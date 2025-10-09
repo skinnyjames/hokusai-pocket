@@ -1,0 +1,10 @@
+/docs/
+/lib/
+/bin/
+/.shards/
+*.dwarf
+build/
+hokusai-pocket-project/
+pocket/
+.vscode/
+node_modules/

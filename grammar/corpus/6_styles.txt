@@ -1,0 +1,126 @@
+=======
+style declaration
+=======
+[style]
+mainContainer {
+  int: 38;
+  bool: true;
+  float: 0.3;
+  string: "foobar";
+  func: outline(0, 0, 1, 0);
+}
+
+other {
+  bool: false;
+}
+------
+
+(document
+  (style_template
+    (style
+      (name)
+      (children
+        (element
+          (name)
+          (style_int))
+        (element
+          (name)
+          (style_bool))
+        (element
+          (name)
+          (style_float))
+        (element
+          (name)
+          (style_string))
+        (element
+          (name)
+          (style_func
+            (function)
+            (value)))))
+    (style
+      (name)
+      (children
+        (element
+          (name)
+          (style_bool))))))
+
+=========
+style with template
+=========
+[template]
+  vblock {
+    ...styleSpread
+  }
+
+[style]
+styleSpread {
+  background: rgb(86, 116, 25);
+  outline_color: rgba(191, 112, 112, 0.67);
+}
+---------
+(document
+  (template
+    (element
+      (name)
+      (attributes
+        (style
+          (name)))))
+  (style_template
+    (style
+      (name)
+      (children
+        (element
+          (name)
+          (style_func
+            (function)
+            (value)))
+        (element
+          (name)
+          (style_func
+            (function)
+            (value)))))))
+
+========
+pathname
+========
+
+[style]
+ernestImage {
+  height: 80;
+  source: "assets/ernest.gif";
+}
+---------
+
+(document
+  (style_template
+    (style
+      (name)
+      (children
+        (element
+          (name)
+          (style_int))
+        (element
+          (name)
+          (style_string))))))
+=========
+evented
+=========
+
+[style]
+eventedStyle@hover {
+  color: rgb(23,23,23);
+}
+
+----
+
+(document
+  (style_template
+    (style
+      (name)
+      (event_name)
+      (children
+        (element
+          (name)
+          (style_func
+            (function)
+            (value)))))))

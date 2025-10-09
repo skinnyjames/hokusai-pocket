@@ -1,0 +1,175 @@
+=======
+top level if condition
+=======
+[template]
+  [if="baz"]
+    one
+------
+
+(document
+  (template
+    (if_macro
+      (function
+        (name))
+      (children
+        (element
+          (name))))))
+
+========
+nested if condition
+========
+[ template ]
+  one
+    [ if="foobar" ] 
+      two
+-------
+
+(document
+  (template
+    (element
+      (name)
+      (children
+        (if_macro
+          (function
+            (name))
+          (children
+            (element
+              (name))))))))
+
+==========
+else condition
+==========
+[ template ]
+  one
+    [if="foobar"]
+      two
+    [else]
+      three
+
+-------
+
+(document
+  (template
+    (element
+      (name)
+      (children
+        (if_macro
+          (function
+            (name))
+          (children
+            (element
+              (name))))
+        (else_macro
+          (children
+            (element
+              (name))))))))
+
+============
+top level iteration
+============
+
+[template]
+  [for="post in posts"]
+    one
+
+-------
+
+(document
+  (template
+    (for_macro
+      (name)
+      (list_name)
+      (children
+        (element
+          (name))))))
+
+=============
+iteration
+=============
+[ template ]
+  one
+    [ for="post in posts" ]
+      two
+
+----------
+
+(document
+  (template
+    (element
+      (name)
+      (children
+        (for_macro
+          (name)
+          (list_name)
+          (children
+            (element
+              (name))))))))
+
+===========
+combo iteration
+===========
+[template]
+  one
+    [for="post in posts"]
+      two
+        [if="true"]
+          three
+        [else]
+          four
+
+----------
+
+(document
+  (template
+    (element
+      (name)
+      (children
+        (for_macro
+          (name)
+          (list_name)
+          (children
+            (element
+              (name)
+              (children
+                (if_macro
+                  (function
+                    (name))
+                  (children
+                    (element
+                      (name))))
+                (else_macro
+                  (children
+                    (element
+                      (name))))))))))))
+
+=========
+Sibling macros
+===========
+[template]
+  [for="post in posts"]
+    two
+    [if="true"]
+      three
+    [else]
+      four
+
+------------
+
+(document
+  (template
+    (for_macro
+      (name)
+      (list_name)
+      (children
+        (element
+          (name))
+        (if_macro
+          (function
+            (name))
+          (children
+            (element
+              (name))))
+        (else_macro
+          (children
+            (element
+              (name))))))))

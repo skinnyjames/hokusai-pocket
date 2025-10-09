@@ -1,0 +1,69 @@
+==============
+Space at end of element
+==============
+
+[ template ]
+  first    
+    second    
+    third
+
+--------------
+
+(document
+  (template
+    (element
+      (name)
+      (children
+        (element
+          (name))
+        (element
+          (name))))))
+
+==============
+Space at the end of template
+==============
+
+[ template ]
+  first   
+    second     
+  third     
+
+-----------
+
+(document
+  (template
+    (element
+      (name)
+      (children
+        (element
+          (name))))
+    (element
+      (name))))
+
+=================
+Trailing Newlines
+==================
+
+[ template ]
+  first
+    second
+      third
+      third
+      third
+
+-----------
+
+(document
+  (template
+    (element
+      (name)
+      (children
+        (element
+          (name)
+          (children
+            (element
+              (name))
+            (element
+              (name))
+            (element
+              (name))))))))

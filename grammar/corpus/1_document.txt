@@ -1,0 +1,155 @@
+===========
+Happy path document
+===========
+
+[ template ]
+  first
+    second
+    third
+  fourth
+
+-----
+
+(document
+  (template
+    (element
+      (name)
+      (children
+        (element
+          (name))
+        (element
+          (name))))
+    (element
+      (name))))
+
+===========
+Newlines at end of element
+===========
+
+[ template ]
+  first
+
+    second
+
+-----------
+
+(document
+  (template
+    (element
+      (name)
+      (children
+        (element
+          (name))))))
+
+=================
+Attributes
+=================
+
+[ template ]
+  first { :prop="value", @event="value" }
+    second { @event="value(arg1, arg2)" }
+
+-------
+
+(document
+  (template
+    (element
+      (name)
+      (attributes
+        (prop
+          (computed)
+          (name)
+          (function
+            (name)))
+        (event
+          (name)
+          (function
+            (name))))
+      (children
+        (element
+          (name)
+          (attributes
+            (event
+              (name)
+              (function
+                (name)
+                (args
+                  (arg)
+                  (arg))))))))))
+
+=======================
+Attributes (Multiline)
+=======================
+
+[ template ]
+  top
+    child {
+      @foo="bar"
+    }
+      child2 {
+        :foo="bar",
+        bar="baz"
+      }
+    child3 {
+      :foo="bar"
+    }
+
+------------
+
+(document
+  (template
+    (element
+      (name)
+      (children
+        (element
+          (name)
+          (attributes
+            (event
+              (name)
+              (function
+                (name))))
+          (children
+            (element
+              (name)
+              (attributes
+                (prop
+                  (computed)
+                  (name)
+                  (function
+                    (name)))
+                (prop
+                  (name)
+                  (function
+                    (name)))))))
+        (element
+          (name)
+          (attributes
+            (prop
+              (computed)
+              (name)
+              (function
+                (name)))))))))
+
+==========
+Attributes (expressions)
+==========
+[template]
+  top
+    image {
+      :source="post.title"
+    }
+-----
+
+(document
+  (template
+    (element
+      (name)
+      (children
+        (element
+          (name)
+          (attributes
+            (prop
+              (computed)
+              (name)
+              (function
+                (name)))))))))

@@ -1,0 +1,10 @@
+============
+Missing template error
+============
+  one
+
+-------------
+
+(ERROR
+  (name))
+

@@ -1,0 +1,12 @@
+[style]
+mainContainer {
+  int: 38;
+  bool: true;
+  float: 0.3;
+  string: "foobar";
+  func: outline(0, 0, 1, 0);
+}
+
+other {
+  bool: false;
+}

@@ -1,0 +1,33 @@
+{
+  "name": "grammar",
+  "version": "1.0.0",
+  "description": "Grammar for hokusai templates",
+  "main": "bindings/node",
+  "scripts": {
+    "test": "npm run build && tree-sitter test",
+    "build": "tree-sitter generate",
+    "parse": "npm run build && tree-sitter parse test.nml",
+    "debug": "npm run build && tree-sitter parse --debug test.nml",
+    "highlight": "tree-sitter highlight test.nml"
+  },
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "nan": "^2.18.0"
+  },
+  "devDependencies": {
+    "tree-sitter-cli": "^0.21.0-pre-release-1"
+  },
+  "tree-sitter": [
+    {
+      "scope": "source.hml",
+      "file-types": [
+        ".hml"
+      ],
+      "first-line-regex": "^{{ *template *}}",
+      "highlights": [
+        "queries/highlights.scm"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,58 @@
+
+=============
+Selectors
+=============
+
+[ template ]
+  node#top.class1.class2
+    node.class2.class3
+
+------------
+
+(document
+  (template
+    (element
+      (name)
+      (selectors
+        (id)
+        (class)
+        (class))
+      (children
+        (element
+          (name)
+          (selectors
+            (class)
+            (class)))))))
+
+===============
+Selectors (id only)
+===============
+
+[ template ]
+  node#id
+    node2#id2
+      node3#id3
+    node4#id4
+
+---------------
+
+(document
+  (template
+    (element
+      (name)
+      (selectors
+        (id))
+      (children
+        (element
+          (name)
+          (selectors
+            (id))
+          (children
+            (element
+              (name)
+              (selectors
+                (id)))))
+        (element
+          (name)
+          (selectors
+            (id)))))))

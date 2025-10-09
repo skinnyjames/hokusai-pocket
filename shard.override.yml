@@ -1,0 +1,9 @@
+dependencies:
+  crest:
+    github: mamantoha/crest
+  http_proxy:
+    github: mamantoha/http_proxy
+    version: ">= 0.12.0"
+  athena-console:
+    github: athena-framework/console
+    version: ~> 0.4.0
