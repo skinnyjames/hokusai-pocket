@@ -107,7 +107,7 @@ module Hokusai::Util
       stream.wrap(new_data, nil)
       stream.flush
 
-      puts ["original.tokens.last.y", tokens.last.y].inspect
+      # puts ["original.tokens.last.y", tokens.last.y].inspect
 
       # splice in new tokens
       #
@@ -157,7 +157,7 @@ module Hokusai::Util
         record.y += new_last_tokens_height
       end
 
-      puts ["insert", records.first.y, records.map(&:height).sum, insert_index, new_last_tokens_height].inspect
+      # puts ["insert", records.first.y, records.map(&:height).sum, insert_index, new_last_tokens_height].inspect
 
       new_tokens.insert(insert_index, *records)
       self.tokens = new_tokens
@@ -248,7 +248,7 @@ module Hokusai::Util
               cursor ||= [tx, sy, 0.5, token.height]
               pcursor ||= token.positions[i]
             else
-              puts ["set selection cursor: #{sy}"]
+              # puts ["set selection cursor: #{sy}"]
               cursor = [tx + w, sy, 0.5, token.height]
               pcursor = token.positions[i]
             end
@@ -265,7 +265,7 @@ module Hokusai::Util
 
             tw += w
           elsif selector.pos? && selector.pos.selected(token.positions[i])
-            puts ["pos 1"]
+            # puts ["pos 1"]
             if selector.pos.cursor_index == selector.pos.positions.first
               cursor ||= [tx, sy, 0.5, token.height]
               pcursor ||= token.positions[i]
@@ -291,7 +291,7 @@ module Hokusai::Util
 
           # [0, [0]]
           elsif selector.pos? && selector.pos.cursor_index && selector.pos.cursor_index + 1 == token.positions[i]
-            puts "pos 2"
+            # puts "pos 2"
             cursor = [tx, sy, 0.5, token.height]
             pcursor = token.positions[i] - 1
             # position_buffer = selector.pos.positions
@@ -301,17 +301,17 @@ module Hokusai::Util
             # end
 
           elsif selector.pos? && selector.pos.cursor_index && selector.pos.cursor_index == token.positions[i]
-            puts "pos 3"
+            # puts "pos 3"
             cursor = [tx + w, sy, 0.5, token.height]
             pcursor = selector.pos.cursor_index
             # position_buffer = selector.pos.positions
           elsif selector.geom? && selector.geom.clicked(tx, by, (w / 2), token.height)
             cursor = [tx, sy, 0.5, token.height]
             pcursor = token.positions[i] - 1
-            puts "setting cursor #{sy}"
+            # puts "setting cursor #{sy}"
 
           elsif selector.geom? && selector.geom.clicked(tx + (w/2.0), by, (w/2.0), token.height)
-            puts "geom click 2"
+            # puts "geom click 2"
             cursor = [tx + w, sy, 0.5, token.height]
             pcursor = token.positions[i]
           end

@@ -8,7 +8,7 @@ class Hokusai::Blocks::DropdownItem < Hokusai::Block
   
   template <<~EOF
   [template]
-    empty.container { ...container @click="set_emit" @mouseup="emit_item"}
+    empty.container { ...container @mousedown="set_emit" @mouseup="emit_item"}
   EOF
 
   computed! :option
@@ -39,8 +39,9 @@ class Hokusai::Blocks::DropdownItem < Hokusai::Block
   def emit_item(event)
     if @emit_next
       emit("picked", option)
-      @emit_next = false
     end
+
+    @emit_next = false
   end
 
   def update_height(height)
@@ -79,10 +80,119 @@ class Hokusai::Blocks::DropdownItem < Hokusai::Block
     end
   end
 end
+class Hokusai::Blocks::Dropdown < Hokusai::Block
+  style <<~EOF
+  [style]
+  dropText {
+    color: rgb(222,222,222);
+    content: "Choose your destiny";
+    outline: outline(0.0, 0.0, 1.0, 0.0);
+    padding: padding(0.0, 0.0, 0.0, 20.0);
+    outline_color: rgb(43, 43, 43);
+  }
 
-module Hokusai::Blocks::DropMix
+  dropIcon {
+    width: 60.0;
+    background: rgb(22,22,22);
+    color: rgb(222,222,222);
+    outline: outline(0.0, 1.0, 0.0, 1.0);
+    outline_color: rgb(43, 43, 43);
+    type: "down";
+  }
+
+  dropIcon@mousedown {
+    color: rgb(22,22,22);
+    background: rgb(222,88,88);
+    cursor: "pointer";
+  }
+
+  itemStyle {
+    z: 2;
+    autoclip: true;
+    background: rgb(22,22,22);
+  }
+
+  item {
+    background: rgb(22,22,22);
+    padding: padding(10.0, 5.0, 10.0, 20.0);
+    outline: outline(0.0, 0.0, 1.0, 0.0);
+    outline_color: rgb(44,44,44);
+    color: rgb(222,222,222);
+  }
+
+  item@hover {
+    background: rgb(222,88,88);
+    color: rgb(22, 22, 22);
+    cursor: "pointer";
+  }
+  
+  dropContainer {
+    background: rgb(22, 22, 22);
+    outline: outline(1.0, 0.0, 1.0, 0.0);
+    outline_color: rgb(43, 43, 43);
+  }
+  EOF
+
+  template <<~EOF
+  [template]
+    vblock { @keypress="autocomplete" @click="prevent" @mousedown="prevent" @hover="prevent" @wheel="prevent" }
+      hblock { ...dropContainer }
+        text { ...dropText :padding="text_padding" :size="size" :content="active_content" }
+        icon { ...dropIcon :size="size" @click="open"}
+      [if="opened"]
+        panel.panel {
+          ...itemStyle 
+          :zposition="zposition"
+          :height="panel_height"
+          @click="prevent"
+          @wheel="prevent"
+          @mousedown="prevent"
+          @hover="prevent" 
+          @mousemove="prevent" 
+        }
+          dynamic
+            [for="item in filtered_options"]
+              item { 
+                ...item
+                @picked="set_active" 
+                :index="index"
+                :height="height" 
+                :key="option_key(item, index)" 
+                :option="item" 
+                :size="size"
+              }
+  EOF
+
+  uses(
+    center: Hokusai::Blocks::Center,
+    vblock: Hokusai::Blocks::Vblock,
+    hblock: Hokusai::Blocks::Hblock,
+    text: Hokusai::Blocks::Text,
+    icon: Hokusai::Blocks::Icon,
+    item: Hokusai::Blocks::DropdownItem,
+    panel: Hokusai::Blocks::Panel,
+    dynamic: Hokusai::Blocks::Dynamic,
+  )
+
+  computed! :options
+  computed :truncate, default: -1, convert: proc(&:to_i)
+  computed :size, default: 24, convert: proc(&:to_i)
+  computed :background, default: [22,22,22], convert: Hokusai::Color
+  computed :color, default: [222,222,222], convert: Hokusai::Color
+  computed :panel_height, default: 300.0, convert: proc(&:to_f)
+  computed :direction, default: :down, convert: proc(&:to_sym)
+
+  attr_accessor :buffer, :zposition
+
   def prevent(event)
     event.stop
+  end
+
+  def text_padding
+    mheight = ((@height || 0.0) / 2.0)
+    msize = (size / 2.0)
+    top = mheight - msize
+    Hokusai::Padding.new(top, 0.0, 0.0, 20.0)
   end
 
   def filtered_options
@@ -137,230 +247,12 @@ module Hokusai::Blocks::DropMix
   def render(canvas)
     @height ||= canvas.height
 
-    yield canvas
-  end
-end
-
-class Hokusai::Blocks::Dropdown < Hokusai::Block
-  style <<~EOF
-  [style]
-  dropText {
-    color: rgb(222,222,222);
-    content: "Choose your destiny";
-    outline: outline(0.0, 0.0, 1.0, 0.0);
-    outline_color: rgb(43, 43, 43);
-  }
-
-  dropIcon {
-    width: 60.0;
-    background: rgb(22,22,22);
-    color: rgb(222,222,222);
-    outline: outline(0.0, 1.0, 0.0, 1.0);
-    outline_color: rgb(43, 43, 43);
-    type: "down";
-  }
-
-  dropIcon@mousedown {
-    color: rgb(22,22,22);
-    background: rgb(222,88,88);
-    cursor: "pointer";
-  }
-
-  itemStyle {
-    z: 2;
-    autoclip: true;
-    background: rgb(22,22,22);
-  }
-
-  item {
-    background: rgb(22,22,22);
-    padding: padding(10.0, 5.0, 10.0, 20.0);
-    outline: outline(0.0, 0.0, 1.0, 0.0);
-    outline_color: rgb(44,44,44);
-    color: rgb(222,222,222);
-  }
-
-  item@hover {
-    background: rgb(222,88,88);
-    color: rgb(22, 22, 22);
-    cursor: "pointer";
-  }
-  
-  dropContainer {
-    background: rgb(22, 22, 22);
-    outline: outline(1.0, 0.0, 1.0, 0.0);
-    outline_color: rgb(43, 43, 43);
-  }
-  EOF
-
-  template <<~EOF
-  [template]
-    vblock { @keypress="autocomplete" @click="prevent" @mousedown="prevent" @hover="prevent" @wheel="prevent" }
-      hblock { ...dropContainer }
-        center { :vertical="true" }
-          text { ...dropText :size="size" :content="active_content" }
-        icon { ...dropIcon :size="size" @click="open"}
-      [if="opened"]
-        panel.panel { 
-          ...itemStyle 
-          :height="panel_height"
-          @click="prevent"
-          @wheel="prevent"
-          @mousedown="prevent"
-          @hover="prevent" 
-          @mousemove="prevent" 
-        }
-          dynamic
-            [for="item in filtered_options"]
-              item { 
-                ...item
-                @picked="set_active" 
-                :index="index"
-                :height="height" 
-                :key="option_key(item, index)" 
-                :option="item" 
-                :size="size"
-              }
-  EOF
-
-  uses(
-    center: Hokusai::Blocks::Center,
-    vblock: Hokusai::Blocks::Vblock,
-    hblock: Hokusai::Blocks::Hblock,
-    text: Hokusai::Blocks::Text,
-    icon: Hokusai::Blocks::Icon,
-    item: Hokusai::Blocks::DropdownItem,
-    panel: Hokusai::Blocks::Panel,
-    dynamic: Hokusai::Blocks::Dynamic,
-  )
-
-  computed! :options
-  computed :truncate, default: -1, convert: proc(&:to_i)
-  computed :size, default: 24, convert: proc(&:to_i)
-  computed :background, default: [22,22,22], convert: Hokusai::Color
-  computed :color, default: [222,222,222], convert: Hokusai::Color
-  computed :panel_height, default: 300.0, convert: proc(&:to_f)
-
-  attr_accessor :buffer
-
-  include Hokusai::Blocks::DropMix
-end
-
-
-class Hokusai::Blocks::Dropup < Hokusai::Block
-  style <<~EOF
-  [style]
-  dropText {
-    color: rgb(222,222,222);
-    outline: outline(0.0, 0.0, 1.0, 0.0);
-    outline_color: rgb(43, 43, 43);
-  }
-
-  dropIcon {
-    width: 60.0;
-    background: rgb(22,22,22);
-    color: rgb(222,222,222);
-    outline: outline(0.0, 0.0, 1.0, 1.0);
-    outline_color: rgb(43, 43, 43);
-    type: "down";
-  }
-
-  dropIcon@mousedown {
-    color: rgb(22,22,22);
-    background: rgb(222,88,88);
-    cursor: "pointer";
-  }
-
-  itemStyle {
-    z: 2;
-    height: 300.0;
-    autoclip: true;
-  }
-
-  item {
-    padding: padding(10.0, 5.0, 10.0, 20.0);
-    outline: outline(1.0, 0.0, 0.0, 0.0);
-    outline_color: rgb(44,44,44);
-    color: rgb(222,222,222);
-  }
-
-  item@hover {
-    background: rgb(222,88,88);
-    color: rgb(22, 22, 22);
-    cursor: "pointer";
-  }
-  
-  dropContainer {
-    background: rgb(22, 22, 22);
-    outline: outline(1.0, 0.0, 1.0, 0.0);
-    outline_color: rgb(43, 43, 43);
-  }
-  EOF
-
-  template <<~EOF
-  [template]
-    vblock { z="2" :height="total_height" @keypress="autocomplete" @click="prevent" @mousedown="prevent" @hover="prevent" @wheel="prevent" }
-      [if="opened"]
-        panel.panel {
-          ...itemStyle 
-          :background="background"
-          @click="prevent"
-          @wheel="prevent"
-          @mousedown="prevent"
-          @hover="prevent" 
-          @mousemove="prevent" 
-        }
-          dynamic
-            [for="item in filtered_options"]
-              item {
-                ...item
-                :background="background"
-                :color="color"
-                @picked="set_active" 
-                :index="index"
-                :height="height" 
-                :key="option_key(item, index)" 
-                :option="item"
-                :size="size"
-              }
-      hblock { ...dropContainer :height="height" }
-        center { :vertical="true" :height="height" }
-          text { :size="size" ...dropText :content="active_content" }
-        icon { ...dropIcon :size="size" type="up" @click="open" }
-      
-  EOF
-
-  uses(
-    center: Hokusai::Blocks::Center,
-    vblock: Hokusai::Blocks::Vblock,
-    hblock: Hokusai::Blocks::Hblock,
-    text: Hokusai::Blocks::Text,
-    icon: Hokusai::Blocks::Icon,
-    item: Hokusai::Blocks::DropdownItem,
-    panel: Hokusai::Blocks::Panel,
-    dynamic: Hokusai::Blocks::Dynamic,
-  )
-
-  computed! :options
-  computed :truncate, default: -1, convert: proc(&:to_i)
-  computed :background, default: [22,22,22], convert: Hokusai::Color
-  computed :color, default: [222,222,222], convert: Hokusai::Color
-  computed :size, default: 24, convert: proc(&:to_i)
-  computed :panel_height, default: 300.0, convert: proc(&:to_f)
-
-  attr_accessor :buffer
-
-  include Hokusai::Blocks::DropMix
-
-  def total_height
-    opened ? panel_height + @height : @height
-  end
-
-  def render(canvas)
-    @height = canvas.height
-
-    if opened
-      canvas.y -= panel_height
+    case direction
+    when :down
+      self.zposition = Hokusai::Boundary.new(0.0, 0.0, 0.0, 0.0)
+    when :up
+      self.zposition = Hokusai::Boundary.new(-(@height + panel_height), 0.0, 0.0, 0.0)
+    else
     end
 
     yield canvas

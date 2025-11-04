@@ -6,57 +6,7 @@ Work in progress, expect changes.  ideas and contributions are welcome.
 
 # installation
 
-## prerequisites
-
-* make and build tools
-* a c compiler
-* ruby/rake
-
-Running `hokusai-pocket new` will walk you through setting up a project
-
-It will create the following project structure
-
-```
-project/
-  .pocket (a config file that defines the gems)
-  src/
-    app.rb (default app entrypoint)
-  dist/
-    default/ (the app gets compiled here)
-    web/
-  vendor/ (source code for mruby / raylib / tree-sitter)
-    ...
-  target/
-    default/ (default target is the build host)
-      bin/
-        mrbc
-        mruby
-        ...
-      include/
-        raylib.h
-        mruby.h
-        hokusai-pocket.h
-        ...
-      lib/
-        libmruby.a
-        libtree-sitter.a
-        libpocket.a
-        ...
-    web/ (addtional targets)
-    ...
-```
-
-* `hokusai-pocket compile -t <target>`
-
-After setup, the `compile` command will recompile the vendor source for different targets. 
-
-* `hokusai-pocket dev -t <target> -a <hokusai app>` 
-
-This command will compile and run `src/app.rb` for `<target>`, omit the target to build for the host system.
-
 # backend
-
-The target hokusai application must end with a `Hokusai::Backend` statement
 
 An example app:
 

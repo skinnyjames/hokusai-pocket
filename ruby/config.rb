@@ -17,24 +17,26 @@ HP_FLAG_INTERLACED_HINT = 65536          # Set to try enabling interlaced video 
 
 module Hokusai
   class Backend
-
-    def self.run(klass)
+    def self.run(klass, &block)
       config = Backend::Config.new
-      yield config
+      block.call config
+      puts "After block"
+      app = klass.mount
+      puts "after mount"
 
-      new(klass, config)
+      obj = new(app, config)
+      puts "after new"
+      obj.run
     end
 
     attr_reader :app, :config
 
-    def initialize(klass, config)
-      @app = klass.mount
+    def initialize(app, config)
+      @app = app
       @config = config
     end
 
-
     class Config
-
       attr_accessor :width, :height, :fps,
                   :title, :config_flags, :window_state_flags,
                   :automation_driver, :background, :after_load_cb,

@@ -1,0 +1,12 @@
+---
+mruby:
+  version: 3.4.0
+  release_no: 30400
+  git_commit: b18a99c6f763f2199ce0f6236f3b326d5808a019
+builds:
+  host:
+    https://github.com/iij/mruby-regexp-pcre.git:
+      url: https://github.com/iij/mruby-regexp-pcre.git
+      branch: master
+      commit: 71bd16ba59239f04aefb73bb6d46d5b581f27b1b
+      version: 0.0.0

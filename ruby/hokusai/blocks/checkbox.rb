@@ -39,7 +39,7 @@ class Hokusai::Blocks::Checkbox < Hokusai::Block
   def initialize(**args)
     @checked = false
 
-    super(**args)
+    super
   end
 
   def render(canvas)

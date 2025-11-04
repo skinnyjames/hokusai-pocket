@@ -177,7 +177,6 @@ module Hokusai
         end
       end
 
-
       zindexed.sort.each do |z, groups|
         groups.each do |group|
           canvas.reset(group.x, group.y, group.w, group.h)

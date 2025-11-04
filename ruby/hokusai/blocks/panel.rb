@@ -54,7 +54,7 @@ class Hokusai::Blocks::Panel < Hokusai::Block
     @clipped_offset = 0.0
     @clipped_content_height = 0.0
 
-    super(**args)
+    super
   end
 
   def wheel_handle(event)

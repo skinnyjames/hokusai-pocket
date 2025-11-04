@@ -98,7 +98,7 @@ class Hokusai::Blocks::Scrollbar < Hokusai::Block
     @height = 0.0
     @offset = 0.0
 
-    super(**args)
+    super
   end
 
   def render(canvas)

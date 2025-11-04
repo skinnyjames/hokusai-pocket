@@ -51,22 +51,14 @@ class Hokusai::Blocks::Tooltip < Hokusai::Block
   def render(canvas)
     case direction
     when :down
-      self.zposition = Hokusai::Boundary.new(10.0, 0.0, 0.0, (canvas.width  / 2.0) - (width / 2.0))
+      self.zposition = Hokusai::Boundary.new(10.0, 0.0, 0.0, (canvas.width  / 2.0) - ((width || 0.0) / 2.0))
     when :right
-      self.zposition = Hokusai::Boundary.new(-((canvas.height / 2.0) + (height / 2.0)), 0.0, 0.0, (canvas.width + 10.0))
+      self.zposition = Hokusai::Boundary.new(-((canvas.height / 2.0) + ((height || 0.0) / 2.0)), 0.0, 0.0, (canvas.width + 10.0))
     when :left
-      self.zposition = Hokusai::Boundary.new(-(canvas.height / 2.0) + (height / 2.0), 0.0, 0.0, -(canvas.width + 10.0))
+      self.zposition = Hokusai::Boundary.new(-(canvas.height / 2.0) + ((height || 0.0) / 2.0), 0.0, 0.0, -(canvas.width + 10.0))
     when :up
-      self.zposition = Hokusai::Boundary.new(10.0, 0.0, 0.0, (canvas.width  / 2.0) - (width / 2.0))
+      self.zposition = Hokusai::Boundary.new(10.0, 0.0, 0.0, (canvas.width  / 2.0) - ((width || 0.0) / 2.0))
     end
-
-    # if active
-    #   draw do 
-    #     rect(canvas.ox, canvas.oy, canvas.owidth, canvas.oheight) do |command|
-    #       command.color = Hokusai::Color.new(0, 0, 0, 200)
-    #     end
-    #   end
-    # end
 
     yield canvas
   end

@@ -1,6 +1,6 @@
 require_relative "./text"
 
-class Input < Hokusai::Block
+class Hokusai::Blocks::Input < Hokusai::Block
   template <<~EOF
   [template]
     panel {
@@ -33,7 +33,7 @@ class Input < Hokusai::Block
     panel: Hokusai::Blocks::Panel,
     cursor: Hokusai::Blocks::Cursor,
     selectable: Hokusai::Blocks::Selectable,
-    text: Text,
+    text: Hokusai::Blocks::Text,
   )
 
   computed! :model

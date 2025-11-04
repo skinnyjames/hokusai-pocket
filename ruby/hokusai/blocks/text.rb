@@ -1,7 +1,7 @@
-require_relative "./util/wrap_stream"
-require_relative "./util/selection"
+require_relative "../util/wrap_stream"
+require_relative "../util/selection"
 
-class Text < Hokusai::Block
+class Hokusai::Blocks::Text < Hokusai::Block
   template <<~EOF
   [template]
     empty {

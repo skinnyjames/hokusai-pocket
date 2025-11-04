@@ -137,7 +137,7 @@ module Hokusai::Blocks::Titlebar
     end
 
     def initialize(**args)
-      super(**args)
+      super
       @hovered_red = false
       @hovered_yellow = false
       @hovered_green = false

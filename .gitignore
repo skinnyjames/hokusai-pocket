@@ -8,3 +8,6 @@ hokusai-pocket-project/
 pocket/
 .vscode/
 node_modules/
+tmp/
+vendor/
+examples/

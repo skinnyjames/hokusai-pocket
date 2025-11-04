@@ -20,7 +20,7 @@ class Hokusai::Blocks::Cursor < Hokusai::Block
     @active = false
     @iteration = 0
 
-    super(**args)
+    super
   end
 
   def before_updated

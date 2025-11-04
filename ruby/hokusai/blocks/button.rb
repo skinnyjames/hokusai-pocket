@@ -95,6 +95,6 @@ class Hokusai::Blocks::Button < Hokusai::Block
     @hovered = false
     @clicked = false
 
-    super(**args)
+    super
   end
 end

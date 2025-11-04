@@ -17,7 +17,7 @@ class Hokusai::Blocks::Label < Hokusai::Block
     @updated = false
     @last_content = nil
 
-    super(**args)
+    super
   end
 
   def render(canvas)

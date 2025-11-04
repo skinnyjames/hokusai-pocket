@@ -26,7 +26,7 @@ class Hokusai::Blocks::Toggle < Hokusai::Block
   def initialize(**args)
     @toggled = false
 
-    super(**args)
+    super
   end
 
   def render(canvas)

@@ -149,7 +149,9 @@ module Hokusai
             children << child
           end
 
-          next if new_values == previous_values
+          if new_values == previous_values
+            next
+          end
 
           Diff.new(previous_values, new_values).patch do |patch|
             case patch
