@@ -1,206 +1,3 @@
-class File
-   module Private
-    def self.to_path_str(path, is_optional=false)
-      if path.kind_of?(String)
-        path
-      else
-        if path.respond_to?(:to_path)
-          path = path.to_path
-        elsif path.respond_to?(:to_str)
-          path = path.to_str
-        elsif is_optional && path.nil?
-          nil
-        else
-          raise TypeError.new("String expected")
-        end
-      end
-    end
-  end
-end
-
-class Pathname
-  ROOT = '/'
-  DOT = '.'
-  DOT_DOT = '..'
-  
-  def initialize(path_str)
-    path_str = File::Private.to_path_str(path_str)
-    @path = path_str.dup
-  end
-  
-  def self.join(*parts)
-    parts = parts.flatten
-    
-    rooted = false
-    if parts[0] == ROOT
-      rooted = true
-    end
-    
-    parts = parts.select{ |p|
-      !p.nil? && p != File::SEPARATOR
-    }.map { |p| 
-      p.to_s
-    }
-    
-    str = parts.join(File::SEPARATOR)
-    if rooted
-      str = "#{ROOT}#{str}"
-    end
-    
-    str = str.each_char.inject('') do |acc, cur|
-      acc.concat(cur) unless acc[acc.length - 1] == cur && cur == File::SEPARATOR
-      acc
-    end
-    
-    str
-  end
-  
-  def +(other)
-    Pathname.new(self.to_s + File::SEPARATOR + other.to_s)
-  end
-  
-  # Non-standard
-  def <<(other)
-    @path.concat(File::SEPARATOR).concat(other.to_s)
-    self
-  end
-  
-  def absolute?
-    @path.start_with?(ROOT)
-  end
-  
-  def dup
-    Pathname.new(@path.dup)
-  end
-  
-  # Non-standard
-  def cleanpath!
-    parts = each_filename.to_a
-    
-    if absolute?
-      parts.unshift ROOT
-    end
-
-    result = []
-    parts.each do |part|
-      case part
-      when DOT
-        next
-      when DOT_DOT
-        case result.last
-        when ROOT
-          # No parent directory of the root
-          next
-        when DOT_DOT
-          # If the last part was deemed a useful parent ref,
-          # then we need this one too.
-          result.push(DOT_DOT)
-        when nil
-          # This is the first part of the path, it must be useful.
-          result.push(DOT_DOT)
-        else
-          # There is a path segment we can just pop to reduce the ..
-          result.pop
-        end
-      else
-        result.push(part)
-      end
-    end
-
-    replace(result.empty? ? DOT : self.class.join(*result))
-    
-    self
-  end
-
-  # Cleans the path by removing consecutive slashes, and useless dots.
-  def cleanpath
-    dup.cleanpath!
-  end
-  
-  def hash
-    @path.hash
-  end
-  
-  def parent
-    if root?
-      self
-    else
-      names = each_filename.to_a[0...-1]
-      if self.absolute?
-        names.unshift(ROOT)
-      end
-      Pathname.new(Pathname.join(names))
-    end
-  end
-  
-  # Non-standard
-  def replace(new_path)
-    @path = new_path.to_s.dup
-    self
-  end
-  
-  def relative?
-    !@path.start_with?(ROOT)
-  end
-  
-  def root?
-    return false if @path.length == 0
-    @path.each_char do |c|
-      return false unless c == ROOT
-    end
-    true
-  end
-  
-  def sub(pattern, replacement)
-    Pathname.new(self.to_s.sub(pattern, replacement))
-  end
-  
-  def each_filename
-    return self.enum_for(:each_filename) unless block_given?
-    
-    @path.split(File::SEPARATOR).
-      select { |p| p && !p.empty? }.
-      each { |f| yield f }
-  end
-  
-  def to_s
-    @path.dup
-  end
-  alias to_str to_s
-end
-
-class Resolver
-  def self.write_to_file(path, filename)
-    code = new(path).code
-    File.open(filename, "w") do |io|
-      io << code
-    end
-  end
-
-  def initialize(file_path, document = File.read(file_path))
-    @file_path = file_path
-    @document = document
-  end
-
-  def code
-    resolve_imports!
-
-    @document
-  end
-
-  def resolve_imports!
-    file_path_dir = File.dirname(@file_path)
-
-    @document = @document.gsub(/(?:require_relative\s+["'](.*)["'])/) do |path|
-      base_path = Pathname.new(@file_path)
-      path = Pathname.new("#{path.gsub(/require_relative\s+["']/, "").chop}.rb")
-      resolved_path = Pathname.join(File.dirname(base_path.to_s), path).to_s
-
-      Resolver.new(resolved_path).code
-    end
-  end
-end
-
 def top
   binding
 end
@@ -230,7 +27,7 @@ spec("hokusai-pocket") do |config|
     def platform(args)
       case args[:platform]
       when "sdl"
-        "PLATFORM_SDL"
+        "PLATFORM_SDL" # to be supported
       else
         "PLATFORM_DESKTOP"
       end
@@ -313,7 +110,11 @@ spec("hokusai-pocket") do |config|
 
     def build
       ruby do
-        Resolver.write_to_file("ruby/hokusai.rb", "mrblib/hokusai.rb")
+        code = ruby_file("ruby/hokusai.rb")
+        File.open("mrblib/hokusai.rb", "w") do |io|
+          io << code
+        end
+        # Resolver.write_to_file("ruby/hokusai.rb", "mrblib/hokusai.rb")
       end
 
       mkdir("vendor/hokusai-pocket")
@@ -441,19 +242,10 @@ spec("hokusai-pocket") do |config|
     end
   end
 
-  task "quick" do |args|
-    dependency "hokusai"
-    dependency "cli"
-
-    def build
-      command("../bin/hokusai-pocket run:target=counter.rb", chdir: "examples")
-    end
-  end
-
   task "run" do |args|
     def build
       out = args[:target] || "app.rb"
-      code = Resolver.new(out).code
+      code = ruby_file(out)
 
       eval code, top
     end
@@ -468,9 +260,7 @@ spec("hokusai-pocket") do |config|
 
     def build
       out = args[:target] || "app.rb"
-      puts "ok"
       code = ruby_file(out)
-      puts "ok"
       fname = File.basename(out).gsub(/\.rb$/, "")
       dir = Pathname.new(out).parent.to_s
 

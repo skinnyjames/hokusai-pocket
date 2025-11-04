@@ -11,3 +11,5 @@ node_modules/
 tmp/
 vendor/
 examples/
+automation-tmp
+barista.lock
