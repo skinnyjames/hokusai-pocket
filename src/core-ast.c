@@ -109,6 +109,10 @@ int hoku_ast_func_call_init(hoku_ast_func_call** call, char* name)
 
 void hoku_ast_func_call_free(hoku_ast_func_call* init)
 {
+	for (int i=0; i<init->args_len; i++)
+	{
+		free(init->strargs[i]);
+	}
   free(init->strargs);
 	free(init->function);
 	free(init);
@@ -451,6 +455,13 @@ void hoku_ast_free(hoku_ast* component)
 	{
 		hoku_ast_func_call_free(component->cond->call);
 		free(component->cond);
+	}
+
+	if (component->loop)
+	{
+		free(component->loop->list_name);
+		free(component->loop->name);
+		free(component->loop);		
 	}
 
 	hoku_ast_list_free(component->relations);

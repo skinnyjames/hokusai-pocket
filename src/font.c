@@ -10,6 +10,8 @@ static char* default_codepoints = "–—‘’“”…\r\n\t 0123456789abcdefg
 
 static void hp_font_type_free(mrb_state* mrb, void* payload)
 {
+  hp_font_wrapper* wrapper = (hp_font_wrapper*) payload;
+  UnloadFont(wrapper->font);
   mrb_free(mrb, payload);
 }
 

@@ -166,9 +166,7 @@ spec("hokusai-pocket") do |config|
 
   task "cli" do |args|
     include Helpers
-    dependency "hokusai" do
-      files "vendor/hokusai-pocket/libhokusai.a", "mrblib/hokusai.rb"
-    end
+    dependency "hokusai"
 
     def build
       mkdir("vendor/cli")
@@ -194,10 +192,12 @@ spec("hokusai-pocket") do |config|
 
           int main(int argc, char* argv[])
           {
+            int ai;
             mrb_state* mrb = mrb_open();
-            mrbc_context *cxt = mrbc_context_new(mrb);
+            ai = mrb_gc_arena_save(mrb);
             mrb_mruby_hokusai_pocket_gem_init(mrb);
-            mrb_load_irep_cxt(mrb, pocket, cxt);
+            mrb_load_irep(mrb, pocket);
+            mrb_gc_arena_restore(mrb, ai);
 
             struct optparse options;
             optparse_init(&options, argv);
@@ -213,8 +213,8 @@ spec("hokusai-pocket") do |config|
               mrb_print_error(mrb);
               return 1;
             }
-            int ai = mrb_gc_arena_save(mrb);
-            mrb_value gemspec = mrb_load_irep_cxt(mrb, pocket_cli, cxt);
+            ai = mrb_gc_arena_save(mrb);
+            mrb_value gemspec = mrb_load_irep(mrb, pocket_cli);
             mrb_gc_arena_restore(mrb, ai);
 
             if (mrb->exc) {

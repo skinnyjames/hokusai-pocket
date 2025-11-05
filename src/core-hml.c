@@ -464,7 +464,7 @@ hoku_ast* hoku_ast_walk_tree(TSNode node, char* template, int level)
 						return NULL;
 					}
 
-					iast->else_relations = malloc(sizeof(hoku_ast*));
+					iast->else_relations = malloc(sizeof(hoku_ast_list));
 					if (iast->else_relations == NULL) return NULL;
 
 					oast->parent = iast;
@@ -520,7 +520,7 @@ hoku_ast* hoku_ast_walk_tree(TSNode node, char* template, int level)
 			{
 				TSNode eechildren = ts_node_named_child(echild, 0);
 				hoku_ast* oast = hoku_ast_walk_tree(eechildren, template, level + 1);
-				ast->else_relations = malloc(sizeof(hoku_ast*));
+				ast->else_relations = malloc(sizeof(hoku_ast_list));
 				if (ast->else_relations == NULL) return NULL;
 
 				oast->parent = ast;

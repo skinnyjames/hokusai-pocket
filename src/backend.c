@@ -66,12 +66,14 @@ int texture_compare(const void* a, const void* b, void* udata)
 uint64_t texture_hash(const void* item, uint64_t seed0, uint64_t seed1)
 {
 	texture_cache* texture = (texture_cache*) item;
+  UnloadTexture(texture->payload);
 	return hashmap_sip(texture->key, strlen(texture->key), seed0, seed1);
 }
 
 void shader_free(void* payload)
 {
   shader_cache* shader = (shader_cache*)payload;
+  UnloadShader(shader->payload);
   free(shader->key);
 }
 
@@ -593,6 +595,7 @@ mrb_value on_draw_texture(mrb_state* mrb, mrb_value self)
     Texture texture = LoadTextureFromImage(img);
     hashmap_set(textures, &(texture_cache){.key=strdup(hash), .payload=texture });
     tex = texture;
+    UnloadImage(img);
   }
   else
   {

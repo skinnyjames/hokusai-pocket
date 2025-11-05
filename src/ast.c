@@ -176,13 +176,15 @@ mrb_value hp_ast_else_ast(mrb_state* mrb, mrb_value self)
   struct RClass* module = mrb_module_get(mrb, "Hokusai");
   struct RClass* astklass = mrb_class_get_under(mrb, module, "Ast");
   mrb_value obj = mrb_funcall(mrb, mrb_obj_value(astklass), "new", 0, NULL);
+
+
   hoku_ast_wrapper* iwrapper;
   iwrapper = (hoku_ast_wrapper*)DATA_PTR(obj);
   if (iwrapper)
   {
     hoku_ast_type_free(mrb, (void*)iwrapper);
   }
-
+  
   mrb_data_init(obj, NULL, &hoku_ast_type);
   iwrapper = mrb_malloc(mrb, sizeof(hoku_ast_wrapper));
   iwrapper->ast = wrapper->ast->else_relations->next_child;
