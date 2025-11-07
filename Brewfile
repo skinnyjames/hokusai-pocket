@@ -5,11 +5,10 @@ end
 spec("hokusai-pocket") do |config|
   task "setup" do
     def build
-      mkdir("vendor")
-      command("touch vendor/.keep")
-      command("git clone https://github.com/raysan5/raylib.git vendor/raylib && cd vendor/raylib && git checkout 5.5")
+      command("mkdir vendor; touch vendor/.keep") unless Dir.exists?("vendor")
+      command("git clone https://github.com/raysan5/raylib.git vendor/raylib; cd vendor/raylib; git checkout 5.5")
       command("git clone https://github.com/tree-sitter/tree-sitter.git vendor/tree-sitter")
-      command("git clone https://github.com/mruby/mruby.git vendor/mruby && cd vendor/mruby && git checkout stable")
+      command("git clone https://github.com/mruby/mruby.git vendor/mruby; cd vendor/mruby; git checkout stable")
     end
   end
 
@@ -46,16 +45,19 @@ spec("hokusai-pocket") do |config|
 
     def build
       command("mkdir -p vendor/tree-sitter/build")
-      command("make -j 5 all install PREFIX=build", chdir: "vendor/tree-sitter")
+      command("make -j 5 all install PREFIX=build CC=#{config.cc.gcc} AR=#{config.cc.ar}", chdir: "vendor/tree-sitter")
     end
   end
 
-  task "mruby" do
+  task "mruby" do |args|
     dependency "setup" do
       files "vendor/.keep"
     end
 
     def build
+      if args[:download]
+        command("git clone https://github.com/mruby/mruby.git vendor/mruby; cd vendor/mruby; git checkout stable")
+      end
       ruby do
         File.open("vendor/mruby/cli_build_config.rb", "w") do |io|
           str = <<-RUBY
@@ -63,11 +65,13 @@ spec("hokusai-pocket") do |config|
               if ENV['VisualStudioVersion'] || ENV['VSINSTALLDIR']
                 toolchain :visualcpp
               else
-                toolchain :clang
+                toolchain :gcc
               end
 
-              conf.gembox "full-core"
+              conf.gem github: "skinnyjames-mruby/mruby-dir-glob", canonical: true
               conf.gem github: "skinnyjames/mruby-bin-barista", branch: "main"
+
+              conf.gembox "default"
             end
           RUBY
 
@@ -75,7 +79,7 @@ spec("hokusai-pocket") do |config|
         end
       end
 
-      command("MRUBY_CONFIG=cli_build_config.rb rake", chdir: "vendor/mruby")
+      command("rake MRUBY_CONFIG=cli_build_config.rb", chdir: "vendor/mruby")
     end
   end
 
@@ -117,9 +121,11 @@ spec("hokusai-pocket") do |config|
         # Resolver.write_to_file("ruby/hokusai.rb", "mrblib/hokusai.rb")
       end
 
-      mkdir("vendor/hokusai-pocket")
-      command("#{mrbc} -ovendor/hokusai-pocket/pocket.h -Bpocket mrblib/hokusai.rb")
-      command("#{config.cc.gcc} -O3 -Wall -I../../vendor/mruby/include -I../../grammar/tree_sitter -I../../src -I. -c #{sources.map { |s| "../../#{s}" }.join(" ")}", chdir: "vendor/hokusai-pocket")
+      unless Dir.exists?("vendor/hokusai-pocket")
+        mkdir("vendor/hokusai-pocket")
+      end
+      command("#{mrbc} -o vendor/hokusai-pocket/pocket.h -Bpocket ./mrblib/hokusai.rb")
+      command("#{config.cc.gcc} -O3 -Wall -I../../vendor/tree-sitter/build/include -I../../vendor/raylib/src -I../../vendor/mruby/include -I../../grammar/tree_sitter -I../../src -I. -c #{sources.map { |s| "../../#{s}" }.join(" ")}", chdir: "vendor/hokusai-pocket")
       ruby do
         command("#{config.cc.ar} r libhokusai.a #{objs.map{ |s| "../../#{s}" }.join(" ")}", chdir: "vendor/hokusai-pocket")
           .forward_output(&on_output)
@@ -134,7 +140,7 @@ spec("hokusai-pocket") do |config|
     end
 
     def includes
-      %w[vendor/mruby/include vendor/cli vendor/hokusai-pocket src].map do |file|
+      %w[vendor/raylib/src vendor/tree-sitter/build/include vendor/mruby/include vendor/cli vendor/hokusai-pocket src].map do |file|
         "-I#{file}"
       end
     end
@@ -144,7 +150,8 @@ spec("hokusai-pocket") do |config|
       when "MacOS"
         "-framework CoreVideo -framework IOKit -framework Cocoa -framework GLUT -framework OpenGL"
       when "Windows"
-        "-lgdi32 -lwinmm"
+        # add -mwindows after figuring out why apps don't launch... 
+        "-lgdi32 -lwinmm -lws2_32"
       when "Linux"
         "-lGL -lm -lpthread -ldl -lrt -lX11"
       else
@@ -169,9 +176,9 @@ spec("hokusai-pocket") do |config|
     dependency "hokusai"
 
     def build
-      mkdir("vendor/cli")
-      mkdir("bin")
-      command("#{mrbc} -ovendor/cli/pocket-cli.h -Bpocket_cli Brewfile")
+      mkdir("vendor/cli") unless Dir.exists?("vendor/cli")
+      mkdir("bin") unless Dir.exists?("bin")
+      command("#{mrbc} -o vendor/cli/pocket-cli.h -Bpocket_cli Brewfile")
 
       ruby do
         File.open("vendor/cli/hokusai-pocket.c", "w") do |io|
@@ -270,7 +277,7 @@ spec("hokusai-pocket") do |config|
         end
       end
 
-      command("vendor/mruby/build/host/bin/mrbc -ovendor/cli/papp.h -Bpocket_app vendor/cli/papp.rb")
+      command("vendor/mruby/build/host/bin/mrbc -o vendor/cli/papp.h -Bpocket_app vendor/cli/papp.rb")
       
       ruby do
         File.open("vendor/cli/#{fname}.c", "w") do |io|
