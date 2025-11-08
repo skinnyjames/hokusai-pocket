@@ -55,9 +55,6 @@ spec("hokusai-pocket") do |config|
     end
 
     def build
-      if args[:download]
-        command("git clone https://github.com/mruby/mruby.git vendor/mruby; cd vendor/mruby; git checkout stable")
-      end
       ruby do
         File.open("vendor/mruby/cli_build_config.rb", "w") do |io|
           str = <<-RUBY
@@ -251,13 +248,14 @@ spec("hokusai-pocket") do |config|
 
   task "run" do |args|
     def build
-      out = args[:target] || "app.rb"
+      out = args[:target]
+      raise "Need to supply an application! (ex: hokusai-pocket run:target=some-app.rb)" if out.nil?
+
       code = ruby_file(out)
 
       eval code, top
     end
   end
-
 
   task "build" do |args|
     include Helpers
@@ -318,6 +316,50 @@ spec("hokusai-pocket") do |config|
       end
 
       command("#{config.cc.gcc} -O3 -Wall #{includes.join(" ")} -o bin/#{fname} vendor/cli/#{fname}.c -L. #{links.join(" ")} #{frameworks(args)}")
+    end
+  end
+
+  task "publish" do |args|
+    def build
+      raise "Need target" if args[:target].nil?
+      platforms = args[:platforms]&.split(",") || %w[osx linux windows]
+
+      command("mkdir build") unless Dir.exists?("build")
+      app_name = File.basename(args[:target]).gsub(/\.rb$/, "")
+
+      ruby do
+        code = ruby_file(args[:target])
+        File.open("build/pocket-app.rb", "w") do |io|
+          io << code
+        end
+
+        extras = args[:extras]&.split(",") || []
+        assets = args[:assets_path]
+        gem_config = args[:gem_config] ? File.read(args[:gem_config]) : ""
+
+        platforms.each do |platform|
+          deps = platform == "linux" ? "libasound2-dev libgl1-mesa-dev libglu1-mesa-dev libx11-dev libxi-dev libxrandr-dev mesa-common-dev xorg-dev" : ""
+
+          processed = erb(
+            Hokusai.docker_template, 
+            string: true, 
+            vars: {
+              deps: deps,
+              extras: extras,
+              assets_path: assets,
+              gem_config: gem_config,
+              os: platform,
+              outfile: app_name
+            }
+          )
+
+          File.open("build/Dockerfile.#{platform}", "w") {|io| io << processed }
+        end
+      end
+
+      platforms.each do |platform|
+        command("docker build --output platforms/#{platform} --file build/Dockerfile.#{platform} .")
+      end
     end
   end
 end
