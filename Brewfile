@@ -6,9 +6,9 @@ spec("hokusai-pocket") do |config|
   task "setup" do
     def build
       command("mkdir vendor; touch vendor/.keep") unless Dir.exists?("vendor")
-      command("git clone https://github.com/raysan5/raylib.git vendor/raylib; cd vendor/raylib; git checkout 5.5")
-      command("git clone https://github.com/tree-sitter/tree-sitter.git vendor/tree-sitter")
-      command("git clone https://github.com/mruby/mruby.git vendor/mruby; cd vendor/mruby; git checkout stable")
+      command("git clone --branch 5.5 --depth 1 https://github.com/raysan5/raylib.git vendor/raylib")
+      command("git clone --depth 1 https://github.com/tree-sitter/tree-sitter.git vendor/tree-sitter")
+      command("git clone --branch stable --depth 1 https://github.com/mruby/mruby.git vendor/mruby")
     end
   end
 

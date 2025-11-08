@@ -21,10 +21,21 @@ To run apps using the binary
 * `hokusai-pocket run:target=<somefile.rb>`
   * where `<somefile.rb>` is a hokusai app
 
-To package your app as a binary
+To package your app as a binary for the host system from this repo
 
 * `hokusai-pocket build:target=<somefile.rb>`
   * where `<somefile.rb>` is a hokusai app
+
+To cross-compile your app for different platforms (wip, requires docker)
+
+* `hokusai-pocket publish:target=<somefile.rb>`
+  * optional arguments include
+    * assets_path=[assets folder]
+    * platforms=osx (defaults to osx,linux,windows)
+    * extras=[folders accessible to the build] (useful for including custom gems)
+    * gem_config=[file declaring conf.gems]  (useful for adding gems)
+
+This will create a platforms/[platform]/[target]/[targetfile] for each included platform
 
 # basic example
 
