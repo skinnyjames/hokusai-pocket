@@ -1,0 +1,70 @@
+name: deploy
+on:
+  push:
+    tags:
+    - '*'
+jobs:
+  publish-linux:
+    runs-on: ubuntu-latest
+    container:
+      image: ubuntu:latest
+    steps:
+      - name: deps
+        run: apt-get update -y && apt-get install -y git ruby clang build-essential libasound2-dev libgl1-mesa-dev libglu1-mesa-dev libx11-dev libxi-dev libxrandr-dev mesa-common-dev xorg-dev
+      - uses: actions/checkout@v5
+      - uses: dsaltares/fetch-gh-release-asset@master
+        with:
+          repo: 'skinnyjames/mruby-bin-barista'
+          version: 'tags/0.2.6'
+          file: 'barista-linux-x86.tar.gz'
+          target: 'barista.tar.gz'
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: unpack barista
+        run: tar -xvf barista.tar.gz --strip-components 1
+      - name: build pocket
+        run: chmod 755 barista && ./barista cli
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hokusai-pocket-linux
+          path: bin/hokusai-pocket
+          overwrite: true
+  publish:
+    strategy:
+      matrix:
+        platform: [{runner: macos-15-intel, os: osx}, {runner: windows-latest, os: windows}]
+    runs-on: ${{ matrix.platform.runner }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dsaltares/fetch-gh-release-asset@master
+        with:
+          repo: 'skinnyjames/mruby-bin-barista'
+          version: 'tags/0.2.6'
+          file: 'barista-${{ matrix.platform.os }}-x86.tar.gz'
+          target: 'barista.tar.gz'
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: unpack barista
+        run: tar -xvf barista.tar.gz --strip-components 1
+      - name: build pocket
+        run: chmod 755 barista && ./barista cli
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hokusai-pocket-${{ matrix.platform.os }}
+          path: bin/hokusai-pocket*
+          overwrite: true
+  release:
+    needs: [publish-linux, publish]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+    - uses: actions/download-artifact@v4
+      with:
+        pattern: hokusai-pocket*
+    - name: zip artifacts
+      run: |
+        tar -czvf hokusai-pocket-x86-linux.tar.gz hokusai-pocket-linux
+        tar -czvf hokusai-pocket-x86-osx.tar.gz hokusai-pocket-osx
+        tar -czvf hokusai-pocket-x86-windows.tar.gz hokusai-pocket-windows
+    - uses: ncipollo/release-action@v1
+      with:
+        artifacts: "hokusai-pocket*"
