@@ -1,0 +1,44 @@
+name: deploy
+on:
+  push:
+    tags:
+    - '*'
+jobs:
+  publish:
+    strategy:
+      matrix:
+        platform: [{ runner: ubuntu-latest, os: linux}, {runner: macos-15-intel, os: osx}, {runner: windows-latest, os: windows}]
+    needs: compile-and-test
+    runs-on: ${{ matrix.platform.runner }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: foxtrotperry/fetch-file-action@v0
+        with:
+          url: "https://github.com/skinnyjames/mruby-bin-barista/releases/download/0.2.6/barista-${{ matrix.platform.os }}-x86.tar.gz"
+          filename: 'barista.tar.gz'
+      - name: unpack barista
+        run: tar -xvf barista.tar.gz --strip-components 1
+      - name: build pocket
+        run: barista cli
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hokusai-pocket-${{ matrix.platform.os }}
+          path: bin/hokusai-pocket
+          overwrite: true
+  release:
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+    - uses: actions/download-artifact@v4
+      with:
+        pattern: hokusai-pocket*
+    - name: zip artifacts
+      run: |
+        tar -czvf hokusai-pocket-x86-linux.tar.gz hokusai-pocket-linux
+        tar -czvf hokusai-pocket-x86-osx.tar.gz hokusai-pocket-osx
+        tar -czvf hokusai-pocket-x86-windows.tar.gz hokusai-pocket-windows
+    - uses: ncipollo/release-action@v1
+      with:
+        artifacts: "hokusai-pocket*"
