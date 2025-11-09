@@ -1595,7 +1595,7 @@ module Hokusai
               value = method
             end
 
-            meta.set_prop(prop.name.to_sym, value)
+            meta.set_prop(prop.name.to_sym, value) unless value.nil?
           end
         end
       end
@@ -3528,7 +3528,9 @@ module Hokusai
             unless local_children.nil?
               groups << [group_parent, group_children]
               parent = PainterEntry.new(group.block, canvas.x, canvas.y, canvas.width, canvas.height)
-              groups << [parent, measure(local_children, local_canvas)]
+              wrap = group.block.node.meta.get_prop(:wrap) || false
+
+              groups << [parent, measure(local_children, local_canvas, wrap: wrap)]
 
               breaked = true
             else
@@ -3584,7 +3586,7 @@ module Hokusai
       after_render&.call
     end
 
-    def measure(children, canvas)
+    def measure(children, canvas, wrap: false)
       x = canvas.x || 0.0
       y = canvas.y || 0.0
       width = canvas.width
@@ -3631,13 +3633,13 @@ module Hokusai
       entries = []
 
       children.each do |block|
-        # nw, nh = ntuple
         w = block.node.meta.get_prop?(:width)&.to_f || neww
         h = block.node.meta.get_prop?(:height)&.to_f || newh
 
-        # local_canvas = Hokusai::Canvas.new(w, h, x, y)
-        # block.node.meta.props[:height] ||= h
-        # block.node.meta.props[:width] ||= w
+        if wrap && x >= width
+          y += h
+          x = canvas.x
+        end
 
         entries << PainterEntry.new(block, x, y, w, h).freeze
 
@@ -11090,7 +11092,13 @@ class Hokusai::Blocks::Icon < Hokusai::Block
     plus: "\u{E0CE}",
     minus: "\u{E0BC}",
     down: "\u{E01D}",
-    up: "\u{E01E}"
+    up: "\u{E01E}",
+    brush: "\u{E035}",
+    times: "\u{E121}",
+    scissor: "\u{E0DD}",
+    info: "\u{E090}",
+    zoomin: "\u{E14A}",
+    zoomout: "\u{E14B}"
   }
 
   computed! :type

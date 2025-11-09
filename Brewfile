@@ -55,6 +55,8 @@ spec("hokusai-pocket") do |config|
     end
 
     def build
+      gem_config = args[:gem_config].nil? ? "" : File.read(args[:gem_config])
+
       ruby do
         File.open("vendor/mruby/cli_build_config.rb", "w") do |io|
           str = <<-RUBY
@@ -68,6 +70,7 @@ spec("hokusai-pocket") do |config|
               conf.gem github: "skinnyjames-mruby/mruby-dir-glob", canonical: true
               conf.gem github: "skinnyjames/mruby-bin-barista", branch: "main"
 
+              #{gem_config}
               conf.gembox "default"
             end
           RUBY
@@ -77,6 +80,90 @@ spec("hokusai-pocket") do |config|
       end
 
       command("rake MRUBY_CONFIG=cli_build_config.rb", chdir: "vendor/mruby")
+    end
+  end
+
+  task "hokusai-github" do |args|
+    dependency "raylib" do
+      files "vendor/raylib/src/libraylib.a"
+    end
+    
+    dependency "tree-sitter" do
+      files "vendor/tree-sitter/build/lib/libtree-sitter.a"
+    end
+    
+    dependency "mruby" do
+      files "vendor/mruby/build/host/lib/libmruby.a"
+    end
+    
+    def includes
+      %w[
+          vendor/tree-sitter/build/include 
+          vendor/raylib/src 
+          vendor/mruby/include
+          vendor/hp/grammar/tree_sitter
+          vendor/hp/src
+        ]
+    end
+
+    def links
+      %w[
+        vendor/hp/grammar/src/parser.c
+        vendor/hp/grammar/src/scanner.c
+        vendor/hokusai-pocket/libhokusai.a
+        vendor/mruby/build/platform/lib/libmruby.a 
+        vendor/raylib/src/libraylib.a
+        vendor/tree-sitter/build/lib/libtree-sitter.a
+      ].join(" ")
+    end
+
+    def h_includes
+      includes.map { |file| "-I../../#{file}" }.join(" ")
+    end
+
+    def sources
+      Dir.glob("vendor/hp/src/*.c")
+    end
+
+    def h_sources
+      sources.map do |file|
+        "../../#{file}"
+      end.join(" ")
+    end
+
+    def objs
+      Dir.glob("vendor/hokusai-pocket/*.o").map do |file|
+        File.basename(file)
+      end.join(" ")
+    end
+
+    def mrbc
+      "vendor/mruby/build/host/bin/mrbc"
+    end
+
+    def build
+      command("git clone --branch main --depth 1 https://github.com/skinnyjames/hokusai-pocket.git vendor/hp") unless Dir.exists?("vendor/hp")
+      ruby do
+        code = ruby_file("vendor/hp/ruby/hokusai.rb")
+        File.open("vendor/hp/mrblib/hokusai.rb", "w") do |io|
+          io << code
+        end
+      end
+
+      unless Dir.exists?("vendor/hokusai-pocket")
+        mkdir("vendor/hokusai-pocket")
+      end
+      command("#{mrbc} -o vendor/hokusai-pocket/pocket.h -Bpocket ./vendor/hp/mrblib/hokusai.rb")
+
+      ruby do
+        command("#{config.cc.gcc} -O3 -Wall #{h_includes} -c #{h_sources}", chdir: "vendor/hokusai-pocket")
+          .forward_output(&on_output)
+          .execute
+
+        command("#{config.cc.ar} r libhokusai.a #{objs}", chdir: "vendor/hokusai-pocket")
+          .forward_output(&on_output)
+          .execute
+      end
     end
   end
 
@@ -259,8 +346,25 @@ spec("hokusai-pocket") do |config|
 
   task "build" do |args|
     include Helpers
-    dependency "hokusai" do
+    dependency "hokusai-github" do
       files "vendor/hokusai-pocket/libhokusai.a"
+    end
+
+    def includes
+      %w[vendor/raylib/src vendor/tree-sitter/build/include vendor/mruby/include vendor/tmp vendor/hokusai-pocket vendor/hp/src].map do |file|
+        "-I#{file}"
+      end
+    end
+
+    def links
+      %w[
+          vendor/hp/grammar/src/parser.c
+          vendor/hp/grammar/src/scanner.c
+          vendor/hokusai-pocket/libhokusai.a
+          vendor/mruby/build/host/lib/libmruby.a 
+          vendor/raylib/src/libraylib.a
+          vendor/tree-sitter/build/lib/libtree-sitter.a
+        ]
     end
 
     def build
@@ -269,16 +373,17 @@ spec("hokusai-pocket") do |config|
       fname = File.basename(out).gsub(/\.rb$/, "")
       dir = Pathname.new(out).parent.to_s
 
+      mkdir("vendor/tmp") unless Dir.exists?("vendor/tmp")
       ruby do
-        File.open("vendor/cli/papp.rb", "w") do |io|
+        File.open("vendor/tmp/papp.rb", "w") do |io|
           io << code
         end
       end
 
-      command("vendor/mruby/build/host/bin/mrbc -o vendor/cli/papp.h -Bpocket_app vendor/cli/papp.rb")
+      command("vendor/mruby/build/host/bin/mrbc -o vendor/tmp/papp.h -Bpocket_app vendor/tmp/papp.rb")
       
       ruby do
-        File.open("vendor/cli/#{fname}.c", "w") do |io|
+        File.open("vendor/tmp/#{fname}.c", "w") do |io|
           str = <<~C
           #ifndef POCKET_ENTRYPOINT
           #define POCKET_ENTRYPOINT
@@ -315,7 +420,8 @@ spec("hokusai-pocket") do |config|
         end
       end
 
-      command("#{config.cc.gcc} -O3 -Wall #{includes.join(" ")} -o bin/#{fname} vendor/cli/#{fname}.c -L. #{links.join(" ")} #{frameworks(args)}")
+      mkdir("bin") unless Dir.exists?("bin")
+      command("#{config.cc.gcc} -O3 -Wall #{includes.join(" ")} -o bin/#{fname} vendor/tmp/#{fname}.c -L. #{links.join(" ")} #{frameworks(args)}")
     end
   end
 
