@@ -107,7 +107,7 @@ module Hokusai
               value = method
             end
 
-            meta.set_prop(prop.name.to_sym, value)
+            meta.set_prop(prop.name.to_sym, value) unless value.nil?
           end
         end
       end

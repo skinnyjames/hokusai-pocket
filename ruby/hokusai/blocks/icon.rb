@@ -16,7 +16,13 @@ class Hokusai::Blocks::Icon < Hokusai::Block
     plus: "\u{E0CE}",
     minus: "\u{E0BC}",
     down: "\u{E01D}",
-    up: "\u{E01E}"
+    up: "\u{E01E}",
+    brush: "\u{E035}",
+    times: "\u{E121}",
+    scissor: "\u{E0DD}",
+    info: "\u{E090}",
+    zoomin: "\u{E14A}",
+    zoomout: "\u{E14B}"
   }
 
   computed! :type

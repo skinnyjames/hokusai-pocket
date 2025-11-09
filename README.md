@@ -171,3 +171,9 @@ Brewfile                      (the build file for the project)
 # Notes
 
 hokusai pocket supports a basic implementation of `require_relative` in the ruby code. It will perform basic subsitution and generate one large ruby file to be compiled using `mrbc`
+
+# Related projects
+
+* [Taylor](https://github.com/HellRok/Taylor) - A simple game engine built using raylib and mruby 
+* [Ruby 2D](https://www.ruby2d.com/) - Make cross-platform 2D applications in Ruby
+* [DragonRuby](docs.dragonruby.org/#/) - DragonRuby is a Multilevel Cross-platform Runtime. The “multiple levels” within the runtime allows us to target platforms no other Ruby can target: PC, Mac, Linux, Raspberry Pi, WASM, iOS, Android, Nintendo Switch, PS4, Xbox, and Stadia. 
