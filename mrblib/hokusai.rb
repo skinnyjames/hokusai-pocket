@@ -1570,7 +1570,7 @@ module Hokusai
 
         if sattr = style["default"]
           sattr.each do |key, value|
-            meta.set_prop(key.to_sym, value)
+            meta.set_prop(key.to_sym, value) unless value.nil?
           end
         end
       end
@@ -1961,10 +1961,10 @@ end
 
 module Hokusai
   class Commands::Image < Commands::Base
-    attr_reader :x, :y, :width, :height, :source
+    attr_reader :x, :y, :width, :height, :image
 
-    def initialize(source, x, y, width, height)
-      @source = source
+    def initialize(image, x, y, width, height)
+      @image = image
       @x = x
       @y = y
       @width = width
@@ -1976,15 +1976,15 @@ module Hokusai
     end
 
     def cache
-      [source, width, height].hash
+      [width, height].hash
     end
   end
 
   class Commands::SVG < Commands::Base
     attr_reader :x, :y, :width, :height, :source, :color
 
-    def initialize(source, x, y, width, height)
-      @source = source
+    def initialize(image, x, y, width, height)
+      @image = image
       @x = x
       @y = y
       @width = width
@@ -2291,9 +2291,10 @@ module Hokusai
     attr_reader :vertex_shader, :fragment_shader, :uniforms
 
     def initialize
-      @uniforms = []
+      @uniforms = {}
       @vertex_shader =  nil
       @fragment_shader = nil
+      @textures = {}
     end
 
     def vertex_shader=(content)
@@ -2306,6 +2307,18 @@ module Hokusai
 
     def uniforms=(values)
       @uniforms = values
+    end
+
+    def textures=(values)
+      @textures = values
+    end
+
+    def textures
+      @textures.transform_keys(&:to_s)
+    end
+
+    def uniforms
+      @uniforms.transform_keys!(&:to_s)
     end
 
     def hash
@@ -2321,29 +2334,33 @@ module Hokusai
 end
 module Hokusai
   class Commands::Texture < Commands::Base
-    attr_reader :x, :y, :width, :height, :rotation, :scale
+    attr_reader :texture, :x, :y
+    attr_accessor :width, :height, :flip, :repeat
 
-    def initialize(x, y, width, height)
+    def initialize(texture, x, y)
+      @texture = texture
       @x = x
       @y = y
-      @width = width
-      @height = height
-      @rotation = 0.0
-      @scale = 10.0
-    end
-
-    def rotation=(value)
-      @rotation = value
-    end
-
-    def scale=(value)
-      @scale = value
+      @width = texture.width
+      @height = texture.height
+      @repeat = false
+      @flip = true
     end
 
     def hash
-      [self.class, x, y, width, height].hash
+      [self.class, width, height].hash
     end
   end
+
+  class Commands::TextureBegin < Commands::Base
+    attr_reader :texture
+
+    def initialize(texture)
+      @texture = texture
+    end
+  end
+
+  class Commands::TextureEnd < Commands::Base; end
 end
 module Hokusai
   class Commands::RotationBegin < Commands::Base
@@ -2516,10 +2533,18 @@ module Hokusai
       queue << Commands::TranslationEnd.new
     end
 
-    def texture(x, y, w, h)
-      command = Commands::Texture.new(x, y, w, h)
+    # def texture_begin(texture, x, y)
+    #   commands << Commands::TextureBegin.new(texture, x, y)
+    # end
 
-      yield command
+    # def texture_end
+    #   commands << Commands::TextureEnd.new
+    # end
+
+    def texture(texture, x, y)
+      command = Commands::Texture.new(texture, x, y)
+
+      yield command if block_given?
 
       queue << command
     end
@@ -2546,289 +2571,69 @@ module Hokusai
   end
 end
 module Hokusai
-  # A Backend agnostic font interface
-  #
-  # Backends are expected to implement the following methods
-  class Font
-    # Creates a wrapping of text based on container width and font size
-    #
-    # @param [String] the text to wrap
-    # @param [Integer] the font size
-    # @param [Float] the width of the container
-    # @param [Float] an initital offset
-    # @return [Hokusai::Clamping]
-    def clamp(text, size, width, initial_offset = 0.0)
-      raise Hokusai::Error.new("Font #clamp not implemented")
+  class MusicRegistry
+    def initialize
+      @musics = {}
     end
 
-    # Creates a wrapping of text based on the container width and font size
-    # and parses markdown
-    # @param [String] the text to wrap
-    # @param [Integer] the font size
-    # @param [Float] the width of the container
-    # @param [Float] an initital offset
-    # @return [Hokusai::Clamping]
-    def clamp_markdown(text, size, width, initial_offset = 0.0)
-      raise Hokusai::Error.new("Font #clamp not implemented")
+    def register(name, music)
+      @musics[name] = music
     end
 
-    # @return [Integer] the font height
-    def height
-      raise Hokusai::Error.new("Font #height not implemented")
+    def get(name)
+      @musics[name]
+    end
+
+    def delete(name)
+      @musics.delete(name)
     end
   end
 
-  # A class representing wrapped text
-  #
-  # A clamping has many segments, delimited by a newline
-  # A segment has many possible groups, and a group has many possible charss
-  class Clamping
-    class Char
-      attr_reader :raw
+  class TextureRegistry
+    attr_reader :textures
 
-      def initialize(raw)
-        @raw = raw
-      end
-
-      # @return [Float] the width of the char
-      def width
-        raw[:width]
-      end
-
-      # @return [Integer] the offset of the char relative to the clamping
-      def offset
-        raw[:offset]
-      end
+    def initialize
+      @textures = {}
     end
 
-    class Group
-      attr_reader :raw
-
-      def initialize(raw)
-        @raw = raw
-      end
-
-      # @return [Integer] the offset of the group relative to the clamping 
-      def offset
-        @offset ||= raw[:offset]
-      end
-
-      # @return [Integer] number of chars in this group
-      def size
-        @size ||= raw[:size]
-      end
-
-      # @return [Float] the total width of chars in this group
-      def width
-        chars.sum(&:width)
-      end
-
-      # @return [UInt] a flag for this group type
-      def type
-        @type ||= raw[:type]
-      end
-
-      # @return [Bool] is this group normal?
-      def normal?
-        @normal ||= type == LibHokusai::GROUP_NORMAL
-      end
-
-      # @return [Bool] is this group bold?
-      def bold?
-        @bold ||= ((type & LibHokusai::GROUP_BOLD) != 0)
-      end
-
-      # @return [Bool] is this group italics?
-      def italics?
-        @italics ||= ((type & LibHokusai::GROUP_ITALICS) != 0)
-      end
-
-      # @return [Bool] does this group represent a hyperlink?
-      def link?
-        @link ||= ((type & LibHokusai::GROUP_LINK) != 0)
-      end
-
-      # @return [Bool] does this group represent a code block?
-      def code?
-        @code ||= type & LibHokusai::GROUP_CODE
-      end
-
-      # @return [String] the hyperlink for this group if there is one
-      def link
-        @href ||= raw[:payload].read_string
-      end
-
-      # @return [Array<Hokusai::Char>] an array of chars
-      def chars
-        return @chars unless @chars.nil?
-
-        @chars = []
-        each_char do |char|
-          @chars << char
-        end
-
-        @chars
-      end
-
-      def each_char
-        char = raw[:chars]
-        i = 0
-
-        while !char.null?
-          yield Char.new(char), i
-          i += 1
-          char = char[:next_char]
-        end
-      end 
+    def create(name, width, height)
+      @textures[name] ||= Hokusai::Texture.init(width, height)
+      @textures[name]
     end
 
-    class Segment
-      attr_reader :raw
-
-      def initialize(raw)
-        @raw = raw
-      end
-
-      # A segment width given a range of offsets
-      # NOTE: Defaults to the full segment
-      def width(range = (offset...offset + size))
-        chars[range]&.sum(&:width) || 0.0
-      end
-
-      # @return [Integer] the offset of this segment relative to the clamping
-      def offset
-        raw[:offset]
-      end
-
-      # @return [Integer] the number of chars in this segment
-      def size
-        raw[:size]
-      end
-
-      # @return [Array<Hokusai::Char>] an array of chars
-      def chars
-        return @chars unless @chars.nil?
-
-        @chars = []
-        each_char do |char|
-          @chars << char
-        end
-
-        @chars
-      end
-
-      def each_char
-        char = raw[:chars]
-        i = 0
-
-        while !char.null?
-          yield Char.new(char), i
-          i += 1
-          char = char[:next_char]
-        end
-      end
-
-      # @return [Array<Hokusai::Group>] an array of clamping groups
-      def groups
-        return @groups unless @groups.nil?
-
-        @groups = []
-        each_group do |group|
-          @groups << group
-        end
-
-        @groups
-      end
-
-      def each_group
-        group = raw[:groups]
-        i = 0
-        until group.null?
-          yield Group.new(group), i
-          i.succ
-          group = group[:next_group]
-        end
-      end
-
-      def select_end
-        raw[:select_end]
-      end
-
-      def select_begin
-        raw[:select_begin]
-      end
-
-      def select_begin=(val)
-        raw[:select_begin] = val
-      end
-
-      def select_end=(val)
-        raw[:select_end] = val.nil? ? select_begin : val
-      end
-
-      def has_selection?
-        !select_end.nil? && !select_begin.nil?
-      end
-
-      def char_is_selected(char)
-        return false if select_begin.nil? || select_end.nil? || (select_end - select_begin).zero?
-
-        (select_begin..select_end).include?(char.offset)
-      end
-
-      def make_selection(start, stop)
-        self.select_begin = start
-        self.select_end = stop
-      end
+    def register(name, texture)
+      @textures[name] = texture
     end
 
-    attr_reader :raw, :markdown
-
-    def initialize(raw, markdown: false)
-      @markdown = markdown
-      @raw = raw
+    def get(name)
+      @textures[name]
     end
 
-    def segments
-      return @segments unless @segments.nil?
+    def delete(name)
+      @textures.delete(name)
+    end
+  end
 
-      @segments = []
-      each_segment do |segment|
-        @segments << segment
-      end
-
-      @segments
+  class ImageRegistry
+    def initialize
+      @images = {}
     end
 
-    def debug
-      LibHokusai.hoku_text_clamp_debug(raw)
+    def create(name, width, height, transparent = false)
+      @images[name] ||= Hokusai::Image.init(width, height, transparent)
+      @images[name]
     end
 
-    def each_segment
-      segment = raw[:segments]
-      i = 0
-
-      until segment.null?
-        yield Segment.new(segment), i
-        i += 1
-
-
-        segment = segment[:next_segment]
-      end
+    def register(name, image)
+      @images[name] = image
     end
 
-    def text(segment)
-      raw[:text][segment.offset, segment.size]
+    def get(name)
+      @images[name]
     end
 
-    def [](offset, size)
-      raw[:text][offset, size]
-    end
-
-    def to_a
-      segments.map do |segment|
-        text(segment)
-      end
+    def delete(name)
+      @images.delete(name)
     end
   end
 
@@ -3466,10 +3271,10 @@ module Hokusai
 
       before_render&.call([root, nil], canvas, input)
 
-      root_children = (canvas.reverse? ? root.children?&.reverse.dup : root.children?&.dup) || []
+      # root_children = (canvas.reverse? ? root.children?&.reverse.dup : root.children?&.dup) || []
       groups = []
       root_entry = PainterEntry.new(root, canvas.x, canvas.y, canvas.width, canvas.height)
-      groups << [root_entry, measure(root_children, canvas)]
+      groups << [root_entry, measure([root], canvas)]
 
       mouse_y = input.mouse.pos.y
       can_capture = mouse_y >= (canvas.y || 0.0) && mouse_y <= (canvas.y || 0.0) + canvas.height
@@ -3500,7 +3305,6 @@ module Hokusai
           else
             entry = PainterEntry.new(group.block, group.x, group.y, group.w, group.h).freeze
           end
-
 
           canvas.reset(entry.x, entry.y, entry.w, entry.h)
 
@@ -3679,6 +3483,173 @@ module Hokusai
         events[:pinch].capture(block, canvas)
         events[:swipe].capture(block, canvas)
       end
+    end
+  end
+end
+
+module Hokusai
+  class TexturePainter
+    attr_reader :root, :commands
+
+    def initialize(root)
+      @root = root
+      @commands = []
+    end
+
+    # @return [Array(Commands::Base)] the command list
+    def render(canvas)
+      return if root.children.empty?
+
+      zindexed = {}
+      zindex_counter = 0
+
+      zroot_x = canvas.x
+      zroot_y = canvas.y
+      zroot_w = canvas.width
+      zroot_h = canvas.height
+
+      root_children = (canvas.reverse? ? root.children?&.reverse.dup : root.children?&.dup) || []
+      groups = []
+      root_entry = PainterEntry.new(root, canvas.x, canvas.y, canvas.width, canvas.height)
+      groups << [root_entry, measure([root], canvas)]
+
+      hovered = false
+      while payload = groups.pop
+        group_parent, group_children = payload
+        
+        parent_z = group_parent.block.node.meta.get_prop(:z)&.to_i
+        zindex_counter -= 1 if (parent_z || 0) > 0 && group_children.empty?
+
+        while group = group_children.shift
+          z = group.block.node.meta.get_prop(:z)&.to_i || 0
+          ztarget = group.block.node.meta.get_prop(:ztarget)
+
+          if (zindex_counter > 0 || z > 0)
+            pos = group.block.node.meta.get_prop(:zposition)
+            pos = pos.nil? ? Hokusai::Boundary.default : Hokusai::Boundary.convert(pos)
+
+            case ztarget
+            when ZTARGET_ROOT
+              entry = PainterEntry.new(group.block, (zroot_x || 0.0) + pos.left, (zroot_y || 0.0) + pos.top, zroot_w + pos.right, zroot_h + pos.bottom).freeze
+            when ZTARGET_PARENT
+              entry = PainterEntry.new(group.block, (group_parent.x || 0.0) + pos.left, (group_parent.y || 0.0) + pos.top, group_parent.w + pos.right, group_parent.h + pos.bottom).freeze
+            else
+              entry = PainterEntry.new(group.block, group.x + pos.left, group.y + pos.top, group.w + pos.right, group.h + pos.bottom).freeze
+            end
+          else
+            entry = PainterEntry.new(group.block, group.x, group.y, group.w, group.h).freeze
+          end
+
+          canvas.reset(entry.x, entry.y, entry.w, entry.h)
+
+          breaked = false
+
+          group.block.render(canvas) do |local_canvas|
+            local_children = (local_canvas.reverse? ? group.block.children?&.reverse : group.block.children?)
+
+            unless local_children.nil?
+              groups << [group_parent, group_children]
+              parent = PainterEntry.new(group.block, canvas.x, canvas.y, canvas.width, canvas.height)
+              groups << [parent, measure(local_children, local_canvas)]
+
+              breaked = true
+            else
+              breaked = false
+            end
+          end
+          
+          if z > 0
+            zindex_counter += 1
+            # puts ["start (#{z}) <#{parent_z}> {#{zindex_counter}} #{group.block.class}".colorize(:blue), z, group.block.node.portal&.ast&.id]
+            zindexed[zindex_counter] ||= []
+            zindexed[zindex_counter] << group
+          elsif zindex_counter > 0
+            zindexed[zindex_counter] ||= []
+            zindexed[zindex_counter] << group
+          else
+            commands.concat group.block.node.meta.commands.queue
+            group.block.node.meta.commands.clear!
+          end
+
+          break if breaked
+        end
+      end
+
+      zindexed.sort.each do |z, groups|
+        groups.each do |group|
+          canvas.reset(group.x, group.y, group.w, group.h)
+
+          commands.concat group.block.node.meta.commands.queue
+          group.block.node.meta.commands.clear!
+        end
+      end
+    end
+
+    def measure(children, canvas)
+      x = canvas.x || 0.0
+      y = canvas.y || 0.0
+      width = canvas.width
+      height = canvas.height
+      vertical = canvas.vertical
+
+      count = 0
+      wcount = 0
+      hcount = 0
+      wsum = 0.0
+      hsum = 0.0
+
+      children.each do |block|
+        z = block.node.meta.get_prop?(:z)&.to_i || 0
+        h = block.node.meta.get_prop?(:height)&.to_f
+        w = block.node.meta.get_prop?(:width)&.to_f
+
+        next if z > 0
+
+        if w
+          wsum += w
+          wcount = wcount.succ
+        end
+
+        if h
+          hsum += h
+          hcount = hcount.succ
+        end
+
+        count = count.succ
+      end
+
+      neww = width
+      newh = height
+
+      if vertical
+        c = (count - hcount)
+        newh = (newh - hsum)  / (c.zero? ? 1 : c)
+      else
+        c = (count - wcount)
+        neww = (neww - wsum) / (c.zero? ? 1 : c)
+      end
+
+      entries = []
+
+      children.each do |block|
+        # nw, nh = ntuple
+        w = block.node.meta.get_prop?(:width)&.to_f || neww
+        h = block.node.meta.get_prop?(:height)&.to_f || newh
+
+        # local_canvas = Hokusai::Canvas.new(w, h, x, y)
+        # block.node.meta.props[:height] ||= h
+        # block.node.meta.props[:width] ||= w
+
+        entries << PainterEntry.new(block, x, y, w, h).freeze
+
+        if vertical
+          y += h
+        else
+          x += w
+        end
+      end
+
+      entries
     end
   end
 end
@@ -3915,7 +3886,7 @@ module Hokusai::Util
 end
 
 module Hokusai::Util
-  class SelectionNew
+  class Selection
     attr_reader :geom, :pos
     attr_accessor :type, :offset_y, :diff, :cursor
 
@@ -4654,12 +4625,9 @@ module Hokusai
     def self.run(klass, &block)
       config = Backend::Config.new
       block.call config
-      puts "After block"
       app = klass.mount
-      puts "after mount"
 
       obj = new(app, config)
-      puts "after new"
       obj.run
     end
 
@@ -4675,12 +4643,13 @@ module Hokusai
                   :title, :config_flags, :window_state_flags,
                   :automation_driver, :background, :after_load_cb,
                   :host, :port, :automated, :on_reload, :event_waiting, :touch,
-                  :draw_fps, :log
+                  :draw_fps, :log, :audio
 
       def initialize
         @width = 500
         @height = 500
         @fps = 60
+        @audio = true
         @draw_fps = false
         @title = "(Unknown Title)"
         @config_flags = HP_FLAG_WINDOW_RESIZABLE | HP_FLAG_VSYNC_HINT
@@ -5175,16 +5144,16 @@ class Hokusai::Blocks::Image < Hokusai::Block
       virtual
   EOF
 
-  computed! :source
+  computed! :name
   computed :width, default: nil
   computed :height, default: nil
   computed :padding, default: Hokusai::Padding.new(0.0, 0.0, 0.0, 0.0), convert: Hokusai::Padding
 
   def render(canvas)
-    src = Pathname.new(source).absolute? ? source : "#{File.dirname(caller[-1].split(":")[0])}/#{source}"
-
-    draw do
-      image(src, canvas.x + padding.left, canvas.y + padding.top, (width&.to_f || canvas.width) - padding.right, (height&.to_f || canvas.height) - padding.bottom)
+    if image = Hokusai.images.get(name)
+      draw do
+        image(image, canvas.x + padding.left, canvas.y + padding.top, (width&.to_f || canvas.width) - padding.right, (height&.to_f || canvas.height) - padding.bottom)
+      end
     end
 
     yield canvas
@@ -6318,7 +6287,7 @@ module Hokusai::Util
 end
 
 module Hokusai::Util
-  class SelectionNew
+  class Selection
     attr_reader :geom, :pos
     attr_accessor :type, :offset_y, :diff, :cursor
 
@@ -6408,6 +6377,7 @@ class Hokusai::Blocks::Text < Hokusai::Block
   computed :font, default: nil
   computed :size, default: 15, convert: proc(&:to_i)
   computed :copy_text, default: false
+  computed :cache, default: true
 
   inject :panel_top
   inject :panel_height
@@ -6447,13 +6417,13 @@ class Hokusai::Blocks::Text < Hokusai::Block
 
     should_splice = last_content != content && !last_content.nil?
 
-    return @wrap_cache unless force || should_splice || !heights_loaded || breaked || @wrap_cache.nil?
+    return @wrap_cache unless !cache || force || should_splice || !heights_loaded || breaked || @wrap_cache.nil?
 
     # if there's no cache, new / wrap
     # if the heights aren't loaded - new / wrap
     # if the content changed - use / splice
     # if forced / resized - new / wrap
-    if force || !heights_loaded || breaked || @wrap_cache.nil?
+    if !cache || force || !heights_loaded || breaked || @wrap_cache.nil?
       @wrap_cache = Hokusai::Util::WrapCache.new
     end
 
@@ -6481,7 +6451,10 @@ class Hokusai::Blocks::Text < Hokusai::Block
     end
 
     stream.flush
-    self.render_height = stream.y
+    self.render_height = stream.y - canvas.y
+    if render_height.zero?
+      self.render_height += size + padding.height
+    end
 
     if !last_y.nil?
       self.heights_loaded = true
@@ -6849,7 +6822,7 @@ module Hokusai::Util
 end
 
 module Hokusai::Util
-  class SelectionNew
+  class Selection
     attr_reader :geom, :pos
     attr_accessor :type, :offset_y, :diff, :cursor
 
@@ -6957,8 +6930,15 @@ module Hokusai::Blocks
 
     def start_selection(event)
       if event.left.down && !selection.active?
-        selection.clear
-        selection.start(event.pos.x, event.pos.y)
+        selection.pos.cursor_index = nil
+        selection.geom!
+
+        selection.geom.clear
+        selection.geom.start(event.pos.x, event.pos.y)
+        selection.geom.set_click_pos(event.pos.x, event.pos.y)
+      elsif selection.geom.frozen?
+        selection.geom.click_pos = nil
+        selection.geom.clear
       end
     end
 
@@ -6966,9 +6946,9 @@ module Hokusai::Blocks
       return unless selection.active?
       
       if event.left.up
-        selection.freeze!
+        selection.geom.freeze!
       elsif event.left.down
-        selection.stop(event.pos.x, event.pos.y)
+        selection.geom.stop(event.pos.x, event.pos.y)
       end
     end
 
@@ -7769,7 +7749,7 @@ module Hokusai::Util
 end
 
 module Hokusai::Util
-  class SelectionNew
+  class Selection
     attr_reader :geom, :pos
     attr_accessor :type, :offset_y, :diff, :cursor
 
@@ -7859,6 +7839,7 @@ class Hokusai::Blocks::Text < Hokusai::Block
   computed :font, default: nil
   computed :size, default: 15, convert: proc(&:to_i)
   computed :copy_text, default: false
+  computed :cache, default: true
 
   inject :panel_top
   inject :panel_height
@@ -7898,13 +7879,13 @@ class Hokusai::Blocks::Text < Hokusai::Block
 
     should_splice = last_content != content && !last_content.nil?
 
-    return @wrap_cache unless force || should_splice || !heights_loaded || breaked || @wrap_cache.nil?
+    return @wrap_cache unless !cache || force || should_splice || !heights_loaded || breaked || @wrap_cache.nil?
 
     # if there's no cache, new / wrap
     # if the heights aren't loaded - new / wrap
     # if the content changed - use / splice
     # if forced / resized - new / wrap
-    if force || !heights_loaded || breaked || @wrap_cache.nil?
+    if !cache || force || !heights_loaded || breaked || @wrap_cache.nil?
       @wrap_cache = Hokusai::Util::WrapCache.new
     end
 
@@ -7932,7 +7913,10 @@ class Hokusai::Blocks::Text < Hokusai::Block
     end
 
     stream.flush
-    self.render_height = stream.y
+    self.render_height = stream.y - canvas.y
+    if render_height.zero?
+      self.render_height += size + padding.height
+    end
 
     if !last_y.nil?
       self.heights_loaded = true
@@ -8076,7 +8060,7 @@ class Hokusai::Blocks::Input < Hokusai::Block
       @click="start_selection"
       @hover="update_selection"
       :autoclip="true"
-  }
+    }
       text {
         :content="model"
         :size="size"
@@ -8126,7 +8110,7 @@ class Hokusai::Blocks::Input < Hokusai::Block
 
     @buffer = ""
     @cursor = nil
-    @selection = Hokusai::Util::SelectionNew.new
+    @selection = Hokusai::Util::Selection.new
   end
 
   def update_click_position(event)
@@ -8438,13 +8422,6 @@ class Hokusai::Blocks::Modal < Hokusai::Block
   [template]
     hblock
       empty
-      empty
-      image {
-        :source="close_icon"
-        ...closeButtonStyle
-        @click="emit_close"
-
-      }
     hblock
       empty
       slot
@@ -8457,7 +8434,6 @@ class Hokusai::Blocks::Modal < Hokusai::Block
     vblock: Hokusai::Blocks::Vblock,
     hblock: Hokusai::Blocks::Hblock,
     empty: Hokusai::Blocks::Empty,
-    image: Hokusai::Blocks::Image
   )
 
   computed :active, default: false
@@ -8491,18 +8467,19 @@ class Hokusai::Blocks::Texture < Hokusai::Block
     virtual
   EOF
 
-  computed :width, default: nil, convert: proc(&:to_i)
-  computed :height, default: nil, convert: proc(&:to_i)
+  computed :value, default: nil
   computed :x, default: nil
   computed :y, default: nil
-  computed :rotation, default: nil
-  computed :scale, default: 100.0
+  computed :flip, default: true
   
   def render(canvas)
-    draw do
-      texture(x || canvas.x, y || canvas.y, width || canvas.width, height || canvas.height) do |command|
-        command.rotation = rotation if rotation
-        command.scale = scale
+    if tex = value
+      draw do
+        texture(tex, x || canvas.x, y || canvas.y) do |command|
+          command.width = canvas.width
+          command.height = canvas.height
+          command.flip = flip
+        end
       end
     end
   end
@@ -8517,6 +8494,7 @@ class Hokusai::Blocks::ShaderBegin < Hokusai::Block
   computed :fragment_shader, default: nil
   computed :vertex_shader, default: nil
   computed :uniforms, default: {}
+  computed :textures, default: {}
 
   def render(canvas)
     draw do
@@ -8524,6 +8502,7 @@ class Hokusai::Blocks::ShaderBegin < Hokusai::Block
         command.vertex_shader = vertex_shader
         command.fragment_shader = fragment_shader
         command.uniforms = uniforms
+        command.textures = textures
       end
     end
 
@@ -8588,7 +8567,7 @@ class Hokusai::Blocks::ColorPicker < Hokusai::Block
           :fragment_shader="picker_shader"
           :uniforms="values"
         }
-          texture
+          texture { :value="texture" :flip="false" }
           shader_end { :height="0.0" :width="0.0" }
       vblock {
         width="32"
@@ -8599,7 +8578,7 @@ class Hokusai::Blocks::ColorPicker < Hokusai::Block
           :fragment_shader="hue_shader"
           :uniforms="values"
         }
-          texture
+          texture { :value="texture" :flip="false" }
           shader_end { :height="0.0" :width="0.0"}
       vblock { :z="3" ztarget="root"}
         [if="picking"]
@@ -8614,7 +8593,6 @@ class Hokusai::Blocks::ColorPicker < Hokusai::Block
   uses(
     rect: Hokusai::Blocks::Rect,
     empty: Hokusai::Blocks::Empty,
-    image: Hokusai::Blocks::Image,
     shader_begin: Hokusai::Blocks::ShaderBegin, 
     shader_end: Hokusai::Blocks::ShaderEnd, 
     texture: Hokusai::Blocks::Texture,
@@ -8624,7 +8602,7 @@ class Hokusai::Blocks::ColorPicker < Hokusai::Block
   )
 
   attr_accessor :position, :top, :left, :height, :width, :selecting, :selection,
-                :brightness, :saturation, :pickerx, :pickery
+                :brightness, :saturation, :pickerx, :pickery, :texture
   
 
   def start_selection(event)
@@ -9611,13 +9589,17 @@ class Hokusai::Blocks::ColorPicker < Hokusai::Block
     self.height = canvas.height
     self.width = canvas.width
 
+    @texture ||= Hokusai::Texture.init(1, 1)
+
     yield canvas
   end
 end
-class Hokusai::Blocks::TranslationBlock < Hokusai::Block
+class Hokusai::Blocks::Translation < Hokusai::Block
   template <<~EOF
   [template]
-    dynamic { @size_updated="set_size" }
+    dynamic { 
+      @size_updated="set_size" 
+    }
       slot
   EOF
 
@@ -9634,10 +9616,6 @@ class Hokusai::Blocks::TranslationBlock < Hokusai::Block
 
   computed :duration, default: 500.0, convert: proc(&:to_f)
   computed :from, default: :top, convert: proc(&:to_sym)
-
-  def on_mounted
-    @start = Process.clock_gettime(Process::CLOCK_MONOTONIC, :millisecond)
-  end
 
   def circular_in(t)
     return 1.0 - Math.sqrt(1.0 - t * t);
@@ -9667,7 +9645,9 @@ class Hokusai::Blocks::TranslationBlock < Hokusai::Block
 
   def render(canvas)
     @canvas ||= canvas
-    time = Process.clock_gettime(Process::CLOCK_MONOTONIC, :millisecond) - @start
+    @start ||= Hokusai.monotonic
+
+    time = Hokusai.monotonic - @start
 
     if time > duration
       yield canvas
@@ -10681,7 +10661,7 @@ module Hokusai::Util
 end
 
 module Hokusai::Util
-  class SelectionNew
+  class Selection
     attr_reader :geom, :pos
     attr_accessor :type, :offset_y, :diff, :cursor
 
@@ -10771,6 +10751,7 @@ class Hokusai::Blocks::Text < Hokusai::Block
   computed :font, default: nil
   computed :size, default: 15, convert: proc(&:to_i)
   computed :copy_text, default: false
+  computed :cache, default: true
 
   inject :panel_top
   inject :panel_height
@@ -10810,13 +10791,13 @@ class Hokusai::Blocks::Text < Hokusai::Block
 
     should_splice = last_content != content && !last_content.nil?
 
-    return @wrap_cache unless force || should_splice || !heights_loaded || breaked || @wrap_cache.nil?
+    return @wrap_cache unless !cache || force || should_splice || !heights_loaded || breaked || @wrap_cache.nil?
 
     # if there's no cache, new / wrap
     # if the heights aren't loaded - new / wrap
     # if the content changed - use / splice
     # if forced / resized - new / wrap
-    if force || !heights_loaded || breaked || @wrap_cache.nil?
+    if !cache || force || !heights_loaded || breaked || @wrap_cache.nil?
       @wrap_cache = Hokusai::Util::WrapCache.new
     end
 
@@ -10844,7 +10825,10 @@ class Hokusai::Blocks::Text < Hokusai::Block
     end
 
     stream.flush
-    self.render_height = stream.y
+    self.render_height = stream.y - canvas.y
+    if render_height.zero?
+      self.render_height += size + padding.height
+    end
 
     if !last_y.nil?
       self.heights_loaded = true
@@ -11787,6 +11771,18 @@ module Hokusai
     @fonts ||= FontRegistry.new
   end
 
+  def self.textures
+    @textures ||= TextureRegistry.new
+  end
+
+  def self.images
+    @images ||= ImageRegistry.new
+  end
+
+  def self.musics
+    @musics ||= MusicRegistry.new
+  end
+
   # Close the current window
   #
   # @return [void]
@@ -11833,6 +11829,14 @@ module Hokusai
   # **Backend** Provides the maximize window callback
   def self.on_maximize_window(&block)
     @on_maximize_window = block
+  end
+
+  def self.on_resize_window(&block)
+    @on_resize_window = block
+  end
+
+  def self.resize_window(width, height)
+    @on_resize_window&.call(width, height)
   end
 
   # Sets the window position on the screen

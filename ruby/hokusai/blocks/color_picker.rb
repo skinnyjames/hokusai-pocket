@@ -43,7 +43,7 @@ class Hokusai::Blocks::ColorPicker < Hokusai::Block
           :fragment_shader="picker_shader"
           :uniforms="values"
         }
-          texture
+          texture { :value="texture" :flip="false" }
           shader_end { :height="0.0" :width="0.0" }
       vblock {
         width="32"
@@ -54,7 +54,7 @@ class Hokusai::Blocks::ColorPicker < Hokusai::Block
           :fragment_shader="hue_shader"
           :uniforms="values"
         }
-          texture
+          texture { :value="texture" :flip="false" }
           shader_end { :height="0.0" :width="0.0"}
       vblock { :z="3" ztarget="root"}
         [if="picking"]
@@ -69,7 +69,6 @@ class Hokusai::Blocks::ColorPicker < Hokusai::Block
   uses(
     rect: Hokusai::Blocks::Rect,
     empty: Hokusai::Blocks::Empty,
-    image: Hokusai::Blocks::Image,
     shader_begin: Hokusai::Blocks::ShaderBegin, 
     shader_end: Hokusai::Blocks::ShaderEnd, 
     texture: Hokusai::Blocks::Texture,
@@ -79,7 +78,7 @@ class Hokusai::Blocks::ColorPicker < Hokusai::Block
   )
 
   attr_accessor :position, :top, :left, :height, :width, :selecting, :selection,
-                :brightness, :saturation, :pickerx, :pickery
+                :brightness, :saturation, :pickerx, :pickery, :texture
   
 
   def start_selection(event)
@@ -1065,6 +1064,8 @@ class Hokusai::Blocks::ColorPicker < Hokusai::Block
     self.left = canvas.x
     self.height = canvas.height
     self.width = canvas.width
+
+    @texture ||= Hokusai::Texture.init(1, 1)
 
     yield canvas
   end

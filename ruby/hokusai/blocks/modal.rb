@@ -13,13 +13,6 @@ class Hokusai::Blocks::Modal < Hokusai::Block
   [template]
     hblock
       empty
-      empty
-      image {
-        :source="close_icon"
-        ...closeButtonStyle
-        @click="emit_close"
-
-      }
     hblock
       empty
       slot
@@ -32,7 +25,6 @@ class Hokusai::Blocks::Modal < Hokusai::Block
     vblock: Hokusai::Blocks::Vblock,
     hblock: Hokusai::Blocks::Hblock,
     empty: Hokusai::Blocks::Empty,
-    image: Hokusai::Blocks::Image
   )
 
   computed :active, default: false

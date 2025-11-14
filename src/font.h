@@ -2,7 +2,6 @@
 #define HOKUSAI_POCKET_FONT_H
 
 #include <mruby.h>
-#include <mruby.h>
 #include <mruby/data.h>
 #include <mruby/class.h>
 #include <mruby/compile.h>

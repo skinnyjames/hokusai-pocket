@@ -232,7 +232,7 @@ spec("hokusai-pocket") do |config|
     def frameworks(args)
       case detected_os
       when "MacOS"
-        "-framework CoreVideo -framework IOKit -framework Cocoa -framework GLUT -framework OpenGL"
+        "-framework CoreVideo -framework CoreAudio -framework IOKit -framework Cocoa -framework GLUT -framework OpenGL"
       when "Windows"
         # add -mwindows after figuring out why apps don't launch... 
         "-lgdi32 -lwinmm -lws2_32"

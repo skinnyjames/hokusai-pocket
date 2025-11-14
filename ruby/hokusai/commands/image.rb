@@ -1,9 +1,9 @@
 module Hokusai
   class Commands::Image < Commands::Base
-    attr_reader :x, :y, :width, :height, :source
+    attr_reader :x, :y, :width, :height, :image
 
-    def initialize(source, x, y, width, height)
-      @source = source
+    def initialize(image, x, y, width, height)
+      @image = image
       @x = x
       @y = y
       @width = width
@@ -15,15 +15,15 @@ module Hokusai
     end
 
     def cache
-      [source, width, height].hash
+      [width, height].hash
     end
   end
 
   class Commands::SVG < Commands::Base
     attr_reader :x, :y, :width, :height, :source, :color
 
-    def initialize(source, x, y, width, height)
-      @source = source
+    def initialize(image, x, y, width, height)
+      @image = image
       @x = x
       @y = y
       @width = width

@@ -20,12 +20,9 @@ module Hokusai
     def self.run(klass, &block)
       config = Backend::Config.new
       block.call config
-      puts "After block"
       app = klass.mount
-      puts "after mount"
 
       obj = new(app, config)
-      puts "after new"
       obj.run
     end
 
@@ -41,12 +38,13 @@ module Hokusai
                   :title, :config_flags, :window_state_flags,
                   :automation_driver, :background, :after_load_cb,
                   :host, :port, :automated, :on_reload, :event_waiting, :touch,
-                  :draw_fps, :log
+                  :draw_fps, :log, :audio
 
       def initialize
         @width = 500
         @height = 500
         @fps = 60
+        @audio = true
         @draw_fps = false
         @title = "(Unknown Title)"
         @config_flags = HP_FLAG_WINDOW_RESIZABLE | HP_FLAG_VSYNC_HINT

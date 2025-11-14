@@ -61,9 +61,9 @@ static bool scanner_pop(struct HmlScanList** scanner)
 */
 static void scanner_serialize(struct HmlScanList** scanner, char* buffer)
 {
-  int i = 0; 
+  // int i = 0; 
   struct HmlScanList* head = *scanner;
-  i = sprintf(buffer, "%ld", head->col);
+  sprintf(buffer, "%ld", head->col);
   head = head->next;
   while (head != NULL && head->col != 0)
   {
@@ -89,7 +89,7 @@ static void scanner_deserialize(struct HmlScanner* scanner, const char* buffer, 
 
   char* scan_ep;
   char scan_buffer[32];
-  bool scanned_indent = false;
+  // bool scanned_indent = false;
   int track = 0;
   int done = 0;
 
@@ -192,8 +192,8 @@ bool tree_sitter_hml_external_scanner_scan(void* payload, TSLexer* lexer, const 
         if (lexer->lookahead == '#' || lexer->lookahead == '{' || lexer->lookahead == '.') return false;
         
         current_column = (long int) lexer->get_column(lexer) + 1;
-        long int a = -1;
-        if (scanner->list->next) a = scanner->list->next->col;
+        // long int a = -1;
+        // if (scanner->list->next) a = scanner->list->next->col;
         // printf("'%c' CURRENT %ld | SCANNED %ld | NEXT %ld\n", lexer->lookahead, current_column, scanner->list->col, a);
 
         if (current_column == scanner->list->col)

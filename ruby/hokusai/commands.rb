@@ -119,10 +119,18 @@ module Hokusai
       queue << Commands::TranslationEnd.new
     end
 
-    def texture(x, y, w, h)
-      command = Commands::Texture.new(x, y, w, h)
+    # def texture_begin(texture, x, y)
+    #   commands << Commands::TextureBegin.new(texture, x, y)
+    # end
 
-      yield command
+    # def texture_end
+    #   commands << Commands::TextureEnd.new
+    # end
+
+    def texture(texture, x, y)
+      command = Commands::Texture.new(texture, x, y)
+
+      yield command if block_given?
 
       queue << command
     end
