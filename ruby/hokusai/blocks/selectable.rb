@@ -38,8 +38,15 @@ module Hokusai::Blocks
 
     def start_selection(event)
       if event.left.down && !selection.active?
-        selection.clear
-        selection.start(event.pos.x, event.pos.y)
+        selection.pos.cursor_index = nil
+        selection.geom!
+
+        selection.geom.clear
+        selection.geom.start(event.pos.x, event.pos.y)
+        selection.geom.set_click_pos(event.pos.x, event.pos.y)
+      elsif selection.geom.frozen?
+        selection.geom.click_pos = nil
+        selection.geom.clear
       end
     end
 
@@ -47,9 +54,9 @@ module Hokusai::Blocks
       return unless selection.active?
       
       if event.left.up
-        selection.freeze!
+        selection.geom.freeze!
       elsif event.left.down
-        selection.stop(event.pos.x, event.pos.y)
+        selection.geom.stop(event.pos.x, event.pos.y)
       end
     end
 

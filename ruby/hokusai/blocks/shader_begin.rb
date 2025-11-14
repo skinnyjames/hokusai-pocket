@@ -7,6 +7,7 @@ class Hokusai::Blocks::ShaderBegin < Hokusai::Block
   computed :fragment_shader, default: nil
   computed :vertex_shader, default: nil
   computed :uniforms, default: {}
+  computed :textures, default: {}
 
   def render(canvas)
     draw do
@@ -14,6 +15,7 @@ class Hokusai::Blocks::ShaderBegin < Hokusai::Block
         command.vertex_shader = vertex_shader
         command.fragment_shader = fragment_shader
         command.uniforms = uniforms
+        command.textures = textures
       end
     end
 

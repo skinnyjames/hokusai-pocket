@@ -69,7 +69,6 @@ class Hokusai::Blocks::ColorPicker < Hokusai::Block
   uses(
     rect: Hokusai::Blocks::Rect,
     empty: Hokusai::Blocks::Empty,
-    image: Hokusai::Blocks::Image,
     shader_begin: Hokusai::Blocks::ShaderBegin, 
     shader_end: Hokusai::Blocks::ShaderEnd, 
     texture: Hokusai::Blocks::Texture,

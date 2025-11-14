@@ -82,7 +82,7 @@ module Hokusai
 
         if sattr = style["default"]
           sattr.each do |key, value|
-            meta.set_prop(key.to_sym, value)
+            meta.set_prop(key.to_sym, value) unless value.nil?
           end
         end
       end

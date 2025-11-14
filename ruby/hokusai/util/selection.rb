@@ -2,7 +2,7 @@ require_relative "./geometry_selection"
 require_relative "./position_selection"
 
 module Hokusai::Util
-  class SelectionNew
+  class Selection
     attr_reader :geom, :pos
     attr_accessor :type, :offset_y, :diff, :cursor
 

@@ -22,7 +22,7 @@ char* hoku_get_tag(TSNode tag, char* template)
 
 void hoku_debug(TSNode node, char* template)
 {
-	char* ntype = ts_node_type(node);
+	const char* ntype = ts_node_type(node);
 	char* val = hoku_get_tag(node, template);
 
 	printf("[type: %s] ->\n%s\n", ntype, val);
@@ -30,7 +30,6 @@ void hoku_debug(TSNode node, char* template)
 
 void hoku_dump(hoku_ast* c, int level)
 {
-	size_t count = hashmap_count(c->props);
 	printf("%*s%s", (int)((level) * 2), "", c->type);
 	if (c->id != NULL) printf("#%s", c->id);
 
@@ -127,7 +126,7 @@ hoku_ast_func_call* hoku_ast_walk_func(TSNode node, char* template, int level)
 
 hoku_ast_event* hoku_ast_walk_event(TSNode node, char* template, int level)
 {
-	char* type = ts_node_type(node);
+	// const char* type = ts_node_type(node);
 	TSNode nname = ts_node_child(node, 0);
 
 	char* name = hoku_get_tag(nname, template);
@@ -145,7 +144,7 @@ hoku_ast_event* hoku_ast_walk_event(TSNode node, char* template, int level)
 
 hoku_ast_prop* hoku_ast_walk_prop(TSNode node, char* template, int level)
 {
-	char* type = ts_node_type(node);
+	// const char* type = ts_node_type(node);
 	bool computed = false;
 	TSNode nname = ts_node_child(node, 0);
 
@@ -183,7 +182,7 @@ element 1
 */
 hoku_ast* hoku_ast_walk_tree(TSNode node, char* template, int level)
 {
-	char* ntype = ts_node_type(node);
+	const char* ntype = ts_node_type(node);
 	if (ntype == NULL)
 	{
 		f_log(F_LOG_ERROR, "Node type is null!\n %s", template);
@@ -206,7 +205,7 @@ hoku_ast* hoku_ast_walk_tree(TSNode node, char* template, int level)
 		}
 
 		free(name);
-		int i = 0;
+		// int i = 0;
 
 		TSNode sibling = ts_node_next_named_sibling(node);
 
@@ -214,8 +213,8 @@ hoku_ast* hoku_ast_walk_tree(TSNode node, char* template, int level)
 		// can be "attributes OR children"
 		while (!ts_node_is_null(sibling))
 		{
-			i++;
-			char* stype = ts_node_type(sibling);
+			// i++;
+			const char* stype = ts_node_type(sibling);
 			if (stype == NULL)
 			{
 				f_log(F_LOG_ERROR, "Sibling node type is null");
@@ -229,7 +228,7 @@ hoku_ast* hoku_ast_walk_tree(TSNode node, char* template, int level)
 				TSNode attribute = ts_node_named_child(sibling, 0);
 				while (!ts_node_is_null(attribute))
 				{
-					char* atype = ts_node_type(attribute);
+					const char* atype = ts_node_type(attribute);
 					if (atype == NULL)
 					{
 						f_log(F_LOG_ERROR, "attribute type is null");
@@ -292,7 +291,7 @@ hoku_ast* hoku_ast_walk_tree(TSNode node, char* template, int level)
 				TSNode sel = ts_node_named_child(sibling, 0);
 				while (!ts_node_is_null(sel))
 				{	
-					char* seltype = ts_node_type(sel);
+					const char* seltype = ts_node_type(sel);
 					char* seltag = hoku_get_tag(sel, template);
 					if (seltag == NULL)
 					{
@@ -326,7 +325,7 @@ hoku_ast* hoku_ast_walk_tree(TSNode node, char* template, int level)
 				for (uint32_t i=0; i<child_count; i++)
 				{
 					child = ts_node_named_child(sibling, i);
-					char* ctype = ts_node_type(child);
+					const char* ctype = ts_node_type(child);
 					f_log(F_LOG_FINE, "Child: %s %d", ctype, i);
 					f_log(F_LOG_DEBUG, "Walking ast tree for %s (%d)", ctype, level);
 
@@ -448,7 +447,7 @@ hoku_ast* hoku_ast_walk_tree(TSNode node, char* template, int level)
 		TSNode echild = ts_node_next_named_sibling(node);
 		if (!ts_node_is_null(echild))
 		{	
-			char* etype = ts_node_type(echild);
+			const char* etype = ts_node_type(echild);
 
 			if (strcmp(etype, "else_macro") == 0)
 			{
@@ -514,7 +513,7 @@ hoku_ast* hoku_ast_walk_tree(TSNode node, char* template, int level)
 
 		if (!ts_node_is_null(echild))
 		{	
-			char* etype = ts_node_type(echild);
+			const char* etype = ts_node_type(echild);
 
 			if (strcmp(etype, "else_macro") == 0)
 			{
@@ -550,8 +549,7 @@ hoku_style_attribute* hoku_walk_style_attributes(TSNode node, char* template)
 		char* attribute_name = hoku_get_tag(attribute_name_node, template);
 		TSNode value_node;
 		value_node = ts_node_next_named_sibling(attribute_name_node);
-		char* value_node_type;
-		value_node_type = ts_node_type(value_node);
+		const char* value_node_type = ts_node_type(value_node);
 
 		if (value_node_type == NULL || attribute_name == NULL)
 		{
@@ -594,6 +592,11 @@ hoku_style_attribute* hoku_walk_style_attributes(TSNode node, char* template)
 
 			TSNode func_value_node = ts_node_next_named_sibling(func_name_node);
 			value = hoku_get_tag(func_value_node, template);
+		}
+		else
+		{
+			f_log(F_LOG_ERROR, "Invalid Style Type: %d", value_node_type);
+			return NULL;
 		}
 
 		hoku_style_attribute* attribute;
@@ -796,13 +799,13 @@ int hoku_ast_from_template(hoku_ast** out, char* type, char* template)
 	
 	TSNode child = ts_node_named_child(templ, 0);
 	hoku_ast* roots = NULL;
-	char* ntype = ts_node_type(child);
+	char* ntype = (char*)ts_node_type(child);
 	f_log(F_LOG_FINE, "init vars, %p, %p", child, ntype);
 
 	f_log(F_LOG_DEBUG, "Walking template tree for");
 	while (!ts_node_is_null(child))
 	{
-		ntype = ts_node_type(child);
+		ntype = (char*)ts_node_type(child);
 
 		if (strcmp(ntype, "else_macro") != 0)
 		{
@@ -814,7 +817,7 @@ int hoku_ast_from_template(hoku_ast** out, char* type, char* template)
 			if (children == NULL) 
 			{
 				f_log(F_LOG_WARN, "Children are NULL");
-				char* ntype = ts_node_type(child);
+				ntype = (char*)ts_node_type(child);
 			}
 
 			if (roots == NULL)

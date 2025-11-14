@@ -123,7 +123,6 @@ module Hokusai
             entry = PainterEntry.new(group.block, group.x, group.y, group.w, group.h).freeze
           end
 
-
           canvas.reset(entry.x, entry.y, entry.w, entry.h)
 
           before_render&.call([group.block, group.parent], canvas, input)
