@@ -1,7 +1,9 @@
-class Hokusai::Blocks::TranslationBlock < Hokusai::Block
+class Hokusai::Blocks::Translation < Hokusai::Block
   template <<~EOF
   [template]
-    dynamic { @size_updated="set_size" }
+    dynamic { 
+      @size_updated="set_size" 
+    }
       slot
   EOF
 
@@ -18,10 +20,6 @@ class Hokusai::Blocks::TranslationBlock < Hokusai::Block
 
   computed :duration, default: 500.0, convert: proc(&:to_f)
   computed :from, default: :top, convert: proc(&:to_sym)
-
-  def on_mounted
-    @start = Process.clock_gettime(Process::CLOCK_MONOTONIC, :millisecond)
-  end
 
   def circular_in(t)
     return 1.0 - Math.sqrt(1.0 - t * t);
@@ -51,7 +49,9 @@ class Hokusai::Blocks::TranslationBlock < Hokusai::Block
 
   def render(canvas)
     @canvas ||= canvas
-    time = Process.clock_gettime(Process::CLOCK_MONOTONIC, :millisecond) - @start
+    @start ||= Hokusai.monotonic
+
+    time = Hokusai.monotonic - @start
 
     if time > duration
       yield canvas

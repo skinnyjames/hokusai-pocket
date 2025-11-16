@@ -4,9 +4,10 @@ require_relative './hokusai/types'
 require_relative './hokusai/node'
 require_relative './hokusai/block'
 require_relative './hokusai/commands'
-require_relative './hokusai/font'
+require_relative './hokusai/registry'
 require_relative './hokusai/event'
 require_relative './hokusai/painter'
+require_relative './hokusai/texture_painter'
 require_relative './hokusai/util/selection'
 require_relative './hokusai/util/piece_table'
 require_relative './hokusai/util/wrap_stream'
@@ -74,6 +75,18 @@ module Hokusai
     @fonts ||= FontRegistry.new
   end
 
+  def self.textures
+    @textures ||= TextureRegistry.new
+  end
+
+  def self.images
+    @images ||= ImageRegistry.new
+  end
+
+  def self.musics
+    @musics ||= MusicRegistry.new
+  end
+
   # Close the current window
   #
   # @return [void]
@@ -120,6 +133,14 @@ module Hokusai
   # **Backend** Provides the maximize window callback
   def self.on_maximize_window(&block)
     @on_maximize_window = block
+  end
+
+  def self.on_resize_window(&block)
+    @on_resize_window = block
+  end
+
+  def self.resize_window(width, height)
+    @on_resize_window&.call(width, height)
   end
 
   # Sets the window position on the screen

@@ -3,9 +3,10 @@ module Hokusai
     attr_reader :vertex_shader, :fragment_shader, :uniforms
 
     def initialize
-      @uniforms = []
+      @uniforms = {}
       @vertex_shader =  nil
       @fragment_shader = nil
+      @textures = {}
     end
 
     def vertex_shader=(content)
@@ -18,6 +19,18 @@ module Hokusai
 
     def uniforms=(values)
       @uniforms = values
+    end
+
+    def textures=(values)
+      @textures = values
+    end
+
+    def textures
+      @textures.transform_keys(&:to_s)
+    end
+
+    def uniforms
+      @uniforms.transform_keys!(&:to_s)
     end
 
     def hash

@@ -18,51 +18,28 @@ typedef struct HokuAstWrapper
 static void hoku_ast_type_free(mrb_state* mrb, void* payload)
 {
   hoku_ast_wrapper* wrapper = (hoku_ast_wrapper*)payload;
-  if (wrapper->ast->is_root && wrapper->ast->type) 
+  if (wrapper->ast->is_root) 
   {
-    f_log(F_LOG_FINE, "freeing root %p %s", wrapper->ast, wrapper->ast->type);
-    if (wrapper->ast->type)
-    {
-      hoku_ast_free(wrapper->ast);
-    }
+    f_log(F_LOG_FINE, "freeing root [id: %s] %p %s",  wrapper->ast->id, wrapper->ast, wrapper->ast->type);
+    hoku_ast_free(wrapper->ast);
   
     f_log(F_LOG_FINE, "Done freeing root");
   }
-  wrapper->ast = NULL;
-  mrb_free(mrb, wrapper);
+
+  free(wrapper);
   f_log(F_LOG_DEBUG, "Done MRB free");
 }
 
 static struct mrb_data_type hoku_ast_type = { "Ast", hoku_ast_type_free };
 
-mrb_value hp_ast_parse(mrb_state* mrb, mrb_value self)
+hoku_ast* hp_create_ast(mrb_state* mrb, char* type, char* template)
 {
-  mrb_value templ;
-  mrb_value templtype;
-  hoku_ast_wrapper* wrapper;
-
-  mrb_get_args(mrb, "SS", &templ, &templtype);
-
-  // mrb_value data = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "@data"));
-  // if (!mrb_nil_p(data)) return data;
-
-  mrb_value obj = mrb_funcall(mrb, self, "new", 0, NULL);
-
-  char* template = mrb_str_to_cstr(mrb, templ);
-  char* type = mrb_str_to_cstr(mrb, templtype);
-  wrapper = (hoku_ast_wrapper*)DATA_PTR(obj);
-  if (wrapper) {
-    hoku_ast_type_free(mrb, (void*)wrapper);
-  }
-  mrb_data_init(obj, NULL, &hoku_ast_type);
-
-  wrapper = mrb_malloc(mrb, sizeof(hoku_ast_wrapper));
-
   hoku_ast* ast;
   if (hoku_ast_from_template(&ast, type, template) != 0)
   {
     struct RClass* hokusai_class = mrb_class_get(mrb, "Hokusai");
     struct RClass* exp = mrb_class_get_under(mrb, hokusai_class, "Error");
+    mrb_value templtype = mrb_str_new_cstr(mrb, type);
     mrb_raisef(mrb, exp, "Failed to parse template for %S", templtype);
   }
 
@@ -77,15 +54,26 @@ mrb_value hp_ast_parse(mrb_state* mrb, mrb_value self)
     mrb_raisef(mrb, exp, "Failed to parse template for %S", errstr);
   }
 
-  wrapper->ast = ast;
-  wrapper->dirty = false;
-  wrapper->else_active = false;
-  f_log(F_LOG_FINE, "DATA OBJ STUFF");
-  DATA_TYPE(obj) = &hoku_ast_type;
-  DATA_PTR(obj) = wrapper;
-  f_log(F_LOG_FINE, "DONE DATA OBJ STUFF");
+  return ast;
+}
 
-  // mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@data"), obj);
+mrb_value hp_ast_parse(mrb_state* mrb, mrb_value self)
+{
+  mrb_value templ;
+  mrb_value templtype;
+
+  mrb_get_args(mrb, "SS", &templ, &templtype);
+
+  char* template = mrb_str_to_cstr(mrb, templ);
+  char* type = mrb_str_to_cstr(mrb, templtype);
+  
+  hoku_ast* ast = hp_create_ast(mrb, type, template);
+
+  mrb_value obj = mrb_funcall(mrb, self, "new", 0, NULL);
+  hoku_ast_wrapper* wrapper = malloc(sizeof(hoku_ast_wrapper));
+  *wrapper = (hoku_ast_wrapper){ast, false, false};
+  mrb_data_init(obj, wrapper, &hoku_ast_type);
+
   return obj;
 }
 
@@ -175,23 +163,12 @@ mrb_value hp_ast_else_ast(mrb_state* mrb, mrb_value self)
 
   struct RClass* module = mrb_module_get(mrb, "Hokusai");
   struct RClass* astklass = mrb_class_get_under(mrb, module, "Ast");
-  mrb_value obj = mrb_funcall(mrb, mrb_obj_value(astklass), "new", 0, NULL);
-
-
-  hoku_ast_wrapper* iwrapper;
-  iwrapper = (hoku_ast_wrapper*)DATA_PTR(obj);
-  if (iwrapper)
-  {
-    hoku_ast_type_free(mrb, (void*)iwrapper);
-  }
   
-  mrb_data_init(obj, NULL, &hoku_ast_type);
-  iwrapper = mrb_malloc(mrb, sizeof(hoku_ast_wrapper));
-  iwrapper->ast = wrapper->ast->else_relations->next_child;
-  iwrapper->dirty = false;
-  iwrapper->else_active = false;
-  DATA_TYPE(obj) = &hoku_ast_type;
-  DATA_PTR(obj) = iwrapper;
+  mrb_value obj = mrb_funcall(mrb, mrb_obj_value(astklass), "new", 0, NULL);
+  hoku_ast_wrapper* iwrapper = malloc(sizeof(hoku_ast_wrapper));
+  *iwrapper = (hoku_ast_wrapper){wrapper->ast->else_relations->next_child, false, false};
+  mrb_data_init(obj, iwrapper, &hoku_ast_type);
+
   return obj;
 }
 
@@ -211,19 +188,9 @@ mrb_value hp_ast_siblings(mrb_state* mrb, mrb_value self)
     mrb_value astobjklass = mrb_obj_value(astklass);
     mrb_value obj = mrb_funcall(mrb, astobjklass, "new", 0, NULL);
 
-    hoku_ast_wrapper* iwrapper = (hoku_ast_wrapper*)DATA_PTR(obj);
-    // if (iwrapper) mrb_free(mrb, iwrapper);
-    if (iwrapper) {
-      hoku_ast_type_free(mrb, (void*)iwrapper);
-    }
-    mrb_data_init(obj, NULL, &hoku_ast_type);
-    iwrapper = mrb_malloc(mrb, sizeof(hoku_ast_wrapper));
-    iwrapper->ast = head;
-    iwrapper->dirty = false;
-    iwrapper->else_active = false;
-
-    DATA_TYPE(obj) = &hoku_ast_type;
-    DATA_PTR(obj) = iwrapper;
+    hoku_ast_wrapper* iwrapper = malloc(sizeof(hoku_ast_wrapper));
+    *iwrapper = (hoku_ast_wrapper){head, false, false};
+    mrb_data_init(obj, iwrapper, &hoku_ast_type);
     mrb_ary_push(mrb, siblings, obj);
 
     head = head->relations->next_sibling;
@@ -248,19 +215,10 @@ mrb_value hp_ast_else_children(mrb_state* mrb, mrb_value self)
     struct RClass* astklass = mrb_class_get_under(mrb, module, "Ast");
     mrb_value astobjklass = mrb_obj_value(astklass);
     mrb_value obj = mrb_funcall(mrb, astobjklass, "new", 0, NULL);
-    hoku_ast_wrapper* iwrapper = (hoku_ast_wrapper*)DATA_PTR(obj);
-    //if (iwrapper) mrb_free(mrb, iwrapper);
-    if (iwrapper) {
-      hoku_ast_type_free(mrb, (void*)iwrapper);
-    }
-    mrb_data_init(obj, NULL, &hoku_ast_type);
-    iwrapper = mrb_malloc(mrb, sizeof(hoku_ast_wrapper));
-    iwrapper->ast = head;
-    iwrapper->dirty = false;
-    iwrapper->else_active = false;
 
-    DATA_TYPE(obj) = &hoku_ast_type;
-    DATA_PTR(obj) = iwrapper;
+    hoku_ast_wrapper* iwrapper = malloc(sizeof(hoku_ast_wrapper));
+    *iwrapper = (hoku_ast_wrapper){head, false, false};
+    mrb_data_init(obj, iwrapper, &hoku_ast_type);
     mrb_ary_push(mrb, children, obj);
 
     head = head->relations->next_sibling;
@@ -286,19 +244,9 @@ mrb_value hp_ast_children(mrb_state* mrb, mrb_value self)
     mrb_value astobjklass = mrb_obj_value(astklass);
     mrb_value obj = mrb_funcall(mrb, astobjklass, "new", 0, NULL);
 
-    hoku_ast_wrapper* iwrapper = (hoku_ast_wrapper*)DATA_PTR(obj);
-    // if (iwrapper) mrb_free(mrb, iwrapper);
-    if (iwrapper) {
-      hoku_ast_type_free(mrb, (void*)iwrapper);
-    }
-    mrb_data_init(obj, NULL, &hoku_ast_type);
-    iwrapper = mrb_malloc(mrb, sizeof(hoku_ast_wrapper));
-    iwrapper->ast = head;
-    iwrapper->dirty = false;
-    iwrapper->else_active = false;
-
-    DATA_TYPE(obj) = &hoku_ast_type;
-    DATA_PTR(obj) = iwrapper;
+    hoku_ast_wrapper* iwrapper = malloc(sizeof(hoku_ast_wrapper));
+    *iwrapper = (hoku_ast_wrapper){head, false, false};
+    mrb_data_init(obj, iwrapper, &hoku_ast_type);
     mrb_ary_push(mrb, children, obj);
 
     head = head->relations->next_sibling;
@@ -389,7 +337,7 @@ mrb_value hp_ast_props(mrb_state* mrb, mrb_value self)
     }
 
     mrb_value pname =  mrb_str_new_cstr(mrb, prop->name);
-    mrb_value args[3] = {prop->computed, pname, call };
+    mrb_value args[3] = {{prop->computed}, pname, call };
     mrb_value hpprop = mrb_obj_new(mrb, prop_klass, 3, args);
     mrb_hash_set(mrb, hash, pname, hpprop);
   }
@@ -518,7 +466,8 @@ void mrb_define_hokusai_ast_class(mrb_state* mrb)
   mrb_define_hokusai_event_class(mrb, ast_class);
   mrb_define_hokusai_prop_class(mrb, ast_class);
 
-  MRB_SET_INSTANCE_TT(ast_class, MRB_TT_DATA) ;
+  MRB_SET_INSTANCE_TT(ast_class, MRB_TT_DATA);
+
   mrb_define_class_method(mrb, ast_class, "parse", hp_ast_parse, MRB_ARGS_REQ(2));
   mrb_define_method(mrb, ast_class, "type", hp_ast_get_type, MRB_ARGS_NONE());
   mrb_define_method(mrb, ast_class, "id", hp_ast_id, MRB_ARGS_NONE());

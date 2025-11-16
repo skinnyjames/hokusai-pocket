@@ -7,7 +7,7 @@ class Hokusai::Blocks::Input < Hokusai::Block
       @click="start_selection"
       @hover="update_selection"
       :autoclip="true"
-  }
+    }
       text {
         :content="model"
         :size="size"
@@ -57,7 +57,7 @@ class Hokusai::Blocks::Input < Hokusai::Block
 
     @buffer = ""
     @cursor = nil
-    @selection = Hokusai::Util::SelectionNew.new
+    @selection = Hokusai::Util::Selection.new
   end
 
   def update_click_position(event)

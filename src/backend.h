@@ -13,6 +13,9 @@
 #include "style.h"
 #include "error.h"
 #include "font.h"
+#include "texture.h"
+#include "image.h"
+#include "music.h"
 
 /**
  * 

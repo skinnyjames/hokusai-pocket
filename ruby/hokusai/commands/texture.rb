@@ -1,16 +1,15 @@
 module Hokusai
   class Commands::Texture < Commands::Base
-    attr_reader :x, :y, :width, :height, :rotation, :scale
+    attr_reader :texture, :x, :y, :rotation, :scale
 
-    def initialize(x, y, width, height)
+    def initialize(texture, x, y)
+      @texture = texture
       @x = x
       @y = y
-      @width = width
-      @height = height
       @rotation = 0.0
-      @scale = 10.0
+      @scale = 1.0
     end
-
+ 
     def rotation=(value)
       @rotation = value
     end
@@ -20,7 +19,17 @@ module Hokusai
     end
 
     def hash
-      [self.class, x, y, width, height].hash
+      [self.class, width, height].hash
     end
   end
+
+  class Commands::TextureBegin < Commands::Base
+    attr_reader :texture
+
+    def initialize(texture)
+      @texture = texture
+    end
+  end
+
+  class Commands::TextureEnd < Commands::Base; end
 end
