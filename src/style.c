@@ -25,6 +25,11 @@ mrb_value style_parse_function(mrb_state* mrb, char* function, mrb_value value)
     mrb_value padding = mrb_obj_value(mrb_class_get_under(mrb, hokusai_class, "Padding"));
     ret = mrb_funcall(mrb, padding, "convert", 1, value); 
   }
+  else if (strcmp(function, "bounds") == 0)
+  {
+    mrb_value padding = mrb_obj_value(mrb_class_get_under(mrb, hokusai_class, "Boundary"));
+    ret = mrb_funcall(mrb, padding, "convert", 1, value); 
+  }
   else
   {
     struct RClass* exp = mrb_class_get_under(mrb, hokusai_class, "Error");

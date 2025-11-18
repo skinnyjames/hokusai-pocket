@@ -88,10 +88,10 @@ module Hokusai
 
       before_render&.call([root, nil], canvas, input)
 
-      root_children = (canvas.reverse? ? root.children?&.reverse.dup : root.children?&.dup) || []
+      # root_children = (canvas.reverse? ? root.children?&.reverse.dup : root.children?&.dup) || []
       groups = []
       root_entry = PainterEntry.new(root, canvas.x, canvas.y, canvas.width, canvas.height)
-      groups << [root_entry, measure(root_children, canvas)]
+      groups << [root_entry, measure([root], canvas)]
 
       mouse_y = input.mouse.pos.y
       can_capture = mouse_y >= (canvas.y || 0.0) && mouse_y <= (canvas.y || 0.0) + canvas.height
@@ -122,7 +122,6 @@ module Hokusai
           else
             entry = PainterEntry.new(group.block, group.x, group.y, group.w, group.h).freeze
           end
-
 
           canvas.reset(entry.x, entry.y, entry.w, entry.h)
 

@@ -66,7 +66,6 @@ int texture_compare(const void* a, const void* b, void* udata)
 uint64_t texture_hash(const void* item, uint64_t seed0, uint64_t seed1)
 {
 	texture_cache* texture = (texture_cache*) item;
-  UnloadTexture(texture->payload);
 	return hashmap_sip(texture->key, strlen(texture->key), seed0, seed1);
 }
 
@@ -270,7 +269,7 @@ mrb_value on_draw_text(mrb_state* mrb, mrb_value self)
   int y = mrb_int(mrb, mrb_float_to_integer(mrb, mrb_funcall_argv(mrb, command, mrb_intern_lit(mrb, "y"), 0, NULL)));
   // hp_handle_error(mrb);
 
-  char* str = mrb_string_cstr(mrb, mrb_funcall_argv(mrb, command, mrb_intern_lit(mrb, "content"), 0, NULL));
+  const char* str = mrb_string_cstr(mrb, mrb_funcall_argv(mrb, command, mrb_intern_lit(mrb, "content"), 0, NULL));
   // hp_handle_error(mrb);
 
   int size = mrb_int(mrb, mrb_float_to_integer(mrb, mrb_funcall_argv(mrb, command, mrb_intern_lit(mrb, "size"), 0, NULL)));
@@ -335,7 +334,11 @@ mrb_value on_draw_image(mrb_state* mrb, mrb_value self)
   
   Texture tex;
   
-  char* source = mrb_string_cstr(mrb, mrb_funcall_argv(mrb, command, mrb_intern_lit(mrb, "source"), 0, NULL));
+  mrb_value image = mrb_funcall(mrb, command, "image", 0, NULL);
+  // hp_image_wrapper* wrapper = hp_image_get(mrb, image);
+
+  mrb_value object_id = mrb_funcall(mrb, image, "object_id", 0, NULL);
+  const char* oid = mrb_str_to_cstr(mrb, mrb_funcall(mrb, object_id, "to_s", 0, NULL));
   // hp_handle_error(mrb);
 
   int x = mrb_int(mrb, mrb_float_to_integer(mrb, mrb_funcall_argv(mrb, command, mrb_intern_lit(mrb, "x"), 0, NULL)));
@@ -352,18 +355,19 @@ mrb_value on_draw_image(mrb_state* mrb, mrb_value self)
 
   if (!inside_scissori(x, y, height)) return mrb_nil_value();
 
-  int len = strlen(source) + 100;
+  int len = strlen(oid) + 100;
   char hash[len];
-  sprintf(hash, "%s-%d-%d", source, width, height);
+  sprintf(hash, "%s-%d-%d", oid, width, height);
   const texture_cache* result = hashmap_get(textures, &(texture_cache){ .key=hash });
   if (result == NULL)
   {
-    Image img = LoadImage(source);
-    ImageResize(&img, width, height);
-    Texture texture = LoadTextureFromImage(img);
-    UnloadImage(img);
+    mrb_value copy = mrb_funcall(mrb, image, "copy", 0, NULL);
+    hp_image_wrapper* iwrapper = hp_image_get(mrb, copy);
+    ImageResize(&(iwrapper->image), width, height);
+    Texture texture = LoadTextureFromImage(iwrapper->image);
     GenTextureMipmaps(&texture);
     hashmap_set(textures, &(texture_cache){.key=strdup(hash), .payload=texture });
+
     tex = texture;
   }
   else
@@ -371,15 +375,29 @@ mrb_value on_draw_image(mrb_state* mrb, mrb_value self)
     tex = result->payload;
   }
 
+  // Color* colors = LoadImageColors(wrapper->image);
+  // UpdateTexture(tex, colors);
+
   DrawTexture(tex, x, y, WHITE);
   return mrb_nil_value();
+}
+
+int on_shader_texture_foreach(mrb_state* mrb, mrb_value key, mrb_value value, void* data)
+{
+  Shader shad = *((Shader*)data);
+  const char* ckey = mrb_string_cstr(mrb, key);
+  hp_texture_wrapper* wrapper = hp_texture_get(mrb, value);
+
+  int location = GetShaderLocation(shad, ckey);
+  SetShaderValueTexture(shad, location, wrapper->texture.texture);
+  return 0;
 }
 
 int on_shader_uniform_foreach(mrb_state* mrb, mrb_value key, mrb_value value, void* data)
 {
   Shader shad = *((Shader*)data);
   int type = mrb_int(mrb, mrb_ary_entry(value, 1));
-  char* ckey = mrb_string_cstr(mrb, key);
+  const char* ckey = mrb_string_cstr(mrb, key);
   int location = GetShaderLocation(shad, ckey);
   mrb_value vec = mrb_ary_entry(value, 0);
   hp_handle_error(mrb);
@@ -388,15 +406,15 @@ int on_shader_uniform_foreach(mrb_state* mrb, mrb_value key, mrb_value value, vo
   {
     // value 0 is a float
     float values = mrb_float(vec);
-
     SetShaderValue(shad, location, &values, type);
-
+    return 0;
   }
   else if (type == 4)
   {
     // value 0 is an int
     int values = mrb_int(mrb, vec);
     SetShaderValue(shad, location, &values, type);
+    return 0;
   }
   else if (type == 8)
   {
@@ -453,6 +471,8 @@ mrb_value on_draw_shader_begin(mrb_state* mrb, mrb_value self)
   // hp_handle_error(mrb);
 
   mrb_value uniforms = mrb_funcall_argv(mrb, command, mrb_intern_lit(mrb, "uniforms"), 0, NULL);
+
+  mrb_value textures = mrb_funcall(mrb, command, "textures", 0, NULL);
   hp_handle_error(mrb);
 
   Shader shad;
@@ -464,14 +484,14 @@ mrb_value on_draw_shader_begin(mrb_state* mrb, mrb_value self)
 
   if (!mrb_nil_p(fragment_shader))
   {
-    fs = mrb_string_cstr(mrb, fragment_shader);
+    fs = (char*)mrb_string_cstr(mrb, fragment_shader);
     f = fs;
     len += strlen(fs);
   }
 
   if (!mrb_nil_p(vertex_shader))
   {
-    vs = mrb_string_cstr(mrb, vertex_shader);
+    vs = (char*)mrb_string_cstr(mrb, vertex_shader);
     v = vs;
     len += strlen(vs);
   }
@@ -493,6 +513,8 @@ mrb_value on_draw_shader_begin(mrb_state* mrb, mrb_value self)
 
   mrb_hash_foreach(mrb, RHASH(uniforms), on_shader_uniform_foreach, &shad);
   BeginShaderMode(shad);
+  mrb_hash_foreach(mrb, RHASH(textures), on_shader_texture_foreach, &shad);
+
   return mrb_nil_value();
 }
 
@@ -571,8 +593,9 @@ mrb_value on_draw_texture(mrb_state* mrb, mrb_value self)
 {
   mrb_value command;
   mrb_get_args(mrb, "o", &command);
-  
-  Texture tex;
+
+  mrb_value texture = mrb_funcall_argv(mrb, command, mrb_intern_lit(mrb, "texture"), 0, NULL);
+  hp_texture_wrapper* wrapper = hp_texture_get(mrb, texture);
 
   int x = mrb_int(mrb, mrb_float_to_integer(mrb, mrb_funcall_argv(mrb, command, mrb_intern_lit(mrb, "x"), 0, NULL)));
   hp_handle_error(mrb);
@@ -580,29 +603,33 @@ mrb_value on_draw_texture(mrb_state* mrb, mrb_value self)
   int y = mrb_int(mrb, mrb_float_to_integer(mrb, mrb_funcall_argv(mrb, command, mrb_intern_lit(mrb, "y"), 0, NULL)));
   hp_handle_error(mrb);
 
-  int width = mrb_int(mrb, mrb_float_to_integer(mrb, mrb_funcall_argv(mrb, command, mrb_intern_lit(mrb, "width"), 0, NULL)));
+  float width = mrb_float(mrb_funcall_argv(mrb, command, mrb_intern_lit(mrb, "width"), 0, NULL));
+  float height = mrb_float(mrb_funcall_argv(mrb, command, mrb_intern_lit(mrb, "height"), 0, NULL));
+  bool flip = mrb_bool(mrb_funcall(mrb, command, "flip", 0, NULL));
+  bool repeat = mrb_bool(mrb_funcall(mrb, command, "repeat", 0, NULL));
+
   hp_handle_error(mrb);
 
-  int height = mrb_int(mrb, mrb_float_to_integer(mrb, mrb_funcall_argv(mrb, command, mrb_intern_lit(mrb, "height"), 0, NULL)));
-  hp_handle_error(mrb);
+  // float rotation = mrb_float(mrb_funcall_argv(mrb, command, mrb_intern_lit(mrb, "rotation"), 0, NULL));
+  // float scale = mrb_float(mrb_funcall(mrb, command, "scale", 0, NULL));
 
-  char hash[200];
-  sprintf(hash, "%d-%d-%d-%d", x, y, width, height);
-  const texture_cache* result = hashmap_get(textures, &(texture_cache){ .key=hash });
-  if (result == NULL)
+  float source_height = flip ? -(wrapper->texture.texture.height) : (wrapper->texture.texture.height);
+
+  Rectangle source;
+  if (repeat)
   {
-    Image img = GenImageColor(width, height, BLANK);
-    Texture texture = LoadTextureFromImage(img);
-    hashmap_set(textures, &(texture_cache){.key=strdup(hash), .payload=texture });
-    tex = texture;
-    UnloadImage(img);
+    source = (Rectangle){ 0, 0, width, height};
+    SetTextureWrap(wrapper->texture.texture, TEXTURE_WRAP_REPEAT);
   }
   else
   {
-    tex = result->payload;
+    SetTextureWrap(wrapper->texture.texture, TEXTURE_WRAP_CLAMP);
+    source = (Rectangle){ 0, 0, (float)wrapper->texture.texture.width, source_height};
   }
 
-  DrawTexture(tex, x, y, WHITE);
+  Rectangle dest = (Rectangle){ x, y, width, height};
+
+  DrawTexturePro(wrapper->texture.texture, source, dest, (Vector2){ 0, 0 }, 0.0f, WHITE);
   return mrb_nil_value();
 }
 
@@ -610,7 +637,7 @@ mrb_value on_cursor_set(mrb_state* mrb, mrb_value self)
 {
   mrb_sym sym;
   mrb_get_args(mrb, "n", &sym);
-  char* symbol = mrb_sym2name(mrb, sym);
+  const char* symbol = mrb_sym2name(mrb, sym);
   if (strcmp(symbol, "none") == 0 && !IsCursorHidden())
   {
     HideCursor();
@@ -684,6 +711,20 @@ mrb_value on_can_render(mrb_state* mrb, mrb_value self)
   return mrb_false_value();
 }
 
+mrb_value on_resize_window(mrb_state* mrb, mrb_value self)
+{
+  mrb_value rwidth;
+  mrb_value rheight;
+  mrb_get_args(mrb, "oo", &rwidth, &rheight);
+
+  int width = mrb_fixnum(rwidth);
+  int height = mrb_fixnum(rheight);
+
+  SetWindowSize(width, height);
+
+  return mrb_nil_value();
+}
+
 void hp_backend_render_callbacks(mrb_state* mrb, struct RClass* module)
 {
   /* Top level callbacks */
@@ -695,6 +736,9 @@ void hp_backend_render_callbacks(mrb_state* mrb, struct RClass* module)
 
   struct RProc* can_render_proc = mrb_proc_new_cfunc(mrb, on_can_render);
   mrb_funcall_with_block(mrb, mrb_obj_value(module), mrb_intern_lit(mrb, "on_can_render"), 0, NULL, mrb_obj_value(can_render_proc));
+
+  struct RProc* window_resize_proc = mrb_proc_new_cfunc(mrb, on_resize_window);
+  mrb_funcall_with_block(mrb, mrb_obj_value(module), mrb_intern_lit(mrb, "on_resize_window"), 0, NULL, mrb_obj_value(window_resize_proc));
 
   /* Render callbacks */
   struct RClass* com_class = mrb_class_get_under(mrb, module, "Commands");
@@ -814,7 +858,7 @@ void hp_process_input(mrb_state* mrb, mrb_value input)
 
   mrb_value left = mrb_funcall_argv(mrb, mouse, mrb_intern_lit(mrb, "left"), 0, NULL);
   mrb_value right = mrb_funcall_argv(mrb, mouse, mrb_intern_lit(mrb, "right"), 0, NULL);
-  mrb_value middle = mrb_funcall_argv(mrb, mouse, mrb_intern_lit(mrb, "middle"), 0, NULL);
+  // mrb_value middle = mrb_funcall_argv(mrb, mouse, mrb_intern_lit(mrb, "middle"), 0, NULL);
 
   mrb_value scroll = mrb_float_value(mrb, GetMouseWheelMove());
   mrb_funcall_argv(mrb, mouse, mrb_intern_lit(mrb, "scroll="), 1, &scroll);
@@ -828,6 +872,17 @@ void hp_process_input(mrb_state* mrb, mrb_value input)
   mrb_funcall_argv(mrb, left, mrb_intern_lit(mrb, "down="), 1, &ldown);
   mrb_funcall_argv(mrb, left, mrb_intern_lit(mrb, "up="), 1, &lup);
   mrb_funcall_argv(mrb, left, mrb_intern_lit(mrb, "released="), 1, &lreleased);
+
+  mrb_value rclicked = mrb_bool_value(IsMouseButtonPressed(2));
+  mrb_value rdown =  mrb_bool_value(IsMouseButtonDown(2));
+  mrb_value rup = mrb_bool_value(IsMouseButtonUp(2));
+  mrb_value rreleased = mrb_bool_value(IsMouseButtonReleased(2));
+
+  mrb_funcall_argv(mrb, right, mrb_intern_lit(mrb, "clicked="), 1, &rclicked);
+  mrb_funcall_argv(mrb, right, mrb_intern_lit(mrb, "down="), 1, &rdown);
+  mrb_funcall_argv(mrb, right, mrb_intern_lit(mrb, "up="), 1, &rup);
+  mrb_funcall_argv(mrb, right, mrb_intern_lit(mrb, "released="), 1, &rreleased);
+
 
   mrb_value posy = mrb_float_value(mrb, GetMouseY());
   mrb_value posx = mrb_float_value(mrb, GetMouseX());
@@ -845,7 +900,6 @@ void hp_process_input(mrb_state* mrb, mrb_value input)
 
 int hp_backend_run(mrb_state* mrb, struct RClass* hokusai_module, mrb_value backend)
 {
-
   textures = hashmap_new(sizeof(texture_cache), 0, 0, 0, texture_hash, texture_compare, texture_free, NULL);
   shaders = hashmap_new(sizeof(shader_cache), 0, 0, 0, shader_hash, shader_compare, shader_free, NULL);
   // glue setup glue
@@ -861,22 +915,28 @@ int hp_backend_run(mrb_state* mrb, struct RClass* hokusai_module, mrb_value back
     f_logger_set_level(F_LOG_FINE | F_LOG_DEBUG | F_LOG_INFO | F_LOG_WARN);
   }
 
+  int config_flags = mrb_fixnum(mrb_funcall(mrb, config, "config_flags", 0, NULL));
+  bool audio = mrb_bool(mrb_funcall(mrb, config, "audio", 0, NULL));
+
   struct RClass* input_class = mrb_class_get_under(mrb, hokusai_module, "Input");
   struct RClass* painter_class = mrb_class_get_under(mrb, hokusai_module, "Painter");
   struct RClass* canvas_class = mrb_class_get_under(mrb, hokusai_module, "Canvas");
   mrb_value input = mrb_obj_new(mrb, input_class, 0, NULL);
   if (mrb->exc) mrb_print_error(mrb);
   // raylib stuff
-  SetConfigFlags(FLAG_WINDOW_RESIZABLE);
+  SetConfigFlags(config_flags);
 
   int width = mrb_int(mrb, mrb_funcall_argv(mrb, config, mrb_intern_lit(mrb, "width"), 0, NULL));
   int height = mrb_int(mrb, mrb_funcall_argv(mrb, config, mrb_intern_lit(mrb, "height"), 0, NULL));
-  char* title = mrb_string_cstr(mrb,  mrb_funcall_argv(mrb, config, mrb_intern_lit(mrb, "title"), 0, NULL));
+  const char* title = mrb_string_cstr(mrb,  mrb_funcall_argv(mrb, config, mrb_intern_lit(mrb, "title"), 0, NULL));
   bool draw_fps = mrb_bool(mrb_funcall(mrb, config, "draw_fps", 0, NULL));
   bool resize = false;
 
   InitWindow(width, height, title);
   SetTargetFPS(60);
+  if (audio) {
+    InitAudioDevice();
+  }
 
   mrb_value after_load_proc = mrb_funcall_argv(mrb, config, mrb_intern_lit(mrb, "after_load_cb"), 0, NULL);
   if(!mrb_nil_p(after_load_proc)) mrb_funcall_argv(mrb, after_load_proc, mrb_intern_lit(mrb, "call"), 0, NULL);
@@ -885,18 +945,17 @@ int hp_backend_run(mrb_state* mrb, struct RClass* hokusai_module, mrb_value back
   // mrb_value canvas = mrb_obj_new(mrb, canvas_class, 4, cargs);
   while(!WindowShouldClose())
   {
-    f_log(F_LOG_DEBUG, "begin drawing");
-    if (IsWindowFocused())
-    {
-      f_log(F_LOG_DEBUG, "disable event wait");
-      DisableEventWaiting();
-    }
-    else
-    {
-      EnableEventWaiting();
-    }
+    // f_log(F_LOG_DEBUG, "begin drawing");
+    // if (IsWindowFocused() && !audio)
+    // {
+    //   f_log(F_LOG_DEBUG, "disable event wait");
+    //   DisableEventWaiting();
+    // }
+    // else
+    // {
+    //   EnableEventWaiting();
+    // }
     
-    // EnableEventWaiting();
     BeginDrawing();
       // f_log(F_LOG_DEBUG, "proces input");
       hp_process_input(mrb, input);
@@ -940,6 +999,7 @@ int hp_backend_run(mrb_state* mrb, struct RClass* hokusai_module, mrb_value back
     f_log(F_LOG_FINE, "End drawing");
   }
 
+  if (audio) CloseAudioDevice();
   hashmap_free(textures);
   hashmap_free(shaders);
   return 0;

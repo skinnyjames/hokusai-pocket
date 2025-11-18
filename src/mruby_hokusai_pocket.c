@@ -10,6 +10,8 @@ mrb_value mruby_hokusai_pocket_backend_run(mrb_state* mrb, mrb_value self)
   struct RClass* hokusai_module = mrb_module_get(mrb, "Hokusai");
   hp_backend_render_callbacks(mrb, hokusai_module);
   hp_backend_run(mrb, hokusai_module, self);
+
+  return mrb_nil_value();
 }
 
 mrb_value hp_define_monotonic(mrb_state* mrb, mrb_value self)
@@ -24,6 +26,9 @@ void mrb_mruby_hokusai_pocket_gem_init(mrb_state* mrb)
   mrb_define_hokusai_ast_class(mrb);
   mrb_define_hokusai_style_class(mrb);
   mrb_define_hokusai_font_class(mrb);
+  mrb_define_hokusai_texture_class(mrb);
+  mrb_define_hokusai_image_class(mrb);
+  mrb_define_hokusai_music_class(mrb);
   if (mrb->exc) mrb_print_error(mrb);
 
   struct RClass* hokusai_backend = mrb_class_get_under(mrb, hokusai_module, "Backend");
@@ -32,6 +37,7 @@ void mrb_mruby_hokusai_pocket_gem_init(mrb_state* mrb)
 
 void mrb_mruby_hokusai_pocket_gem_final(mrb_state* mrb)
 {
+
 }
 
 #endif

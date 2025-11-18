@@ -4,18 +4,19 @@ class Hokusai::Blocks::Texture < Hokusai::Block
     virtual
   EOF
 
-  computed :width, default: nil, convert: proc(&:to_i)
-  computed :height, default: nil, convert: proc(&:to_i)
+  computed :value, default: nil
   computed :x, default: nil
   computed :y, default: nil
-  computed :rotation, default: nil
-  computed :scale, default: 100.0
+  computed :flip, default: true
   
   def render(canvas)
-    draw do
-      texture(x || canvas.x, y || canvas.y, width || canvas.width, height || canvas.height) do |command|
-        command.rotation = rotation if rotation
-        command.scale = scale
+    if tex = value
+      draw do
+        texture(tex, x || canvas.x, y || canvas.y) do |command|
+          command.width = canvas.width
+          command.height = canvas.height
+          command.flip = flip
+        end
       end
     end
   end

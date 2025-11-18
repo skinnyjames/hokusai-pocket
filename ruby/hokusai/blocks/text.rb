@@ -21,6 +21,7 @@ class Hokusai::Blocks::Text < Hokusai::Block
   computed :font, default: nil
   computed :size, default: 15, convert: proc(&:to_i)
   computed :copy_text, default: false
+  computed :cache, default: true
 
   inject :panel_top
   inject :panel_height
@@ -60,13 +61,13 @@ class Hokusai::Blocks::Text < Hokusai::Block
 
     should_splice = last_content != content && !last_content.nil?
 
-    return @wrap_cache unless force || should_splice || !heights_loaded || breaked || @wrap_cache.nil?
+    return @wrap_cache unless !cache || force || should_splice || !heights_loaded || breaked || @wrap_cache.nil?
 
     # if there's no cache, new / wrap
     # if the heights aren't loaded - new / wrap
     # if the content changed - use / splice
     # if forced / resized - new / wrap
-    if force || !heights_loaded || breaked || @wrap_cache.nil?
+    if !cache || force || !heights_loaded || breaked || @wrap_cache.nil?
       @wrap_cache = Hokusai::Util::WrapCache.new
     end
 
@@ -94,7 +95,10 @@ class Hokusai::Blocks::Text < Hokusai::Block
     end
 
     stream.flush
-    self.render_height = stream.y
+    self.render_height = stream.y - canvas.y
+    if render_height.zero?
+      self.render_height += size + padding.height
+    end
 
     if !last_y.nil?
       self.heights_loaded = true
