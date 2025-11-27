@@ -46,6 +46,7 @@ module Hokusai
       @keys = {}
       @pressed = []
       @released = []
+      @down = []
 
       # populate the key states
       KEY_CODES.each do |symbol, code|

@@ -847,14 +847,15 @@ int hoku_ast_from_template(hoku_ast** out, char* type, char* template)
 	f_log(F_LOG_DEBUG, "Appending root ast to init ast");
 	hoku_ast_append_child(&init, roots);
 
-	templ = ts_node_next_named_sibling(templ);
-	if (!ts_node_is_null(templ) && strcmp(ts_node_type(templ), "style_template") == 0)
-	{
-		f_log(F_LOG_FINE, "walking style template\n");
-		style = hoku_walk_style_template(templ, template);
-	}
+	// this is a memory problem, and we don't use this anyway....
+	// templ = ts_node_next_named_sibling(templ);
+	// if (!ts_node_is_null(templ) && strcmp(ts_node_type(templ), "style_template") == 0)
+	// {
+	// 	f_log(F_LOG_FINE, "walking style template\n");
+	// 	style = hoku_walk_style_template(templ, template);
+	// }
 
-	init->styles = style;
+	// init->styles = style;
 
 	f_log(F_LOG_FINE, "delete tree");
 	ts_tree_delete(tree);

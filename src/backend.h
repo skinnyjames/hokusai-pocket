@@ -2,6 +2,7 @@
 #define HOKUSAI_POCKET_BACKEND_H
 
 #include "hashmap.h"
+#include <nfd.h>
 #include <mruby.h>
 #include <mruby/proc.h>
 #include <mruby/numeric.h>

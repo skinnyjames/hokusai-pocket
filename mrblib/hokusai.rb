@@ -487,6 +487,7 @@ module Hokusai
       @keys = {}
       @pressed = []
       @released = []
+      @down = []
 
       # populate the key states
       KEY_CODES.each do |symbol, code|
@@ -2335,7 +2336,7 @@ end
 module Hokusai
   class Commands::Texture < Commands::Base
     attr_reader :texture, :x, :y
-    attr_accessor :width, :height, :flip, :repeat
+    attr_accessor :width, :height, :flip, :repeat, :rotation
 
     def initialize(texture, x, y)
       @texture = texture
@@ -2344,6 +2345,7 @@ module Hokusai
       @width = texture.width
       @height = texture.height
       @repeat = false
+      @rotation = 0
       @flip = true
     end
 
@@ -2423,6 +2425,27 @@ module Hokusai
     end
   end
 end
+module Hokusai
+  class Commands::BlendModeBegin < Commands::Base
+    attr_reader :type
+
+    # possible types
+    # :alpha, :multiply, :additive, :colors
+    def initialize(type)
+      @type = type
+    end
+
+    def hash
+      [self.class, type].hash
+    end
+  end
+
+  class Commands::BlendModeEnd < Commands::Base;
+    def hash
+      [self.class].hash
+    end
+  end
+end
 
 module Hokusai
   # A proxy class for invoking various UI commands
@@ -2495,6 +2518,14 @@ module Hokusai
     # Invokes a scissor stop command
     def scissor_end
       queue << Commands::ScissorEnd.new
+    end
+
+    def blend_mode_begin(type)
+      queue << Commands::BlendModeBegin.new(type)
+    end
+
+    def blend_mode_end
+      queue << Commands::BlendModeEnd.new
     end
 
     def shader_begin
@@ -4661,7 +4692,7 @@ module Hokusai
         @port = 4333
         @automated = false
         @on_reload = ->(_){}
-        @event_waiting = false
+        @event_waiting = true
         @touch = false
         @log = false
       end
@@ -6521,7 +6552,7 @@ class Hokusai::Blocks::Text < Hokusai::Block
     end
 
     draw do
-      tokens = cache.tokens_for(Hokusai::Canvas.new(canvas.width, pheight, canvas.x + padding.left, poffset))
+      tokens = cache.tokens_for(Hokusai::Canvas.new(canvas.width, pheight, canvas.x + padding.left, canvas.y))
       pad = Hokusai::Padding.new(padding.top, 0.0, 0.0, padding.left)
 
       if selection && animate_selection
@@ -7983,7 +8014,7 @@ class Hokusai::Blocks::Text < Hokusai::Block
     end
 
     draw do
-      tokens = cache.tokens_for(Hokusai::Canvas.new(canvas.width, pheight, canvas.x + padding.left, poffset))
+      tokens = cache.tokens_for(Hokusai::Canvas.new(canvas.width, pheight, canvas.x + padding.left, canvas.y))
       pad = Hokusai::Padding.new(padding.top, 0.0, 0.0, padding.left)
 
       if selection && animate_selection
@@ -8166,7 +8197,7 @@ class Hokusai::Blocks::Input < Hokusai::Block
         selection.pos.cursor_index = range.begin + 1
 
         decrement_cursor(false) if selection.pos.cursor_index >= model.size
-
+  
       elsif selection.pos.cursor_index
         model[selection.pos.cursor_index] = ""
         decrement_cursor(false)
@@ -9811,7 +9842,7 @@ module Hokusai::Blocks
       # event.stop
     end
 
-    #            ┌───────────────────── canvas.width ──────────────────────┐    
+    #        ┌───────────────────── canvas.width ──────────────────────┐    
     #        │                                                         │    
     #        │   ┌────────────────────────────────────────────────┐    │    
     #            │slider_width = canvas.width - slider_start - padding.right
@@ -10895,7 +10926,7 @@ class Hokusai::Blocks::Text < Hokusai::Block
     end
 
     draw do
-      tokens = cache.tokens_for(Hokusai::Canvas.new(canvas.width, pheight, canvas.x + padding.left, poffset))
+      tokens = cache.tokens_for(Hokusai::Canvas.new(canvas.width, pheight, canvas.x + padding.left, canvas.y))
       pad = Hokusai::Padding.new(padding.top, 0.0, 0.0, padding.left)
 
       if selection && animate_selection
@@ -11371,6 +11402,7 @@ class Hokusai::Blocks::Dropdown < Hokusai::Block
   def set_active(item)
     self.active = item
     self.opened = false
+    emit("change", active)
   end
 
   def render(canvas)
@@ -11843,8 +11875,8 @@ module Hokusai
   #
   # @param [Array<Float, Float>]
   # @return [void]
-  def self.set_window_position(mouse)
-    @on_set_window_position&.call(mouse)
+  def self.set_window_position(x, y)
+    @on_set_window_position&.call(x, y)
   end
 
   # **Backend:** Provides the window position callback
@@ -11867,6 +11899,26 @@ module Hokusai
 
   def self.on_can_render(&block)
     @on_renderable = block
+  end
+
+  def self.on_open_file(&block)
+    @on_open_file = block
+  end
+
+  def self.open_file(hash = {})
+    hash.transform_keys!(&:to_s)
+
+    @on_open_file&.call(hash)
+  end
+
+  def self.on_save_file(&block)
+    @on_save_file = block
+  end
+
+  def self.save_file(hash = {})
+    hash.transform_keys!(&:to_s)
+
+    @on_save_file&.call(hash)
   end
 
   # Tells if a canvas is renderable

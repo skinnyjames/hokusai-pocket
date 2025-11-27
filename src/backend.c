@@ -589,6 +589,48 @@ mrb_value on_draw_scale_end(mrb_state* mrb, mrb_value self)
   return mrb_nil_value();
 }
 
+mrb_value on_draw_blend_mode_begin(mrb_state* mrb, mrb_value self)
+{
+  mrb_value command;
+  mrb_get_args(mrb, "o", &command);
+  
+  mrb_value type = mrb_funcall(mrb, command, "type", 0, NULL);
+  char* ctype = mrb_str_to_cstr(mrb, type);
+  if (strcmp(ctype, "alpha") == 0)
+  {
+    BeginBlendMode(BLEND_ALPHA);
+  }
+  else if (strcmp(ctype, "multiply") == 0)
+  {
+    BeginBlendMode(BLEND_MULTIPLIED);
+  }
+  else if (strcmp(ctype, "additive") == 0)
+  {
+    BeginBlendMode(BLEND_ADDITIVE);
+  }
+  else if (strcmp(ctype, "colors") == 0)
+  {
+    BeginBlendMode(BLEND_ADD_COLORS);
+  }
+  else if (strcmp(ctype, "subtract") == 0)
+  {
+    BeginBlendMode(BLEND_SUBTRACT_COLORS);
+  }
+  else
+  {
+    mrb_raise(mrb, E_ARGUMENT_ERROR, "Invalid blend mode");
+  }
+
+  return mrb_nil_value();
+}
+
+mrb_value on_draw_blend_mode_end(mrb_state* mrb, mrb_value self)
+{
+  EndBlendMode();
+  return mrb_nil_value();
+}
+
+
 mrb_value on_draw_texture(mrb_state* mrb, mrb_value self)
 {
   mrb_value command;
@@ -605,12 +647,12 @@ mrb_value on_draw_texture(mrb_state* mrb, mrb_value self)
 
   float width = mrb_float(mrb_funcall_argv(mrb, command, mrb_intern_lit(mrb, "width"), 0, NULL));
   float height = mrb_float(mrb_funcall_argv(mrb, command, mrb_intern_lit(mrb, "height"), 0, NULL));
+  float rotation = mrb_float(mrb_funcall_argv(mrb, command, mrb_intern_lit(mrb, "rotation"), 0, NULL));
   bool flip = mrb_bool(mrb_funcall(mrb, command, "flip", 0, NULL));
   bool repeat = mrb_bool(mrb_funcall(mrb, command, "repeat", 0, NULL));
 
   hp_handle_error(mrb);
 
-  // float rotation = mrb_float(mrb_funcall_argv(mrb, command, mrb_intern_lit(mrb, "rotation"), 0, NULL));
   // float scale = mrb_float(mrb_funcall(mrb, command, "scale", 0, NULL));
 
   float source_height = flip ? -(wrapper->texture.texture.height) : (wrapper->texture.texture.height);
@@ -629,7 +671,7 @@ mrb_value on_draw_texture(mrb_state* mrb, mrb_value self)
 
   Rectangle dest = (Rectangle){ x, y, width, height};
 
-  DrawTexturePro(wrapper->texture.texture, source, dest, (Vector2){ 0, 0 }, 0.0f, WHITE);
+  DrawTexturePro(wrapper->texture.texture, source, dest, (Vector2){ 0, 0 }, rotation, WHITE);
   return mrb_nil_value();
 }
 
@@ -725,6 +767,70 @@ mrb_value on_resize_window(mrb_state* mrb, mrb_value self)
   return mrb_nil_value();
 }
 
+mrb_value on_open_file(mrb_state* mrb, mrb_value self)
+{
+  mrb_value options;
+  mrb_get_args(mrb, "o", &options);
+
+  mrb_value rpath = mrb_hash_fetch(mrb, options, mrb_str_new_cstr(mrb, "path"), mrb_nil_value());
+  mrb_value rfilter = mrb_hash_fetch(mrb, options, mrb_str_new_cstr(mrb, "filter"), mrb_nil_value());
+
+  char* path = NULL;
+  char* filter = NULL;
+
+  if (!mrb_nil_p(rpath)) path = mrb_str_to_cstr(mrb, rpath);
+  if (!mrb_nil_p(rfilter)) filter = mrb_str_to_cstr(mrb, rfilter);
+
+  nfdchar_t* outpath = NULL;
+  nfdresult_t result = NFD_OpenDialog(filter, path, &outpath);
+  if (result == NFD_OKAY)
+  {
+    mrb_value res = mrb_str_new_cstr(mrb, outpath);
+    free(outpath);
+    return res;
+  }
+  else if (result == NFD_CANCEL)
+  {
+    return mrb_nil_value();
+  }
+  else
+  {
+    mrb_raise(mrb, E_STANDARD_ERROR, NFD_GetError());
+  }
+}
+
+mrb_value on_save_file(mrb_state* mrb, mrb_value self)
+{
+  mrb_value options;
+  mrb_get_args(mrb, "o", &options);
+
+  mrb_value rpath = mrb_hash_fetch(mrb, options, mrb_str_new_cstr(mrb, "path"), mrb_nil_value());
+  mrb_value rfilter = mrb_hash_fetch(mrb, options, mrb_str_new_cstr(mrb, "filter"), mrb_nil_value());
+
+  char* path = NULL;
+  char* filter = NULL;
+
+  if (!mrb_nil_p(rpath)) path = mrb_str_to_cstr(mrb, rpath);
+  if (!mrb_nil_p(rfilter)) filter = mrb_str_to_cstr(mrb, rfilter);
+
+  nfdchar_t* outpath = NULL;
+  nfdresult_t result = NFD_SaveDialog(filter, path, &outpath);
+  if (result == NFD_OKAY)
+  {
+    mrb_value res = mrb_str_new_cstr(mrb, outpath);
+    free(outpath);
+    return res;
+  }
+  else if (result == NFD_CANCEL)
+  {
+    return mrb_nil_value();
+  }
+  else
+  {
+    mrb_raise(mrb, E_STANDARD_ERROR, NFD_GetError());
+  }
+}
+
 void hp_backend_render_callbacks(mrb_state* mrb, struct RClass* module)
 {
   /* Top level callbacks */
@@ -739,6 +845,12 @@ void hp_backend_render_callbacks(mrb_state* mrb, struct RClass* module)
 
   struct RProc* window_resize_proc = mrb_proc_new_cfunc(mrb, on_resize_window);
   mrb_funcall_with_block(mrb, mrb_obj_value(module), mrb_intern_lit(mrb, "on_resize_window"), 0, NULL, mrb_obj_value(window_resize_proc));
+
+  struct RProc* open_file_proc = mrb_proc_new_cfunc(mrb, on_open_file);
+  mrb_funcall_with_block(mrb, mrb_obj_value(module), mrb_intern_lit(mrb, "on_open_file"), 0, NULL, mrb_obj_value(open_file_proc));
+
+  struct RProc* save_file_proc = mrb_proc_new_cfunc(mrb, on_save_file);
+  mrb_funcall_with_block(mrb, mrb_obj_value(module), mrb_intern_lit(mrb, "on_save_file"), 0, NULL, mrb_obj_value(save_file_proc));
 
   /* Render callbacks */
   struct RClass* com_class = mrb_class_get_under(mrb, module, "Commands");
@@ -766,6 +878,14 @@ void hp_backend_render_callbacks(mrb_state* mrb, struct RClass* module)
   struct RClass* image_class = mrb_class_get_under(mrb, com_class, "Image");
   struct RProc* image_proc = mrb_proc_new_cfunc(mrb, on_draw_image);
   mrb_funcall_with_block(mrb, mrb_obj_value(image_class), mrb_intern_lit(mrb, "on_draw"), 0, NULL, mrb_obj_value(image_proc));
+  
+  struct RClass* blend_mode_begin_class = mrb_class_get_under(mrb, com_class, "BlendModeBegin");
+  struct RProc* blend_mode_begin_proc = mrb_proc_new_cfunc(mrb, on_draw_blend_mode_begin);
+  mrb_funcall_with_block(mrb, mrb_obj_value(blend_mode_begin_class), mrb_intern_lit(mrb, "on_draw"), 0, NULL, mrb_obj_value(blend_mode_begin_proc));
+
+  struct RClass* blend_mode_end_class = mrb_class_get_under(mrb, com_class, "BlendModeEnd");
+  struct RProc* blend_mode_end_proc = mrb_proc_new_cfunc(mrb, on_draw_blend_mode_end);
+  mrb_funcall_with_block(mrb, mrb_obj_value(blend_mode_end_class), mrb_intern_lit(mrb, "on_draw"), 0, NULL, mrb_obj_value(blend_mode_end_proc));
 
   struct RClass* shader_begin_class = mrb_class_get_under(mrb, com_class, "ShaderBegin");
   struct RProc* shader_begin_proc = mrb_proc_new_cfunc(mrb, on_draw_shader_begin);
@@ -883,7 +1003,6 @@ void hp_process_input(mrb_state* mrb, mrb_value input)
   mrb_funcall_argv(mrb, right, mrb_intern_lit(mrb, "up="), 1, &rup);
   mrb_funcall_argv(mrb, right, mrb_intern_lit(mrb, "released="), 1, &rreleased);
 
-
   mrb_value posy = mrb_float_value(mrb, GetMouseY());
   mrb_value posx = mrb_float_value(mrb, GetMouseX());
   mrb_value pos = mrb_funcall_argv(mrb, mouse, mrb_intern_lit(mrb, "pos"), 0, NULL);
@@ -930,6 +1049,8 @@ int hp_backend_run(mrb_state* mrb, struct RClass* hokusai_module, mrb_value back
   int height = mrb_int(mrb, mrb_funcall_argv(mrb, config, mrb_intern_lit(mrb, "height"), 0, NULL));
   const char* title = mrb_string_cstr(mrb,  mrb_funcall_argv(mrb, config, mrb_intern_lit(mrb, "title"), 0, NULL));
   bool draw_fps = mrb_bool(mrb_funcall(mrb, config, "draw_fps", 0, NULL));
+  bool event_waiting = mrb_bool(mrb_funcall(mrb, config, "event_waiting", 0, NULL));
+
   bool resize = false;
 
   InitWindow(width, height, title);
@@ -940,21 +1061,21 @@ int hp_backend_run(mrb_state* mrb, struct RClass* hokusai_module, mrb_value back
 
   mrb_value after_load_proc = mrb_funcall_argv(mrb, config, mrb_intern_lit(mrb, "after_load_cb"), 0, NULL);
   if(!mrb_nil_p(after_load_proc)) mrb_funcall_argv(mrb, after_load_proc, mrb_intern_lit(mrb, "call"), 0, NULL);
-  
+  SetTraceLogLevel(LOG_ERROR); 
   // mrb_value cargs[] = { mrb_float_value(mrb, 400.0), mrb_float_value(mrb, 400.0), mrb_float_value(mrb, 0.0), mrb_float_value(mrb, 0.0) };
   // mrb_value canvas = mrb_obj_new(mrb, canvas_class, 4, cargs);
   while(!WindowShouldClose())
   {
+
     // f_log(F_LOG_DEBUG, "begin drawing");
-    // if (IsWindowFocused() && !audio)
-    // {
-    //   f_log(F_LOG_DEBUG, "disable event wait");
-    //   DisableEventWaiting();
-    // }
-    // else
-    // {
-    //   EnableEventWaiting();
-    // }
+    if (IsWindowFocused())
+    {
+      DisableEventWaiting();
+    }
+    else if(event_waiting)
+    {
+      EnableEventWaiting();
+    }
     
     BeginDrawing();
       // f_log(F_LOG_DEBUG, "proces input");

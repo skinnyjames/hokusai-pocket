@@ -113,7 +113,7 @@ class Hokusai::Blocks::Input < Hokusai::Block
         selection.pos.cursor_index = range.begin + 1
 
         decrement_cursor(false) if selection.pos.cursor_index >= model.size
-
+  
       elsif selection.pos.cursor_index
         model[selection.pos.cursor_index] = ""
         decrement_cursor(false)

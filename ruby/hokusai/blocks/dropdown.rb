@@ -242,6 +242,7 @@ class Hokusai::Blocks::Dropdown < Hokusai::Block
   def set_active(item)
     self.active = item
     self.opened = false
+    emit("change", active)
   end
 
   def render(canvas)

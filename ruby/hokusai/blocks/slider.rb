@@ -124,7 +124,7 @@ module Hokusai::Blocks
       # event.stop
     end
 
-    #            ┌───────────────────── canvas.width ──────────────────────┐    
+    #        ┌───────────────────── canvas.width ──────────────────────┐    
     #        │                                                         │    
     #        │   ┌────────────────────────────────────────────────┐    │    
     #            │slider_width = canvas.width - slider_start - padding.right
