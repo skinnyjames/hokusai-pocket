@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.2
+
+### Added
+
+* Added licenses for dependencies
+
+### Bugfix
+
+* Support additions from 0.3.1 release in `hokusai-pocket publish` command.
+
 ## 0.3.1
 
 ### Added

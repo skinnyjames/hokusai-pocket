@@ -23,7 +23,7 @@ RUN git clone --branch 5.5 --depth 1 https://github.com/raysan5/raylib.git vendo
 RUN git clone --depth 1 https://github.com/tree-sitter/tree-sitter.git vendor/tree-sitter
 RUN git clone --branch stable --depth 1 https://github.com/mruby/mruby.git vendor/mruby
 RUN git clone --branch main --depth 1 https://github.com/skinnyjames/hokusai-pocket.git vendor/hp
-
+RUN git clone https://github.com/mlabbe/nativefiledialog.git vendor/nfd
 
 # build mruby
 WORKDIR /app/vendor/mruby
@@ -201,6 +201,22 @@ RUN mkdir -p /app/vendor/tree-sitter/build
 WORKDIR /app/vendor/tree-sitter
 RUN make -j 5 all install PREFIX=build CC=$CC AR=$AR
 
+# build nfd
+WORKDIR /app/vendor/nfd
+<% if os == "windows" %>
+# RUN apt install -y  g++-mingw-w64-ucrt64 gcc-mingw-w64-ucrt64
+ENV CPATH=/usr/x86_64-w64-mingw32/include:$CPATH
+ENV CC=x86_64-w64-mingw32-gcc
+ENV CXX=x86_64-w64-mingw32-g++
+
+RUN cd build/gmake_windows && make clean
+RUN cd build/gmake_windows && make config=release_x64 verbose=1
+<% elsif os == "osx" %>
+RUN cd build/gmake_macosx && make config=release_x64
+<% else %>
+RUN cd build/gmake_linux_zenity && make config=release_x64
+<% end %>
+
 WORKDIR /app
 RUN mkdir -p /app/vendor/hokusai-pocket
 
@@ -211,13 +227,23 @@ spec("hokusai-pocket-app") do
       "vendor/mruby/build/host/bin/mrbc"
     end
 
+<% if os.eql?("windows")%>
+    def nfd
+      "nfd.lib"
+    end
+<% else %>
+    def nfd
+      "libnfd.a"
+    end
+<% end %>
+
 <% if os.eql?("windows") %>
     def libs
-      "-lgdi32 -lwinmm -lws2_32"
+      "-lgdi32 -lwinmm -lws2_32 -lcomctl32 -lcomdlg32 -lole32 -luuid -lpthread"
     end
 <% elsif os.eql?("osx") %>
     def libs
-      "-framework CoreVideo -framework IOKit -framework Cocoa -framework GLUT -framework OpenGL"
+      "-framework CoreVideo -framework CoreAudio -framework AppKit -framework IOKit -framework Cocoa -framework GLUT -framework OpenGL"
     end
 <% else %>
     def libs
@@ -231,18 +257,19 @@ spec("hokusai-pocket-app") do
           vendor/mruby/include
           vendor/hp/grammar/tree_sitter
           vendor/hp/src
+          vendor/nfd/src/include
         ]
     end
 
     def links
-      %w[
+      (%w[
         vendor/hp/grammar/src/parser.c
         vendor/hp/grammar/src/scanner.c
         vendor/hokusai-pocket/libhokusai.a
         vendor/mruby/build/platform/lib/libmruby.a 
         vendor/raylib/src/libraylib.a
         vendor/tree-sitter/build/lib/libtree-sitter.a
-      ].join(" ")
+      ] + ["vendor/nfd/build/lib/Release/x64/\#{nfd}"]).join(" ")
     end
 
     def h_includes
@@ -324,6 +351,7 @@ spec("hokusai-pocket-app") do
         .
         vendor/hokusai-pocket
         vendor/hp/src
+        vendor/nfd/src/include
       ].map { |file| "-I\#{file}" }.join(" ")
 
       mkdir("bin")
