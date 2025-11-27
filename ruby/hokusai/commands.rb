@@ -9,6 +9,7 @@ require_relative "./commands/texture"
 require_relative "./commands/rotation"
 require_relative "./commands/scale"
 require_relative "./commands/translation"
+require_relative "./commands/blend_mode"
 
 module Hokusai
   # A proxy class for invoking various UI commands
@@ -81,6 +82,14 @@ module Hokusai
     # Invokes a scissor stop command
     def scissor_end
       queue << Commands::ScissorEnd.new
+    end
+
+    def blend_mode_begin(type)
+      queue << Commands::BlendModeBegin.new(type)
+    end
+
+    def blend_mode_end
+      queue << Commands::BlendModeEnd.new
     end
 
     def shader_begin

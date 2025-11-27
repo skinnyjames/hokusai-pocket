@@ -46,6 +46,7 @@ jobs:
         run: tar -xvf barista.tar.gz --strip-components 1
       - name: build pocket
         run: chmod 755 barista && ./barista cli
+        shell: bash
       - uses: actions/upload-artifact@v4
         with:
           name: hokusai-pocket-${{ matrix.platform.os }}

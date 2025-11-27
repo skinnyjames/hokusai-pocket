@@ -3,12 +3,17 @@ def top
 end
 
 spec("hokusai-pocket") do |config|
+  NFD_LIB = Barista.os == "Windows" ? "nfd.lib" : "libnfd.a"
+
+  puts ["NFD LIB #{NFD_LIB}"]
+
   task "setup" do
     def build
       command("mkdir vendor; touch vendor/.keep") unless Dir.exists?("vendor")
       command("git clone --branch 5.5 --depth 1 https://github.com/raysan5/raylib.git vendor/raylib")
       command("git clone --depth 1 https://github.com/tree-sitter/tree-sitter.git vendor/tree-sitter")
       command("git clone --branch stable --depth 1 https://github.com/mruby/mruby.git vendor/mruby")
+      command("git clone https://github.com/mlabbe/nativefiledialog.git vendor/nfd")
     end
   end
 
@@ -46,6 +51,28 @@ spec("hokusai-pocket") do |config|
     def build
       command("mkdir -p vendor/tree-sitter/build")
       command("make -j 5 all install PREFIX=build CC=#{config.cc.gcc} AR=#{config.cc.ar}", chdir: "vendor/tree-sitter")
+    end
+  end
+
+  task "nfd" do |args|
+    dependency "setup" do
+      files "vendor/.keep"
+    end
+
+    def build
+      if mac?
+        folder = "build/gmake_macosx"
+      elsif windows?
+        folder = "build/gmake_windows"
+      else
+        folder = "build/gmake_linux_zenity"
+      end
+      
+      if windows?
+        command("make config=release_x64", chdir: "vendor/nfd/#{folder}")
+      else
+        command("make config=release_x64 all", chdir: "vendor/nfd/#{folder}")
+      end
     end
   end
 
@@ -95,6 +122,10 @@ spec("hokusai-pocket") do |config|
     dependency "mruby" do
       files "vendor/mruby/build/host/lib/libmruby.a"
     end
+
+    dependency "nfd" do
+      files "vendor/nfd/build/lib/Release/x64/#{NFD_LIB}"
+    end
     
     def includes
       %w[
@@ -103,6 +134,7 @@ spec("hokusai-pocket") do |config|
           vendor/mruby/include
           vendor/hp/grammar/tree_sitter
           vendor/hp/src
+          vendor/nfd/src/include
         ]
     end
 
@@ -180,6 +212,10 @@ spec("hokusai-pocket") do |config|
       files "vendor/mruby/build/host/lib/libmruby.a"
     end
 
+    dependency "nfd" do
+      files "vendor/nfd/build/lib/Release/x64/#{NFD_LIB}"
+    end
+
     def sources
       glob(File.join(path, "src", "*.c"))
     end
@@ -209,7 +245,7 @@ spec("hokusai-pocket") do |config|
         mkdir("vendor/hokusai-pocket")
       end
       command("#{mrbc} -o vendor/hokusai-pocket/pocket.h -Bpocket ./mrblib/hokusai.rb")
-      command("#{config.cc.gcc} -O3 -Wall -I../../vendor/tree-sitter/build/include -I../../vendor/raylib/src -I../../vendor/mruby/include -I../../grammar/tree_sitter -I../../src -I. -c #{sources.map { |s| "../../#{s}" }.join(" ")}", chdir: "vendor/hokusai-pocket")
+      command("#{config.cc.gcc} -O3 -Wall -I../../vendor/tree-sitter/build/include -I../../vendor/raylib/src -I../../vendor/mruby/include -I../../vendor/nfd/src/include -I../../grammar/tree_sitter -I../../src -I. -c #{sources.map { |s| "../../#{s}" }.join(" ")}", chdir: "vendor/hokusai-pocket")
       ruby do
         command("#{config.cc.ar} r libhokusai.a #{objs.map{ |s| "../../#{s}" }.join(" ")}", chdir: "vendor/hokusai-pocket")
           .forward_output(&on_output)
@@ -224,7 +260,7 @@ spec("hokusai-pocket") do |config|
     end
 
     def includes
-      %w[vendor/raylib/src vendor/tree-sitter/build/include vendor/mruby/include vendor/cli vendor/hokusai-pocket src].map do |file|
+      %w[vendor/raylib/src vendor/tree-sitter/build/include vendor/mruby/include vendor/cli vendor/hokusai-pocket vendor/nfd/src/include src].map do |file|
         "-I#{file}"
       end
     end
@@ -232,10 +268,10 @@ spec("hokusai-pocket") do |config|
     def frameworks(args)
       case detected_os
       when "MacOS"
-        "-framework CoreVideo -framework CoreAudio -framework IOKit -framework Cocoa -framework GLUT -framework OpenGL"
+        "-framework CoreVideo -framework CoreAudio -framework AppKit -framework IOKit -framework Cocoa -framework GLUT -framework OpenGL"
       when "Windows"
         # add -mwindows after figuring out why apps don't launch... 
-        "-lgdi32 -lwinmm -lws2_32"
+        "-lgdi32 -lwinmm -lws2_32 -lcomctl32 -lcomdlg32 -lole32 -luuid"
       when "Linux"
         "-lGL -lm -lpthread -ldl -lrt -lX11"
       else
@@ -251,7 +287,7 @@ spec("hokusai-pocket") do |config|
           vendor/mruby/build/host/lib/libmruby.a 
           vendor/raylib/src/libraylib.a
           vendor/tree-sitter/build/lib/libtree-sitter.a
-        ]
+        ] + ["vendor/nfd/build/lib/Release/x64/#{NFD_LIB}"]
     end
   end
 
@@ -364,7 +400,7 @@ spec("hokusai-pocket") do |config|
           vendor/mruby/build/host/lib/libmruby.a 
           vendor/raylib/src/libraylib.a
           vendor/tree-sitter/build/lib/libtree-sitter.a
-        ]
+        ] + ["vendor/nfd/build/lib/Release/x64/#{NFD_LIB}"]
     end
 
     def build

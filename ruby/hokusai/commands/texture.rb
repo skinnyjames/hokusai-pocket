@@ -1,7 +1,7 @@
 module Hokusai
   class Commands::Texture < Commands::Base
     attr_reader :texture, :x, :y
-    attr_accessor :width, :height, :flip, :repeat
+    attr_accessor :width, :height, :flip, :repeat, :rotation
 
     def initialize(texture, x, y)
       @texture = texture
@@ -10,6 +10,7 @@ module Hokusai
       @width = texture.width
       @height = texture.height
       @repeat = false
+      @rotation = 0
       @flip = true
     end
 

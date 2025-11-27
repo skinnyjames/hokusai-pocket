@@ -56,7 +56,7 @@ module Hokusai
         @port = 4333
         @automated = false
         @on_reload = ->(_){}
-        @event_waiting = false
+        @event_waiting = true
         @touch = false
         @log = false
       end

@@ -147,8 +147,8 @@ module Hokusai
   #
   # @param [Array<Float, Float>]
   # @return [void]
-  def self.set_window_position(mouse)
-    @on_set_window_position&.call(mouse)
+  def self.set_window_position(x, y)
+    @on_set_window_position&.call(x, y)
   end
 
   # **Backend:** Provides the window position callback
@@ -171,6 +171,26 @@ module Hokusai
 
   def self.on_can_render(&block)
     @on_renderable = block
+  end
+
+  def self.on_open_file(&block)
+    @on_open_file = block
+  end
+
+  def self.open_file(hash = {})
+    hash.transform_keys!(&:to_s)
+
+    @on_open_file&.call(hash)
+  end
+
+  def self.on_save_file(&block)
+    @on_save_file = block
+  end
+
+  def self.save_file(hash = {})
+    hash.transform_keys!(&:to_s)
+
+    @on_save_file&.call(hash)
   end
 
   # Tells if a canvas is renderable
