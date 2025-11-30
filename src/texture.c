@@ -61,6 +61,25 @@ mrb_value hp_texture_clear(mrb_state* mrb, mrb_value self)
   return mrb_nil_value();
 }
 
+mrb_value hp_texture_dup(mrb_state* mrb, mrb_value self)
+{
+  mrb_value width = hp_texture_width(mrb, self);
+  mrb_value height = hp_texture_height(mrb, self);
+
+  struct RClass* module = mrb_module_get(mrb, "Hokusai");
+  struct RClass* klass = mrb_class_get_under(mrb, module, "Commands");
+  mrb_value commands = mrb_funcall(mrb, mrb_obj_value(klass), "new", 0, NULL);
+  
+  mrb_funcall(mrb, commands, "texture", 3, self, mrb_float_value(mrb, 0.0), mrb_float_value(mrb, 0.0));
+  struct RClass* tklass = mrb_class_get_under(mrb, module, "Texture");
+  mrb_value tex = mrb_funcall(mrb, mrb_obj_value(tklass), "init", 2, width, height);
+  mrb_funcall(mrb, tex, "clear", 0, NULL);
+
+  mrb_value queue = mrb_funcall(mrb, commands, "queue", 0, NULL);
+  mrb_funcall(mrb, tex, "apply", 1, queue);
+  return tex;
+}
+
 // applys an array of commands to this texture...
 mrb_value hp_texture_apply(mrb_state* mrb, mrb_value self)
 {
@@ -94,6 +113,8 @@ void mrb_define_hokusai_texture_class(mrb_state* mrb)
   mrb_define_method(mrb, klass, "height", hp_texture_height, MRB_ARGS_NONE());
   mrb_define_method(mrb, klass, "apply", hp_texture_apply, MRB_ARGS_REQ(1));
   mrb_define_method(mrb, klass, "clear", hp_texture_clear, MRB_ARGS_NONE());
+  mrb_define_method(mrb, klass, "dup", hp_texture_dup, MRB_ARGS_NONE());
+
 }
 
 #endif

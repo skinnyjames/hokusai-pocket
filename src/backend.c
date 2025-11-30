@@ -639,10 +639,10 @@ mrb_value on_draw_texture(mrb_state* mrb, mrb_value self)
   mrb_value texture = mrb_funcall_argv(mrb, command, mrb_intern_lit(mrb, "texture"), 0, NULL);
   hp_texture_wrapper* wrapper = hp_texture_get(mrb, texture);
 
-  int x = mrb_int(mrb, mrb_float_to_integer(mrb, mrb_funcall_argv(mrb, command, mrb_intern_lit(mrb, "x"), 0, NULL)));
+  float x = mrb_float(mrb_funcall_argv(mrb, command, mrb_intern_lit(mrb, "x"), 0, NULL));
   hp_handle_error(mrb);
 
-  int y = mrb_int(mrb, mrb_float_to_integer(mrb, mrb_funcall_argv(mrb, command, mrb_intern_lit(mrb, "y"), 0, NULL)));
+  float y = mrb_float(mrb_funcall_argv(mrb, command, mrb_intern_lit(mrb, "y"), 0, NULL));
   hp_handle_error(mrb);
 
   float width = mrb_float(mrb_funcall_argv(mrb, command, mrb_intern_lit(mrb, "width"), 0, NULL));
@@ -671,6 +671,7 @@ mrb_value on_draw_texture(mrb_state* mrb, mrb_value self)
 
   Rectangle dest = (Rectangle){ x, y, width, height};
 
+  SetTextureFilter(wrapper->texture.texture, TEXTURE_FILTER_BILINEAR);
   DrawTexturePro(wrapper->texture.texture, source, dest, (Vector2){ 0, 0 }, rotation, WHITE);
   return mrb_nil_value();
 }
@@ -1061,7 +1062,7 @@ int hp_backend_run(mrb_state* mrb, struct RClass* hokusai_module, mrb_value back
 
   mrb_value after_load_proc = mrb_funcall_argv(mrb, config, mrb_intern_lit(mrb, "after_load_cb"), 0, NULL);
   if(!mrb_nil_p(after_load_proc)) mrb_funcall_argv(mrb, after_load_proc, mrb_intern_lit(mrb, "call"), 0, NULL);
-  SetTraceLogLevel(LOG_ERROR); 
+  // SetTraceLogLevel(LOG_ERROR); 
   // mrb_value cargs[] = { mrb_float_value(mrb, 400.0), mrb_float_value(mrb, 400.0), mrb_float_value(mrb, 0.0), mrb_float_value(mrb, 0.0) };
   // mrb_value canvas = mrb_obj_new(mrb, canvas_class, 4, cargs);
   while(!WindowShouldClose())
