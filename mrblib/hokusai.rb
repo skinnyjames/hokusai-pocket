@@ -21,6 +21,23 @@ module Hokusai
       @height = height
     end
 
+    def add(other)
+      ex = x + width
+      ey = y + height
+
+      oex = other.x + other.width
+      oey = other.y + other.height
+
+      mx = [x, other.x].min
+      my = [y, other.y].min
+
+      Hokusai::Rect.new(
+        mx, my,
+        [ex, oex].max - mx,
+        [ey, oey].max - my
+      )
+    end
+
     def intersect?(other)
       (x - other.x).abs <= ((width)) && (y - other.y).abs <= ((height))
     end
@@ -2342,10 +2359,10 @@ module Hokusai
       @texture = texture
       @x = x
       @y = y
-      @width = texture.width
-      @height = texture.height
+      @width = texture.width.to_f
+      @height = texture.height.to_f
       @repeat = false
-      @rotation = 0
+      @rotation = 0.0
       @flip = true
     end
 

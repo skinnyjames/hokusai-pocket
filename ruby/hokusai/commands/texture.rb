@@ -7,10 +7,10 @@ module Hokusai
       @texture = texture
       @x = x
       @y = y
-      @width = texture.width
-      @height = texture.height
+      @width = texture.width.to_f
+      @height = texture.height.to_f
       @repeat = false
-      @rotation = 0
+      @rotation = 0.0
       @flip = true
     end
 

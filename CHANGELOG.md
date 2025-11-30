@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.3
+
+### Added
+
+* Added `Hokusai::Texture#dup` to duplicate textures
+* Added `Hokusai::Rect#merge` to merge rects
+
 ## 0.3.2
 
 ### Added

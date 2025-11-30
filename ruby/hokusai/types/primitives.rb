@@ -17,6 +17,23 @@ module Hokusai
       @height = height
     end
 
+    def add(other)
+      ex = x + width
+      ey = y + height
+
+      oex = other.x + other.width
+      oey = other.y + other.height
+
+      mx = [x, other.x].min
+      my = [y, other.y].min
+
+      Hokusai::Rect.new(
+        mx, my,
+        [ex, oex].max - mx,
+        [ey, oey].max - my
+      )
+    end
+
     def intersect?(other)
       (x - other.x).abs <= ((width)) && (y - other.y).abs <= ((height))
     end
