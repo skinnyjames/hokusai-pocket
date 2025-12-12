@@ -1,6 +1,33 @@
 #ifndef HOKUSAI_POCKET_AST
 #define HOKUSAI_POCKET_AST
 
+/**
+ * A Data Wrapper for Hokusai::Ast
+ * 
+ * These functions plugin to the core tree-sitter grammar
+ * and can parse / query Hokusai templates 
+ * 
+ * #parse parses a Hokusai markup template
+ * #type the ast node (eg: vblock)
+ * #id the ast id (ex: vblock#container => container)
+ * #dump dumps the ast to stdout
+ * #has_if_condition? returns true if the ast has an if macro associated with it
+ * #has_else_condition? returns true if the ast has an else macro associated with it
+ * #else_condition_active? && #else_active= (internal, used to toggle state in the mounting logic)
+ * #slot? is this ast a slot?
+ * #virtual? is this ast virtual?
+ * #else_ast returns the wrapped else ast 
+ * #children returns the wrapped ast children
+ * #siblings returns wrapped ast siblings
+ * #if returns if function as a Hokusai::Ast::Func
+ * #loop returns loop function as a Hokusai::Ast::Loop
+ * #loop? returns true if ast has a loop
+ * #props return ast props as a hash
+ * #events return hash of events
+ * #style_list returns array of imported style names
+ * #reset sets else_active to false
+ */
+
 #include "ast.h"
 #include "error.h"
 #include "./ast/loop.c"

@@ -42,7 +42,8 @@
 
 #elif defined(_MSC_VER)
   // On Windows, use QueryPerformanceCounter and QueryPerformanceFrequency.
-
+  #define NOGDI
+  #define WIN32_LEAN_AND_MEAN
   #include <windows.h>
 
   static double PCFreq = 0.0;
