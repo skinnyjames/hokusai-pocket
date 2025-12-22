@@ -16,3 +16,4 @@ barista.lock
 docker/
 platforms/
 .DS_Store
+src/pocket.c

@@ -11461,8 +11461,9 @@ WORKDIR /app
 RUN git clone --branch 5.5 --depth 1 https://github.com/raysan5/raylib.git vendor/raylib
 RUN git clone --depth 1 https://github.com/tree-sitter/tree-sitter.git vendor/tree-sitter
 RUN git clone --branch stable --depth 1 https://github.com/mruby/mruby.git vendor/mruby
-RUN git clone --branch main --depth 1 https://github.com/skinnyjames/hokusai-pocket.git vendor/hp
+RUN git clone --branch feature/libuv --depth 1 https://github.com/skinnyjames/hokusai-pocket.git vendor/hp
 RUN git clone https://github.com/mlabbe/nativefiledialog.git vendor/nfd
+RUN git clone https://github.com/libuv/libuv vendor/libuv
 
 # build mruby
 WORKDIR /app/vendor/mruby
@@ -11656,6 +11657,17 @@ RUN cd build/gmake_macosx && make config=release_x64
 RUN cd build/gmake_linux_zenity && make config=release_x64
 <% end %>
 
+# build libuv
+WORKDIR /app/vendor/libuv
+RUN apt update -y && apt install -y automake libtool
+<% if os == "osx" %>
+RUN ./autogen.sh && ./configure --host=x86_64-apple-darwin20.4 && make
+<% elsif os == "windows" %>
+RUN ./autogen.sh && ./configure --host=x86_64-w64-mingw32 && make
+<% else %>
+RUN ./autogen.sh && ./configure && make
+<% end %>
+
 WORKDIR /app
 RUN mkdir -p /app/vendor/hokusai-pocket
 
@@ -11678,7 +11690,7 @@ spec("hokusai-pocket-app") do
 
 <% if os.eql?("windows") %>
     def libs
-      "-lgdi32 -lwinmm -lws2_32 -lcomctl32 -lcomdlg32 -lole32 -luuid -lpthread"
+      "-lws2_32 -lgdi32 -lwinmm -lcomctl32 -lcomdlg32 -lole32 -luuid -lpthread -ldbghelp -liphlpapi -luserenv"
     end
 <% elsif os.eql?("osx") %>
     def libs
@@ -11696,7 +11708,9 @@ spec("hokusai-pocket-app") do
           vendor/mruby/include
           vendor/hp/grammar/tree_sitter
           vendor/hp/src
+          vendor/hp/src/mruby-uv
           vendor/nfd/src/include
+          vendor/libuv/include
         ]
     end
 
@@ -11708,6 +11722,7 @@ spec("hokusai-pocket-app") do
         vendor/mruby/build/platform/lib/libmruby.a 
         vendor/raylib/src/libraylib.a
         vendor/tree-sitter/build/lib/libtree-sitter.a
+        vendor/libuv/.libs/libuv.a
       ] + ["vendor/nfd/build/lib/Release/x64/\#{nfd}"]).join(" ")
     end
 
@@ -11735,9 +11750,49 @@ spec("hokusai-pocket-app") do
       # build hokusai ruby proper...
       File.open("vendor/hp/mrblib/hokusai.rb", "w") { |io| io << ruby_file("vendor/hp/ruby/hokusai.rb") }
       mkdir("vendor/hokusai-pocket")
-      command("\#{mrbc} -o vendor/hokusai-pocket/pocket.h -Bpocket ./vendor/hp/mrblib/hokusai.rb")
-      command("${CC:-gcc} -O3 -Wall \#{h_includes} -c #\{h_sources}", chdir: "vendor/hokusai-pocket")
+
+      command("\#{mrbc} -o vendor/hp/src/pocket.c -Bpocket ./vendor/hp/mrblib/hokusai.rb")
+
       ruby do
+        code = File.read("vendor/hp/src/pocket.c")
+
+        File.open("vendor/hp/src/pocket.c", "w") do |io|
+          io.puts "#include <stdint.h>"
+          io.puts "#include <pocket.h>"
+          io.puts "#include <mruby.h>"
+          io.puts "#include <mruby/irep.h>"
+          io.puts "void load_pocket(mrb_state* mrb) {"
+          io.puts code
+          io.puts "mrb_load_irep(mrb, pocket);"
+          io.puts "}"
+        end
+
+        File.open("vendor/hp/src/pocket.h", "w") do |io|
+          io.puts "#ifndef MRB_HPOCKET_LIB"
+          io.puts "#define MRB_HPOCKET_LIB"
+          io.puts "#include <mruby.h>"
+          io.puts "void load_pocket(mrb_state* mrb);"
+          io.puts "#endif"
+        end
+      end
+
+      # ugh, need separate libuv/raylib compilation units because of windows.h collisions
+      loop_includes = %w[
+        vendor/mruby/include
+        vendor/libuv/include
+        vendor/tree-sitter/build/include
+        vendor/hp/src
+        vendor/hp/grammar/tree_sitter
+      ].map { |inc| "-I../../\#{inc}" }.join(" ")
+
+      command("${CC:-gcc} -O3 -Wall \#{loop_includes} -c ../../vendor/hp/src/mruby-uv/loop.c", chdir: "vendor/hokusai-pocket")
+      # end building loop.o
+
+      ruby do
+        command("${CC:-gcc} -O3 -Wall \#{h_includes} -c #\{h_sources}", chdir: "vendor/hokusai-pocket")
+        .forward_output(&on_output)
+        .execute
+
         command("${AR:-ar} r libhokusai.a \#{objs}", chdir: "vendor/hokusai-pocket")
         .forward_output(&on_output)
         .execute
@@ -11760,7 +11815,6 @@ spec("hokusai-pocket-app") do
           {
             mrb_state* mrb = mrb_open();
             mrb_mruby_hokusai_pocket_gem_init(mrb);
-            mrb_load_irep(mrb, pocket);
             if (mrb->exc) {
               mrb_print_error(mrb);
               return 1;
@@ -11790,11 +11844,13 @@ spec("hokusai-pocket-app") do
         .
         vendor/hokusai-pocket
         vendor/hp/src
+        vendor/hp/src/mruby-uv
         vendor/nfd/src/include
+        vendor/libuv/include
       ].map { |file| "-I\#{file}" }.join(" ")
 
       mkdir("bin")
-      command("${CC:-gcc} -std=c99 -O3 -Wall \#{app_includes} -o bin/<%= outfile %> <%= outfile %>.c \#{links} \#{libs}")
+      command("${CC:-gcc} -O3 -Wall \#{app_includes} -o bin/<%= outfile %> <%= outfile %>.c \#{links} \#{libs}")
     end
   end
 end
@@ -11841,6 +11897,33 @@ HP_SHADER_UNIFORM_UIVEC4 = 11    # Shader uniform type: uivec4 (4 unsigned int)
 # desktop applications
 # @author skinnyjames
 module Hokusai
+  # Class for handling async work.
+  class Work
+    def initialize(receiver)
+      @state = nil
+      @receiver = receiver
+      @on_execute_cb = nil
+      @on_finished_cb = nil
+    end
+
+    def on_execute(state = nil, &block)
+      @state = state
+      @on_execute_cb = block
+    end
+
+    def on_finished(&block)
+      @on_finished_cb = block
+    end
+
+    def execute(state)
+      @on_execute_cb&.call(state)
+    end
+
+    def finish(receiver, value = nil)
+      receiver.instance_exec(value, &@on_finished_cb)
+    end
+  end
+
   # Access the font registry
   #
   # @return [Hokusai::FontRegistry]
@@ -12018,10 +12101,10 @@ module Hokusai
 
   def self.update(block)
     stack = [block]
-    
+  
     while block = stack.pop
       block.update
-
+    
       stack.concat block.children.reverse
     end
   end

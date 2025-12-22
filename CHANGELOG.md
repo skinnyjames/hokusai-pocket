@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.0
+
+### Added
+
+* Added support for async io via [libuv](https://github.com/libuv/libuv)
+* Added `Hokusai::Work` for starting async work and `Hokusai.worker#queue`
+
+### Changed
+
+* Modified `Brewfile` to make loading hokusai more composable
+* Adds vendored `libuv.a`
+* Changes `<backend.c>` to run a `UV::Loop` inside the draw loop.
+
 ## 0.3.3
 
 ### Added

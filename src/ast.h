@@ -12,6 +12,10 @@
 #include "core-hml.h"
 #include "hashmap.h"
 
+/**
+  defines Hokusai::Ast and related methods
+  @param mrb the mrb vm
+*/
 void mrb_define_hokusai_ast_class(mrb_state* mrb);
 
 #endif

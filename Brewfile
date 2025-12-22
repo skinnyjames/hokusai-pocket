@@ -5,8 +5,6 @@ end
 spec("hokusai-pocket") do |config|
   NFD_LIB = Barista.os == "Windows" ? "nfd.lib" : "libnfd.a"
 
-  puts ["NFD LIB #{NFD_LIB}"]
-
   task "setup" do
     def build
       command("mkdir vendor; touch vendor/.keep") unless Dir.exists?("vendor")
@@ -14,6 +12,7 @@ spec("hokusai-pocket") do |config|
       command("git clone --depth 1 https://github.com/tree-sitter/tree-sitter.git vendor/tree-sitter")
       command("git clone --branch stable --depth 1 https://github.com/mruby/mruby.git vendor/mruby")
       command("git clone https://github.com/mlabbe/nativefiledialog.git vendor/nfd")
+      command("git clone https://github.com/libuv/libuv vendor/libuv")
     end
   end
 
@@ -40,6 +39,21 @@ spec("hokusai-pocket") do |config|
     def build
       command("make clean", chdir: "vendor/raylib/src")
       command("make -j 5 PLATFORM=#{platform(args)}", chdir: "vendor/raylib/src")
+    end
+  end
+
+  task "libuv" do
+    dependency "setup" do
+      files "vendor/.keep"
+    end
+
+    def build
+      if windows?
+        command("bash.exe ./autogen.sh", chdir: "vendor/libuv")
+        command("bash.exe ./configure", chdir: "vendor/libuv")
+      else
+        command("make", chdir: "vendor/libuv")
+      end
     end
   end
 
@@ -126,6 +140,10 @@ spec("hokusai-pocket") do |config|
     dependency "nfd" do
       files "vendor/nfd/build/lib/Release/x64/#{NFD_LIB}"
     end
+
+    dependency "libuv" do
+      files "vendor/libuv/.libs/libuv.a"
+    end
     
     def includes
       %w[
@@ -135,6 +153,7 @@ spec("hokusai-pocket") do |config|
           vendor/hp/grammar/tree_sitter
           vendor/hp/src
           vendor/nfd/src/include
+          vendor/libuv/include
         ]
     end
 
@@ -146,6 +165,7 @@ spec("hokusai-pocket") do |config|
         vendor/mruby/build/platform/lib/libmruby.a 
         vendor/raylib/src/libraylib.a
         vendor/tree-sitter/build/lib/libtree-sitter.a
+        vendor/libuv/.libs/libuv.a
       ].join(" ")
     end
 
@@ -199,6 +219,16 @@ spec("hokusai-pocket") do |config|
     end
   end
 
+  task "system-test" do |args|
+    dependency "hokusai"
+
+    def build
+      code = ruby_file("test/entrypoint.rb")
+
+      eval code, top
+    end
+  end
+
   task "hokusai" do |args|
     dependency "raylib" do
       files "vendor/raylib/src/libraylib.a"
@@ -214,6 +244,10 @@ spec("hokusai-pocket") do |config|
 
     dependency "nfd" do
       files "vendor/nfd/build/lib/Release/x64/#{NFD_LIB}"
+    end
+
+    dependency "libuv" do
+      files "vendor/libuv/.libs/libuv.a"
     end
 
     def sources
@@ -244,9 +278,38 @@ spec("hokusai-pocket") do |config|
       unless Dir.exists?("vendor/hokusai-pocket")
         mkdir("vendor/hokusai-pocket")
       end
-      command("#{mrbc} -o vendor/hokusai-pocket/pocket.h -Bpocket ./mrblib/hokusai.rb")
-      command("#{config.cc.gcc} -O3 -Wall -I../../vendor/tree-sitter/build/include -I../../vendor/raylib/src -I../../vendor/mruby/include -I../../vendor/nfd/src/include -I../../grammar/tree_sitter -I../../src -I. -c #{sources.map { |s| "../../#{s}" }.join(" ")}", chdir: "vendor/hokusai-pocket")
+
+      command("#{mrbc} -o src/pocket.c -Bpocket ./mrblib/hokusai.rb")
+
       ruby do
+        code = File.read("src/pocket.c")
+
+        File.open("src/pocket.c", "w") do |io|
+          io.puts "#include <stdint.h>"
+          io.puts "#include <pocket.h>"
+          io.puts "#include <mruby.h>"
+          io.puts "#include <mruby/irep.h>"
+          io.puts "void load_pocket(mrb_state* mrb) {"
+          io.puts code
+          io.puts "mrb_load_irep(mrb, pocket);"
+          io.puts "}"
+        end
+
+        File.open("vendor/hokusai-pocket/pocket.h", "w") do |io|
+          io.puts "#ifndef MRB_HPOCKET_LIB"
+          io.puts "#define MRB_HPOCKET_LIB"
+          io.puts "#include <mruby.h>"
+          io.puts "void load_pocket(mrb_state* mrb);"
+          io.puts "#endif"
+        end
+      end
+      
+      command("${CC:-gcc} -O3 -Wall -I../../vendor/tree-sitter/build/include -I../../grammar/tree_sitter -I../../vendor/raylib/src -I../../vendor/mruby/include -I../../vendor/hokusai-pocket -I../../vendor/libuv/include -I../../src -I../../src/mruby-uv  -c ../../src/mruby-uv/loop.c", chdir: "vendor/hokusai-pocket")
+
+      ruby do
+        command("#{config.cc.gcc} -O3 -Wall -I../../vendor/tree-sitter/build/include -I../../vendor/raylib/src -I../../vendor/libuv/include -I../../vendor/mruby/include -I../../vendor/nfd/src/include -I../../grammar/tree_sitter -I../../src -I../../src/mruby-uv -I. -c #{sources.map { |s| "../../#{s}" }.join(" ")}", chdir: "vendor/hokusai-pocket")
+          .forward_output(&on_output)
+          .execute
         command("#{config.cc.ar} r libhokusai.a #{objs.map{ |s| "../../#{s}" }.join(" ")}", chdir: "vendor/hokusai-pocket")
           .forward_output(&on_output)
           .execute
@@ -260,7 +323,7 @@ spec("hokusai-pocket") do |config|
     end
 
     def includes
-      %w[vendor/raylib/src vendor/tree-sitter/build/include vendor/mruby/include vendor/cli vendor/hokusai-pocket vendor/nfd/src/include src].map do |file|
+      %w[vendor/raylib/src vendor/tree-sitter/build/include vendor/mruby/include vendor/cli vendor/hokusai-pocket vendor/nfd/src/include vendor/libuv/include src src/mruby-uv].map do |file|
         "-I#{file}"
       end
     end
@@ -287,6 +350,7 @@ spec("hokusai-pocket") do |config|
           vendor/mruby/build/host/lib/libmruby.a 
           vendor/raylib/src/libraylib.a
           vendor/tree-sitter/build/lib/libtree-sitter.a
+          vendor/libuv/.libs/libuv.a
         ] + ["vendor/nfd/build/lib/Release/x64/#{NFD_LIB}"]
     end
   end
@@ -309,9 +373,9 @@ spec("hokusai-pocket") do |config|
           #include <mruby.h>
           #include <mruby/array.h>
           #include <mruby/irep.h>
-
-          #include <mruby_hokusai_pocket.h>
+          
           #include <pocket.h>
+          #include <mruby_hokusai_pocket.h>
           #include <pocket-cli.h>
           #define OPTPARSE_IMPLEMENTATION
           #define OPTPARSE_API static
@@ -323,7 +387,6 @@ spec("hokusai-pocket") do |config|
             mrb_state* mrb = mrb_open();
             ai = mrb_gc_arena_save(mrb);
             mrb_mruby_hokusai_pocket_gem_init(mrb);
-            mrb_load_irep(mrb, pocket);
             mrb_gc_arena_restore(mrb, ai);
 
             struct optparse options;
@@ -365,7 +428,7 @@ spec("hokusai-pocket") do |config|
         end
       end
 
-      command("#{config.cc.gcc} -O3 -Wall #{includes.join(" ")} -o bin/hokusai-pocket vendor/cli/hokusai-pocket.c -L. #{links.join(" ")} #{frameworks(args)}")
+      command("#{config.cc.gcc} -O2 -Wall -g #{includes.join(" ")} -o bin/hokusai-pocket vendor/cli/hokusai-pocket.c -L. #{links.join(" ")} #{frameworks(args)}")
     end
   end
 
@@ -377,87 +440,6 @@ spec("hokusai-pocket") do |config|
       code = ruby_file(out)
 
       eval code, top
-    end
-  end
-
-  task "build" do |args|
-    include Helpers
-    dependency "hokusai-github" do
-      files "vendor/hokusai-pocket/libhokusai.a"
-    end
-
-    def includes
-      %w[vendor/raylib/src vendor/tree-sitter/build/include vendor/mruby/include vendor/tmp vendor/hokusai-pocket vendor/hp/src].map do |file|
-        "-I#{file}"
-      end
-    end
-
-    def links
-      %w[
-          vendor/hp/grammar/src/parser.c
-          vendor/hp/grammar/src/scanner.c
-          vendor/hokusai-pocket/libhokusai.a
-          vendor/mruby/build/host/lib/libmruby.a 
-          vendor/raylib/src/libraylib.a
-          vendor/tree-sitter/build/lib/libtree-sitter.a
-        ] + ["vendor/nfd/build/lib/Release/x64/#{NFD_LIB}"]
-    end
-
-    def build
-      out = args[:target] || "app.rb"
-      code = ruby_file(out)
-      fname = File.basename(out).gsub(/\.rb$/, "")
-      dir = Pathname.new(out).parent.to_s
-
-      mkdir("vendor/tmp") unless Dir.exists?("vendor/tmp")
-      ruby do
-        File.open("vendor/tmp/papp.rb", "w") do |io|
-          io << code
-        end
-      end
-
-      command("vendor/mruby/build/host/bin/mrbc -o vendor/tmp/papp.h -Bpocket_app vendor/tmp/papp.rb")
-      
-      ruby do
-        File.open("vendor/tmp/#{fname}.c", "w") do |io|
-          str = <<~C
-          #ifndef POCKET_ENTRYPOINT
-          #define POCKET_ENTRYPOINT
-          
-          #include <mruby.h>
-          #include <mruby/array.h>
-          #include <mruby/irep.h>
-
-          #include <mruby_hokusai_pocket.h>
-          #include <pocket.h>
-          #include <papp.h>
-
-          int main(int argc, char* argv[])
-          {
-            mrb_state* mrb = mrb_open();
-            mrb_mruby_hokusai_pocket_gem_init(mrb);
-            mrb_load_irep(mrb, pocket);
-
-            int ai = mrb_gc_arena_save(mrb);
-            mrb_value gemspec = mrb_load_irep(mrb, pocket_app);
-            mrb_gc_arena_restore(mrb, ai);
-
-            if (mrb->exc) {
-              mrb_print_error(mrb);
-              return 1;
-            } 
-            mrb_mruby_hokusai_pocket_gem_final(mrb);
-            mrb_close(mrb);
-          }
-          #endif
-          C
-
-          io << str
-        end
-      end
-
-      mkdir("bin") unless Dir.exists?("bin")
-      command("#{config.cc.gcc} -O3 -Wall #{includes.join(" ")} -o bin/#{fname} vendor/tmp/#{fname}.c -L. #{links.join(" ")} #{frameworks(args)}")
     end
   end
 

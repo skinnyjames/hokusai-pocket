@@ -443,7 +443,6 @@ void hoku_ast_list_free(hoku_ast_list* list)
 
 void hoku_ast_free(hoku_ast* component)
 {
-	if (component->styles) hoku_style_free(component->styles);
 	hoku_ast_class_list_free(component->style_list);
   hoku_ast_class_list_free(component->class_list);
 	hashmap_free(component->props);

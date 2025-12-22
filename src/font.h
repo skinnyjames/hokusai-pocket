@@ -18,6 +18,10 @@ typedef struct HpFontWrapper
 
 hp_font_wrapper* hp_font_get(mrb_state* mrb, mrb_value self);
 
+/**
+  defines Hokusai::Font and related methods
+  @param mrb the mrb vm
+*/
 void mrb_define_hokusai_font_class(mrb_state* mrb);
 
 #endif
