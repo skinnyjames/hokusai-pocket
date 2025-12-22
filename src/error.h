@@ -3,6 +3,10 @@
 
 #include <mruby.h>
 
+/**
+  Exits if the mrb vm has an error
+  @param mrb the mrb vm
+*/
 void hp_handle_error(mrb_state* mrb);
 
 #endif
