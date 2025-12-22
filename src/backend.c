@@ -1029,6 +1029,8 @@ int hp_backend_run(mrb_state* mrb, struct RClass* hokusai_module, mrb_value back
   mrb_value block = mrb_funcall_argv(mrb, backend, mrb_intern_lit(mrb, "app"), 0, NULL);
   if (mrb->exc) mrb_print_error(mrb);
 
+  mrb_value worker = mrb_funcall(mrb, mrb_obj_value(hokusai_module), "worker", 0, NULL);
+
   bool log = mrb_bool(mrb_funcall(mrb, config, "log", 0, NULL));
   if (log)
   {
@@ -1042,6 +1044,7 @@ int hp_backend_run(mrb_state* mrb, struct RClass* hokusai_module, mrb_value back
   struct RClass* painter_class = mrb_class_get_under(mrb, hokusai_module, "Painter");
   struct RClass* canvas_class = mrb_class_get_under(mrb, hokusai_module, "Canvas");
   mrb_value input = mrb_obj_new(mrb, input_class, 0, NULL);
+
   if (mrb->exc) mrb_print_error(mrb);
   // raylib stuff
   SetConfigFlags(config_flags);
@@ -1118,6 +1121,8 @@ int hp_backend_run(mrb_state* mrb, struct RClass* hokusai_module, mrb_value back
       hp_handle_error(mrb);
       f_log(F_LOG_FINE, "after update");
     EndDrawing();
+
+    mrb_funcall(mrb, worker, "run", 1, mrb_int_value(mrb, 2));
     f_log(F_LOG_FINE, "End drawing");
   }
 

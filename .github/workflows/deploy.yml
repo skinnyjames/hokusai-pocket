@@ -10,12 +10,12 @@ jobs:
       image: ubuntu:latest
     steps:
       - name: deps
-        run: apt-get update -y && apt-get install -y git ruby clang build-essential libasound2-dev libgl1-mesa-dev libglu1-mesa-dev libx11-dev libxi-dev libxrandr-dev mesa-common-dev xorg-dev
+        run: apt-get update -y && apt-get install -y git cmake automake libtool ruby clang build-essential libasound2-dev libgl1-mesa-dev libglu1-mesa-dev libx11-dev libxi-dev libxrandr-dev mesa-common-dev xorg-dev
       - uses: actions/checkout@v5
       - uses: dsaltares/fetch-gh-release-asset@master
         with:
           repo: 'skinnyjames/mruby-bin-barista'
-          version: 'tags/0.2.6'
+          version: 'tags/0.2.7'
           file: 'barista-linux-x86.tar.gz'
           target: 'barista.tar.gz'
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -28,18 +28,38 @@ jobs:
           name: hokusai-pocket-linux
           path: bin/hokusai-pocket
           overwrite: true
-  publish:
-    strategy:
-      matrix:
-        platform: [{runner: macos-15-intel, os: osx}, {runner: windows-latest, os: windows}]
-    runs-on: ${{ matrix.platform.runner }}
+  publish-osx:
+    runs-on: macos-15-intel
     steps:
       - uses: actions/checkout@v5
       - uses: dsaltares/fetch-gh-release-asset@master
         with:
           repo: 'skinnyjames/mruby-bin-barista'
-          version: 'tags/0.2.6'
-          file: 'barista-${{ matrix.platform.os }}-x86.tar.gz'
+          version: 'tags/0.2.7'
+          file: 'barista-osx-x86.tar.gz'
+          target: 'barista.tar.gz'
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - name: unpack barista
+        run: tar -xvf barista.tar.gz --strip-components 1
+      - name: deps
+        run: brew install automake
+      - name: build pocket
+        run: chmod 755 barista && ./barista cli
+        shell: bash
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hokusai-pocket-osx
+          path: bin/hokusai-pocket*
+          overwrite: true
+  publish-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dsaltares/fetch-gh-release-asset@master
+        with:
+          repo: 'skinnyjames/mruby-bin-barista'
+          version: 'tags/0.2.7'
+          file: 'barista-windows-x86.tar.gz'
           target: 'barista.tar.gz'
           token: ${{ secrets.GITHUB_TOKEN }}
       - name: unpack barista
@@ -49,11 +69,11 @@ jobs:
         shell: bash
       - uses: actions/upload-artifact@v4
         with:
-          name: hokusai-pocket-${{ matrix.platform.os }}
+          name: hokusai-pocket-windows
           path: bin/hokusai-pocket*
           overwrite: true
   release:
-    needs: [publish-linux, publish]
+    needs: [publish-linux, publish-windows, publish-osx]
     runs-on: ubuntu-latest
     permissions:
       contents: write

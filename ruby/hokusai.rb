@@ -68,6 +68,33 @@ HP_SHADER_UNIFORM_UIVEC4 = 11    # Shader uniform type: uivec4 (4 unsigned int)
 # desktop applications
 # @author skinnyjames
 module Hokusai
+  # Class for handling async work.
+  class Work
+    def initialize(receiver)
+      @state = nil
+      @receiver = receiver
+      @on_execute_cb = nil
+      @on_finished_cb = nil
+    end
+
+    def on_execute(state = nil, &block)
+      @state = state
+      @on_execute_cb = block
+    end
+
+    def on_finished(&block)
+      @on_finished_cb = block
+    end
+
+    def execute(state)
+      @on_execute_cb&.call(state)
+    end
+
+    def finish(receiver, value = nil)
+      receiver.instance_exec(value, &@on_finished_cb)
+    end
+  end
+
   # Access the font registry
   #
   # @return [Hokusai::FontRegistry]
@@ -245,10 +272,10 @@ module Hokusai
 
   def self.update(block)
     stack = [block]
-    
+  
     while block = stack.pop
       block.update
-
+    
       stack.concat block.children.reverse
     end
   end

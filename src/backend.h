@@ -17,6 +17,7 @@
 #include "texture.h"
 #include "image.h"
 #include "music.h"
+#include "mruby-uv/loop.h"
 
 /**
  * 
