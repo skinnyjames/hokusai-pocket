@@ -1159,7 +1159,7 @@ module Hokusai
               if !!visible
                 if child.else_condition_active?
                   meta.child_delete(index) if child_present.call(child, false)
-                  child.else_active = 0
+                  child.else_active = false
                 end
 
                 unless child_present.call(child, true)
@@ -1180,8 +1180,8 @@ module Hokusai
                   meta.children!.insert(index, child_block)
 
                   child_block.send(:before_updated) if child_block.respond_to?(:before_updated)
-                  child_block.update
-                  child.else_active = 0
+                  Hokusai.update(child_block)
+                  child.else_active = false
                 end
               elsif !visible
                 if !child.has_else_condition? || (child.has_else_condition? && !child.else_condition_active?)
@@ -1207,10 +1207,10 @@ module Hokusai
                   child_block = NodeMounter.new(node, else_child_block_klass, [stack], previous_providers: providers).mount(context: context, providers: providers)
                   UpdateEntry.new(child_block, block, utarget).register(context: context, providers: providers)
                   meta.children!.insert(index, child_block)
-
                   child_block.send(:before_updated) if child_block.respond_to?(:before_updated)
-                  child_block.update
-                  child.else_active = 1
+                  
+                  Hokusai.update(child_block)
+                  child.else_active = true
                 end
               end
             end
@@ -1692,8 +1692,8 @@ module Hokusai
     def self.style(template)
       case template
       when String
-        @styles = Hokusai::Style.parse(template)
-      when Hokusai::Style
+        @styles = ::Hokusai::Style.parse(template)
+      when ::Hokusai::Style
         @styles = template
       end
     end
@@ -2072,7 +2072,7 @@ module Hokusai
 
     def gradient=(colors)
       unless colors.is_a?(Array) && colors.size == 4 && colors.all? { |color| color.is_a?(Hokusai::Color) }
-        raise Hokusai::Error.new("Gradient must be an array of 4 Hokuai::Color")
+        raise Hokusai::Error.new("Gradient must be an array of 4 Hokusai::Color")
       end
 
       @gradient = colors

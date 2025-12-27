@@ -39,8 +39,8 @@ module Hokusai
     def self.style(template)
       case template
       when String
-        @styles = Hokusai::Style.parse(template)
-      when Hokusai::Style
+        @styles = ::Hokusai::Style.parse(template)
+      when ::Hokusai::Style
         @styles = template
       end
     end
