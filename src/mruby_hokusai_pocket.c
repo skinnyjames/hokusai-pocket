@@ -40,9 +40,9 @@ void mrb_mruby_hokusai_pocket_gem_init(mrb_state* mrb)
 
   mrb_define_class_method(mrb, hokusai_module, "monotonic", hp_define_monotonic, MRB_ARGS_NONE());
   mrb_define_class_method(mrb, hokusai_module, "worker", hp_define_work_loop, MRB_ARGS_NONE());
-
-  mrb_define_hokusai_ast_class(mrb);
+  
   mrb_define_hokusai_style_class(mrb);
+  mrb_define_hokusai_ast_class(mrb);
   mrb_define_hokusai_font_class(mrb);
   mrb_define_hokusai_texture_class(mrb);
   mrb_define_hokusai_image_class(mrb);

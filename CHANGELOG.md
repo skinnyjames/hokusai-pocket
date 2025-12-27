@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.1
+
+### Added
+
+* Added tests in `tests/`, run with `hokusai-pocket run:target=tests/entrypoint.rb`
+
+### Fixed
+
+* Fixed bug with template directive updates
+* Fixed bug with conditional directive 
+
 ## 0.4.0
 
 ### Added

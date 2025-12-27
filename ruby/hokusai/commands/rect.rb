@@ -47,7 +47,7 @@ module Hokusai
 
     def gradient=(colors)
       unless colors.is_a?(Array) && colors.size == 4 && colors.all? { |color| color.is_a?(Hokusai::Color) }
-        raise Hokusai::Error.new("Gradient must be an array of 4 Hokuai::Color")
+        raise Hokusai::Error.new("Gradient must be an array of 4 Hokusai::Color")
       end
 
       @gradient = colors
