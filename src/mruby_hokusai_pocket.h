@@ -1,6 +1,10 @@
 #ifndef MRUBY_HOKUSAI_POCKET_H
 #define MRUBY_HOKUSAI_POCKET_H
 
+#if defined(_MSC_VER)
+#include <time.h>
+#endif
+
 #include <mruby.h>
 #include "backend.h"
 #include "monotonic_timer.h"

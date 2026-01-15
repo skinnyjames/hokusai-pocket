@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.2
+
+### Modified
+
+* Fixes `build_templates.rb` to publish from the correct branch
+
 ## 0.4.1
 
 ### Added
