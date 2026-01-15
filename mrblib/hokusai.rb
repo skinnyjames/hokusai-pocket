@@ -11461,7 +11461,7 @@ WORKDIR /app
 RUN git clone --branch 5.5 --depth 1 https://github.com/raysan5/raylib.git vendor/raylib
 RUN git clone --depth 1 https://github.com/tree-sitter/tree-sitter.git vendor/tree-sitter
 RUN git clone --branch stable --depth 1 https://github.com/mruby/mruby.git vendor/mruby
-RUN git clone --branch feature/libuv --depth 1 https://github.com/skinnyjames/hokusai-pocket.git vendor/hp
+RUN git clone --branch main --depth 1 https://github.com/skinnyjames/hokusai-pocket.git vendor/hp
 RUN git clone https://github.com/mlabbe/nativefiledialog.git vendor/nfd
 RUN git clone https://github.com/libuv/libuv vendor/libuv
 
