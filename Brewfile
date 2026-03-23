@@ -11,7 +11,7 @@ spec("hokusai-pocket") do |config|
       command("mkdir vendor; touch vendor/.keep") unless Dir.exists?("vendor")
       command("git clone --branch 5.5 --depth 1 https://github.com/raysan5/raylib.git vendor/raylib")
       command("git clone --depth 1 https://github.com/tree-sitter/tree-sitter.git vendor/tree-sitter")
-      command("git clone --branch master --depth 1 https://github.com/mruby/mruby.git vendor/mruby")
+      command("git clone --branch 3.4.0 --depth 1 https://github.com/mruby/mruby.git vendor/mruby")
       command("git clone https://github.com/mlabbe/nativefiledialog.git vendor/nfd")
       command("git clone https://github.com/libuv/libuv vendor/libuv")
     end
