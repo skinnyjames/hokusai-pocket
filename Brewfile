@@ -260,6 +260,12 @@ spec("hokusai-pocket") do |config|
       "vendor/mruby/build/host/bin/mrbc"
     end
 
+    def includes
+      %w[vendor/mruby/build/host/include vendor/nfd/src/include vendor/tree-sitter/build/include grammar/tree_sitter vendor/raylib/src vendor/mruby/include vendor/hokusai-pocket vendor/libuv/include src src/mruby-uv].map do |file|
+        "-I../../#{file}"
+      end.join(" ")
+    end
+
     def build
       ruby do
         code = ruby_file("ruby/hokusai.rb")
@@ -298,10 +304,10 @@ spec("hokusai-pocket") do |config|
         end
       end
       
-      command("#{config.cc.gcc} -O3 -Wall -I../../vendor/tree-sitter/build/include -I../../grammar/tree_sitter -I../../vendor/raylib/src -I../../vendor/mruby/include -I../../vendor/hokusai-pocket -I../../vendor/libuv/include -I../../src -I../../src/mruby-uv  -c ../../src/mruby-uv/loop.c", chdir: "vendor/hokusai-pocket")
+      command("#{config.cc.gcc} -O3 -Wall #{includes} -c ../../src/mruby-uv/loop.c", chdir: "vendor/hokusai-pocket")
 
       ruby do
-        command("#{config.cc.gcc} -O3 -Wall -I../../vendor/tree-sitter/build/include -I../../vendor/raylib/src -I../../vendor/libuv/include -I../../vendor/mruby/include -I../../vendor/nfd/src/include -I../../grammar/tree_sitter -I../../src -I../../src/mruby-uv -I. -c #{sources.map { |s| "../../#{s}" }.join(" ")}", chdir: "vendor/hokusai-pocket")
+        command("#{config.cc.gcc} -O3 -Wall #{includes} -I. -c #{sources.map { |s| "../../#{s}" }.join(" ")}", chdir: "vendor/hokusai-pocket")
           .forward_output(&on_output)
           .execute
         command("#{config.cc.ar} r libhokusai.a #{objs.map{ |s| "../../#{s}" }.join(" ")}", chdir: "vendor/hokusai-pocket")
@@ -317,7 +323,7 @@ spec("hokusai-pocket") do |config|
     end
 
     def includes
-      %w[vendor/raylib/src vendor/tree-sitter/build/include vendor/mruby/include vendor/cli vendor/hokusai-pocket vendor/nfd/src/include vendor/libuv/include src src/mruby-uv].map do |file|
+      %w[vendor/mruby/build/host/include vendor/raylib/src vendor/tree-sitter/build/include vendor/mruby/include vendor/cli vendor/hokusai-pocket vendor/nfd/src/include vendor/libuv/include src src/mruby-uv].map do |file|
         "-I#{file}"
       end
     end
