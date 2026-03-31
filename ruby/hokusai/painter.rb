@@ -39,7 +39,8 @@ module Hokusai
         mouseup: MouseUpEvent.new(input, state),
         mousedown: MouseDownEvent.new(input, state),
         keyup: KeyUpEvent.new(input, state),
-        keypress: KeyPressEvent.new(input, state)
+        keypress: KeyPressEvent.new(input, state),
+        keydown: KeyDownEvent.new(input, state),
       }
 
       add_touch_events(events, input, state) unless input.touch.nil?
@@ -196,6 +197,7 @@ module Hokusai
         events[:mouseout].bubble
         events[:mousedown].bubble
         events[:mouseup].bubble
+        events[:keydown].bubble
 
         unless input.touch.nil?
           events[:taphold].bubble
@@ -278,6 +280,8 @@ module Hokusai
       if block.node.portal.nil?
         return
       end
+      
+      events[:keydown].capture(block, canvas)
 
       if input.hovered?(canvas)
         events[:hover].capture(block, canvas)

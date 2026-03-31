@@ -22,6 +22,10 @@ module Hokusai
       @keyboard.released
     end
 
+    def down
+      @keyboard.down
+    end
+
     def char
       @keyboard.char
     end
@@ -85,6 +89,28 @@ module Hokusai
 
     def capture(block, canvas)
       add_capture(block) if matches(block) && released.size > 0
+    end
+  end
+
+  class KeyDownEvent < KeyboardEvent
+    name "keydown"
+    
+    def key
+      down[0]&.[](:symbol)
+    end
+
+    def code
+      down[0]&.[](:code)
+    end
+
+    def char
+      down[0]&.[](:char)
+    end
+
+    def capture(block, _)
+      return unless matches(block) && down.size > 0
+      
+      add_capture(block)
     end
   end
 

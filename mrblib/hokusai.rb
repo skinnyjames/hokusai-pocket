@@ -481,7 +481,7 @@ module Hokusai
 
   class Keyboard
     attr_accessor :shift, :control, :super, :alt
-    attr_reader :keys, :pressed, :released
+    attr_reader :keys, :pressed, :released, :down
 
     def printable?
       [
@@ -531,6 +531,7 @@ module Hokusai
     def reset
       @pressed.clear
       @released.clear
+      @down.clear
       
       @shift = false
       @control = false
@@ -622,7 +623,16 @@ module Hokusai
         nkey = keys[key].dup
         nkey.merge!({ char: char_code_from_key(key, shift)&.chr })
         
-        pressed << nkey
+        @pressed << nkey
+      elsif down
+        keys[key][:pressed] = false
+        keys[key][:released] = false
+        keys[key][:down] = true
+
+        nkey = keys[key].dup
+        nkey.merge!({ char: char_code_from_key(key, shift)&.chr })
+
+        @down << nkey
       elsif !down && keys[key][:down]
         keys[key][:pressed] = false
         keys[key][:released] = true
@@ -630,7 +640,7 @@ module Hokusai
         nkey = keys[key].dup
         nkey.merge!({ char: char_code_from_key(key, shift)&.chr })
 
-        released << nkey
+        @released << nkey
       else
         keys[key][:pressed] = false
         keys[key][:released] = false
@@ -1513,6 +1523,13 @@ module Hokusai
   class Node
     attr_reader :ast, :node, :uuid, :meta, :portal
 
+    def self.virtual
+      @virtual ||= parse <<~EOF
+      [template]
+        virtual
+      EOF
+    end
+
     def self.parse(template, name = "root", parent = nil)
       ast = Ast.parse(template, name)
 
@@ -1613,7 +1630,7 @@ module Hokusai
               value = method
             end
 
-            meta.set_prop(prop.name.to_sym, value) unless value.nil?
+            meta.set_prop(prop.name.to_sym, value)
           end
         end
       end
@@ -1794,6 +1811,21 @@ module Hokusai
 
     def self.mount(name = "root", parent_node = nil)
       compile(name, parent_node).mount(self)
+    end
+
+    # you probably don't need this.
+    def self.render(props)
+      node = Hokusai::Node.virtual
+
+      props.each do |k, v|
+        node.meta.set_prop(k.to_sym, v)
+      end
+
+
+      block = new(node: node)
+      yield block
+
+      node.meta.commands.clear!
     end
 
     def initialize(**args)
@@ -1979,7 +2011,7 @@ end
 
 module Hokusai
   class Commands::Image < Commands::Base
-    attr_reader :x, :y, :width, :height, :image
+    attr_reader :x, :y, :width, :height, :image, :slice
 
     def initialize(image, x, y, width, height)
       @image = image
@@ -1987,6 +2019,13 @@ module Hokusai
       @y = y
       @width = width
       @height = height
+      @slice = nil
+    end
+
+    def slice=(rect)
+      raise Hokusai::Error.new("Argument must be a Hokusai::Rect") unless rect.is_a? Hokusai::Rect
+
+      @slice = rect
     end
 
     def hash
@@ -2523,7 +2562,11 @@ module Hokusai
     # Invokes an image command
     # from a filename, at position {x,y} with `w`x`h` dimensions
     def image(source, x, y, w, h)
-      queue << Commands::Image.new(source, x, y, w, h)
+      command = Commands::Image.new(source, x, y, w, h)
+
+      yield(command)
+
+      queue << command
     end
 
     # Invokes a scissor begin command
@@ -2573,8 +2616,8 @@ module Hokusai
       queue << Commands::ScaleEnd.new
     end
 
-    def translation_Begin(x, y)
-      queue << Commands::TranslationBegin.new
+    def translation_begin(x, y)
+      queue << Commands::TranslationBegin.new(x, y)
     end
 
     def translation_end
@@ -2837,6 +2880,10 @@ module Hokusai
       @keyboard.released
     end
 
+    def down
+      @keyboard.down
+    end
+
     def char
       @keyboard.char
     end
@@ -2900,6 +2947,27 @@ module Hokusai
 
     def capture(block, canvas)
       add_capture(block) if matches(block) && released.size > 0
+    end
+  end
+
+  class KeyDownEvent < KeyboardEvent
+    name "keydown"
+    
+    def key
+      down[0]&.[](:symbol)
+    end
+
+    def code
+      down[0]&.[](:code)
+    end
+
+    def char
+      down[0]&.[](:char)
+    end
+
+    def capture(block, _)
+      return unless matches(block) && down.size > 0
+      add_capture(block)
     end
   end
 
@@ -3270,7 +3338,8 @@ module Hokusai
         mouseup: MouseUpEvent.new(input, state),
         mousedown: MouseDownEvent.new(input, state),
         keyup: KeyUpEvent.new(input, state),
-        keypress: KeyPressEvent.new(input, state)
+        keypress: KeyPressEvent.new(input, state),
+        keydown: KeyDownEvent.new(input, state),
       }
 
       add_touch_events(events, input, state) unless input.touch.nil?
@@ -3427,6 +3496,7 @@ module Hokusai
         events[:mouseout].bubble
         events[:mousedown].bubble
         events[:mouseup].bubble
+        events[:keydown].bubble
 
         unless input.touch.nil?
           events[:taphold].bubble
@@ -3509,6 +3579,8 @@ module Hokusai
       if block.node.portal.nil?
         return
       end
+      
+      events[:keydown].capture(block, canvas)
 
       if input.hovered?(canvas)
         events[:hover].capture(block, canvas)

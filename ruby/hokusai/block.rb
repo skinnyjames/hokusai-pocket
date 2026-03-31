@@ -143,6 +143,21 @@ module Hokusai
       compile(name, parent_node).mount(self)
     end
 
+    # you probably don't need this.
+    def self.render(props)
+      node = Hokusai::Node.virtual
+
+      props.each do |k, v|
+        node.meta.set_prop(k.to_sym, v)
+      end
+
+
+      block = new(node: node)
+      yield block
+
+      node.meta.commands.clear!
+    end
+
     def initialize(**args)
       raise Hokusai::Error.new("Must supply node argument to #{self.class}.new") unless args[:node]
 

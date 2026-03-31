@@ -23,7 +23,7 @@ module Hokusai
 
   class Keyboard
     attr_accessor :shift, :control, :super, :alt
-    attr_reader :keys, :pressed, :released
+    attr_reader :keys, :pressed, :released, :down
 
     def printable?
       [
@@ -73,6 +73,7 @@ module Hokusai
     def reset
       @pressed.clear
       @released.clear
+      @down.clear
       
       @shift = false
       @control = false
@@ -164,7 +165,16 @@ module Hokusai
         nkey = keys[key].dup
         nkey.merge!({ char: char_code_from_key(key, shift)&.chr })
         
-        pressed << nkey
+        @pressed << nkey
+      elsif down
+        keys[key][:pressed] = false
+        keys[key][:released] = false
+        keys[key][:down] = true
+
+        nkey = keys[key].dup
+        nkey.merge!({ char: char_code_from_key(key, shift)&.chr })
+
+        @down << nkey
       elsif !down && keys[key][:down]
         keys[key][:pressed] = false
         keys[key][:released] = true
@@ -172,7 +182,7 @@ module Hokusai
         nkey = keys[key].dup
         nkey.merge!({ char: char_code_from_key(key, shift)&.chr })
 
-        released << nkey
+        @released << nkey
       else
         keys[key][:pressed] = false
         keys[key][:released] = false

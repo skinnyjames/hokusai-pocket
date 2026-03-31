@@ -7,6 +7,13 @@ module Hokusai
   class Node
     attr_reader :ast, :node, :uuid, :meta, :portal
 
+    def self.virtual
+      @virtual ||= parse <<~EOF
+      [template]
+        virtual
+      EOF
+    end
+
     def self.parse(template, name = "root", parent = nil)
       ast = Ast.parse(template, name)
 
@@ -107,7 +114,7 @@ module Hokusai
               value = method
             end
 
-            meta.set_prop(prop.name.to_sym, value) unless value.nil?
+            meta.set_prop(prop.name.to_sym, value)
           end
         end
       end

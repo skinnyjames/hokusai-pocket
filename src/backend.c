@@ -351,6 +351,9 @@ mrb_value on_draw_image(mrb_state* mrb, mrb_value self)
   // hp_handle_error(mrb);
 
   int height = mrb_int(mrb, mrb_float_to_integer(mrb, mrb_funcall_argv(mrb, command, mrb_intern_lit(mrb, "height"), 0, NULL)));
+
+  mrb_value slice = mrb_funcall(mrb, command, "slice", 0, NULL);
+
   hp_handle_error(mrb);
 
   if (!inside_scissori(x, y, height)) return mrb_nil_value();
@@ -363,7 +366,10 @@ mrb_value on_draw_image(mrb_state* mrb, mrb_value self)
   {
     mrb_value copy = mrb_funcall(mrb, image, "copy", 0, NULL);
     hp_image_wrapper* iwrapper = hp_image_get(mrb, copy);
-    ImageResize(&(iwrapper->image), width, height);
+    if (mrb_nil_p(slice))
+    {
+      ImageResize(&(iwrapper->image), width, height);
+    }
     Texture texture = LoadTextureFromImage(iwrapper->image);
     GenTextureMipmaps(&texture);
     hashmap_set(textures, &(texture_cache){.key=strdup(hash), .payload=texture });
@@ -375,10 +381,20 @@ mrb_value on_draw_image(mrb_state* mrb, mrb_value self)
     tex = result->payload;
   }
 
-  // Color* colors = LoadImageColors(wrapper->image);
-  // UpdateTexture(tex, colors);
+  if (mrb_nil_p(slice))
+  {
+    DrawTexture(tex, x, y, WHITE);
+  }
+  else
+  {
+    int sx = mrb_int(mrb, mrb_float_to_integer(mrb, mrb_funcall(mrb, slice, "x", 0, NULL)));
+    int sy = mrb_int(mrb, mrb_float_to_integer(mrb, mrb_funcall(mrb, slice, "y", 0, NULL)));
+    int sw = mrb_int(mrb, mrb_float_to_integer(mrb, mrb_funcall(mrb, slice, "width", 0, NULL)));
+    int sh = mrb_int(mrb, mrb_float_to_integer(mrb, mrb_funcall(mrb, slice, "height", 0, NULL)));
 
-  DrawTexture(tex, x, y, WHITE);
+    DrawTextureRec(tex, (Rectangle){sx, sy, sw, sh}, (Vector2){x, y}, WHITE);
+
+  }
   return mrb_nil_value();
 }
 

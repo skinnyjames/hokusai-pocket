@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.4.6
+
+## Added
+
+* Adds `KeyDownEvent` to Keyboard Events
+
+## Modified
+
+* Changes `Commands::Image` to use slices
+
+## Bugfix
+
+* Fixes bug in `Hokusai::Node` where a prop wouldn't be nilable
+
+## 0.4.5
+
+### Modified
+
+* Fixes build scripts to use working mruby version
+* Fixes build scripts for windows
+
 ## 0.4.2
 
 ### Modified

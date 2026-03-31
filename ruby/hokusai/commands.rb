@@ -70,7 +70,11 @@ module Hokusai
     # Invokes an image command
     # from a filename, at position {x,y} with `w`x`h` dimensions
     def image(source, x, y, w, h)
-      queue << Commands::Image.new(source, x, y, w, h)
+      command = Commands::Image.new(source, x, y, w, h)
+
+      yield(command) if block_given?
+
+      queue << command
     end
 
     # Invokes a scissor begin command
@@ -120,8 +124,8 @@ module Hokusai
       queue << Commands::ScaleEnd.new
     end
 
-    def translation_Begin(x, y)
-      queue << Commands::TranslationBegin.new
+    def translation_begin(x, y)
+      queue << Commands::TranslationBegin.new(x, y)
     end
 
     def translation_end

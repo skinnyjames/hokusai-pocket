@@ -1,6 +1,6 @@
 module Hokusai
   class Commands::Image < Commands::Base
-    attr_reader :x, :y, :width, :height, :image
+    attr_reader :x, :y, :width, :height, :image, :slice
 
     def initialize(image, x, y, width, height)
       @image = image
@@ -8,6 +8,13 @@ module Hokusai
       @y = y
       @width = width
       @height = height
+      @slice = nil
+    end
+
+    def slice=(rect)
+      raise Hokusai::Error.new("Argument must be a Hokusai::Rect") unless rect.is_a? Hokusai::Rect
+
+      @slice = rect
     end
 
     def hash
