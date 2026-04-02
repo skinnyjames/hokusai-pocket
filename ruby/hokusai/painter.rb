@@ -128,16 +128,6 @@ module Hokusai
 
           before_render&.call([group.block, group.parent], canvas, input)
 
-          # defer capture for zindexed items so they can stop propagation.
-          if capture && (zindex_counter.zero? && z.zero?)
-            capture_events(group.block, canvas, hovered: hovered)
-          # since evented styles happens during capture and z-index skips capture, well add some
-          elsif capture && input.hovered?(canvas)
-            if target = group.block.node.meta.target
-              group.block.node.add_evented_styles(target.class, "hover")
-            end
-          end
-
           if resize
             group.block.on_resize(canvas)
           end
@@ -145,6 +135,16 @@ module Hokusai
           breaked = false
 
           group.block.render(canvas) do |local_canvas|
+            # defer capture for zindexed items so they can stop propagation.
+            if capture && (zindex_counter.zero? && z.zero?)
+              capture_events(group.block, local_canvas, hovered: hovered)
+            # since evented styles happens during capture and z-index skips capture, well add some
+            elsif capture && input.hovered?(local_canvas)
+              if target = group.block.node.meta.target
+                group.block.node.add_evented_styles(target.class, "hover")
+              end
+            end
+
             local_children = (local_canvas.reverse? ? group.block.children?&.reverse : group.block.children?)
 
             unless local_children.nil?

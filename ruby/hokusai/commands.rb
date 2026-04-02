@@ -25,6 +25,10 @@ module Hokusai
       @queue = []
     end
 
+    def hash
+      @queue.hash
+    end
+
     # Draw a rectangle
     #
     # @param [Float] the x coordinate

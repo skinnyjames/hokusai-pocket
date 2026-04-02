@@ -3,9 +3,10 @@ require_relative "../diff"
 module Hokusai
   module Mounting
     class LoopContext
-      attr_reader :table
+      attr_reader :table, :proxies
       def initialize
         @table = {}
+        @proxies = {}
       end
 
       def add_entry(var, value)
@@ -49,13 +50,14 @@ module Hokusai
       end
 
       def register
-        child_block_class = target.class.use(ast.type)
+        child_block_class = ast.dynamic? ? ast.type : target.class.use(ast.type)
         values = target.send(ast.loop.method)
 
         unless values.is_a?(Enumerable)
           raise Hokusai::Error.new("Loop directive `#{ast.loop.method}` on #{target.class} must return an Enumerable")
         end
 
+        ast.loop.lastlen = values.size
         entries_to_return = []
         secondary_entries = []
 
@@ -68,19 +70,21 @@ module Hokusai
             if ast.if.args.size > 0
               ctx.send_target(target, target.if)
             else
-              condition = target.send(ast.if.method)
+              condition = ast.if.method.is_a?(Proc) ? target.instance_eval(&ast.if.method) : target.send(ast.if.method)
             end
 
             next if condition
           end
 
           portal = Node.new(ast)
+          ctx.proxies[portal.ast.loop.proxy] = value
+
           node = child_block_class.compile(ast.type, portal)
           child_block = child_block_class.new(node: node, providers: mount_providers)
           child_block.node.add_styles(target.class)
           child_block.node.add_props_from_block(target, context: ctx)
           child_block.node.meta.set_prop(ast.loop.var.to_sym, value)
-          child_block.node.meta.publisher.add(target)
+          child_block.node.meta.publisher.add(target, extra: ctx.proxies)
 
           UpdateEntry.new(child_block, block, target).register(context: ctx, providers: mount_providers.merge(child_block.providers))
 
@@ -113,7 +117,7 @@ module Hokusai
 
           key_prop = ast.props["key"]
 
-          raise Hokusai::Error.new("Loop children must have a :key method defined") if key_prop.nil?
+          raise Hokusai::Error.new("Loop children must have a :key prop defined") if key_prop.nil?
 
           key_ctx = LoopContext.new
 
@@ -124,7 +128,10 @@ module Hokusai
             key_ctx.add_entry(ast.loop.var, value)
             key_ctx.add_entry(index_key, index)
 
-            if key_prop.value.args.size > 0
+            if key_prop.value.method.is_a?(Proc)
+              ast.loop.proxy.value = value
+              key = key_ctx.instance_eval(&key_prop.value.method)
+            elsif key_prop.value.args.size > 0
               key = key_ctx.send_target(utarget, key_prop.value)
             elsif key_ctx.table[key_prop.value.method]
               key = key_ctx.table[key_prop.value.method]
@@ -139,7 +146,9 @@ module Hokusai
           children = []
           loop_var = ast.loop.var.to_sym
 
-          ublock.children?&.each do |child|
+          uchildren = ublock.node.meta.children![ast.loop.start, ast.loop.lastlen]
+
+          uchildren.each do |child|
             if key = child.node.meta.get_prop(:key)
               raise Hokusai::Error.new("Loop children must use :key field") unless key
 
@@ -194,9 +203,9 @@ module Hokusai
 
               if ast.has_if_condition?
                 if ast.if.args.size > 0
-                  condition = ctx.send_target(target, ast.if.method)
+                  condition = ast.if.method.is_a?(Proc) ? target.instance_eval(&ast.if.method) : ctx.send_target(target, ast.if.method)
                 else
-                  condition = target.send(ast.if.method)
+                  condition = ast.if.method.is_a?(Proc) ? target.instance_eval(&ast.if.method) : target.send(ast.if.method)
                 end
 
                 if !condition && ast.has_else_condition?
@@ -208,8 +217,8 @@ module Hokusai
                   next
                 end
               end
-
-              child_block_class = utarget.class.use(target_ast.type)
+              
+              child_block_class = target_ast.dynamic? ? target_ast.type : utarget.class.use(target_ast.type)
               portal = Node.new(ast)
               node = child_block_class.compile(target_ast.type, portal)
               node.add_props_from_block(target, context: ctx)
@@ -223,14 +232,14 @@ module Hokusai
                 children.insert(patch.target, child_block)
               end
             when DeletePatch
-              children[patch.target].send(:before_destroy) if children[patch.target].respond_to? :before_destroy
-              children[patch.target].node.destroy
+              children[patch.target]&.send(:before_destroy) if children[patch.target]&.respond_to? :before_destroy
+              children[patch.target]&.node&.destroy
               children[patch.target] = nil
               # TODO: update rest of block props
             end
           end
-
-          ublock.node.meta.children = children.reject(&:nil?)
+          ublock.node.meta.children![ast.loop.start, ast.loop.lastlen] = children.reject(&:nil?)
+          ast.loop.lastlen = children.reject(&:nil?).size
         end
       end
     end

@@ -36,7 +36,7 @@ module Hokusai
         end
 
         if entry.ast.has_if_condition?
-          next unless entry.target.send(entry.ast.if.method)
+          next unless (entry.ast.if.proc? ? entry.target.instance_eval(&entry.ast.if.method) : entry.target.send(entry.ast.if.method))
         end
 
         if entry.slot?
@@ -87,8 +87,6 @@ module Hokusai
           items = []
 
           entry.ast.children.each_with_index do |child, child_index|
-            child.has_if_condition?
-
             items << Mounting::MountEntry.new(child_index, child, child_block, entry.parent, entry.target, context: entry.ctx, providers: new_mount_providers)
           end
 

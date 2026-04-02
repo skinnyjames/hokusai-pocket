@@ -46,23 +46,26 @@ module Hokusai
       end
 
       def mount(context: nil, providers: {})
-        klass = target.class.use(ast.type)
+        klass = ast.dynamic? ? ast.type : target.class.use(ast.type)
         portal = Node.new(ast)
 
+        # compile the ast and get the node
+        # NOTE: for templates, we compile the ast before instatiation
+        # but for build templates we need the block before the node.
         node = klass.compile(ast.type, portal)
         node.add_styles(target.class)
         node.add_props_from_block(target, context: context || ctx)
 
         # handle provides / dependency injection
         child_block = klass.new(node: node, providers: providers.merge(mount_providers))
-        child_block.node.meta.publisher.add(target) # todo
+        child_block.node.meta.publisher.add(target, extra: context&.proxies || ctx&.proxies || {}) # todo
         UpdateEntry.new(child_block, block, target).register(context: context || ctx, providers: providers.merge(mount_providers))
 
         block.node.meta << child_block
 
         yield child_block
 
-        block.send(:on_mounted) if block.respond_to?(:on_mounted)
+        block.on_mounted if block.respond_to?(:on_mounted)
       end
     end
   end

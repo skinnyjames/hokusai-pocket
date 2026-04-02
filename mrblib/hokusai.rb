@@ -688,6 +688,147 @@ module Hokusai
   end
 end
 
+module Hokusai
+  class Ast
+    class Loop
+      attr_accessor :var, :method, :proxy, :start, :lastlen
+      def initialize(var, method)
+        @var = var
+        @method = method
+        @proxy = nil
+        @start = 0
+        @lastlen = nil
+      end
+    end
+
+    class Func
+      attr_accessor :method, :args
+      def initialize(method, args)
+        @method = method
+        @args = args
+      end
+
+      def proc?
+        @method.is_a?(Proc)
+      end
+    end
+
+    class Event
+      attr_accessor :name, :value
+      def initialize(name, value)
+        @name = name
+        @value = value
+      end
+    end
+
+    class Prop
+      attr_accessor :name, :value, :computed, :built
+      def initialize(computed, name, value, built: false)
+        @name = name
+        @value = value
+        @computed = computed
+        @built = built
+      end
+
+      def computed?
+        @computed
+      end
+    end
+
+    attr_reader :children, :siblings, :classes, :style_list
+    attr_accessor :type, :id, :else_active, :loop, :if, :else_ast, 
+                  :props, :events, :siblingindex
+
+    def initialize
+      @children = []
+      @siblings = []
+      @classes = []
+      @style_list = []
+
+      @props = {}
+      @events = {}
+
+      @loop = nil
+      @if = nil
+      @else_ast = nil
+      
+      @siblingindex = 0
+      @type = nil
+      @id = nil
+      @else_active = false
+    end
+
+    def dump(level = 0, show_props: false)
+      io = ""
+      io << " if " if has_if_condition?
+      io << " loop = #{loop.var} #{loop.method}" if loop?
+      io <<  "(#{type})"
+      io << "\n"
+
+      if props.size > 0 && show_props
+        io << "#{" " * level * 2}{\n"
+        props.each do |key, value|
+          io << "#{" " * level * 3}#{key} = #{value}\n"
+        end
+
+        events.each do |_, event|
+          io << "#{" " * level * 3}@#{event.name} = #{event.value.method} #{!!event(event.name)}\n"
+        end
+        io << "#{" " * level * 2}}\n"
+      end
+
+      if children.empty?
+        io << "#{" " * level * 2}(no children)\n"
+      else
+        child_dump = children&.map {|child| child.dump(level + 1, show_props: show_props) }
+        io << "#{" " * level * 2}#{child_dump.join("#{" " * level * 2}") }\n"
+      end
+
+      io
+    end
+    
+    def reset
+      self.else_active = false
+    end
+
+    def has_else_condition?
+      !else_ast.nil?
+    end
+
+    def else_condition_active?
+      !else_ast.nil? && else_active
+    end
+  
+    def has_if_condition?
+      !self.if.nil?
+    end
+
+    def loop?
+      !self.loop.nil?
+    end
+
+    def slot?
+      type == "slot"
+    end
+
+    def virtual?
+      type == "virtual"
+    end
+
+    def dynamic?
+      type.is_a?(Class)
+    end
+
+    def prop(name)
+      props[name]
+    end
+
+    def event(name)
+      events[name]
+    end
+  end
+end
+
 # frozen_string_literal: true
 
 module Hokusai
@@ -830,9 +971,10 @@ end
 module Hokusai
   module Mounting
     class LoopContext
-      attr_reader :table
+      attr_reader :table, :proxies
       def initialize
         @table = {}
+        @proxies = {}
       end
 
       def add_entry(var, value)
@@ -876,13 +1018,14 @@ module Hokusai
       end
 
       def register
-        child_block_class = target.class.use(ast.type)
+        child_block_class = ast.dynamic? ? ast.type : target.class.use(ast.type)
         values = target.send(ast.loop.method)
 
         unless values.is_a?(Enumerable)
           raise Hokusai::Error.new("Loop directive `#{ast.loop.method}` on #{target.class} must return an Enumerable")
         end
 
+        ast.loop.lastlen = values.size
         entries_to_return = []
         secondary_entries = []
 
@@ -895,19 +1038,21 @@ module Hokusai
             if ast.if.args.size > 0
               ctx.send_target(target, target.if)
             else
-              condition = target.send(ast.if.method)
+              condition = ast.if.method.is_a?(Proc) ? target.instance_eval(&ast.if.method) : target.send(ast.if.method)
             end
 
             next if condition
           end
 
           portal = Node.new(ast)
+          ctx.proxies[portal.ast.loop.proxy] = value
+
           node = child_block_class.compile(ast.type, portal)
           child_block = child_block_class.new(node: node, providers: mount_providers)
           child_block.node.add_styles(target.class)
           child_block.node.add_props_from_block(target, context: ctx)
           child_block.node.meta.set_prop(ast.loop.var.to_sym, value)
-          child_block.node.meta.publisher.add(target)
+          child_block.node.meta.publisher.add(target, extra: ctx.proxies)
 
           UpdateEntry.new(child_block, block, target).register(context: ctx, providers: mount_providers.merge(child_block.providers))
 
@@ -940,7 +1085,7 @@ module Hokusai
 
           key_prop = ast.props["key"]
 
-          raise Hokusai::Error.new("Loop children must have a :key method defined") if key_prop.nil?
+          raise Hokusai::Error.new("Loop children must have a :key prop defined") if key_prop.nil?
 
           key_ctx = LoopContext.new
 
@@ -951,7 +1096,10 @@ module Hokusai
             key_ctx.add_entry(ast.loop.var, value)
             key_ctx.add_entry(index_key, index)
 
-            if key_prop.value.args.size > 0
+            if key_prop.value.method.is_a?(Proc)
+              ast.loop.proxy.value = value
+              key = key_ctx.instance_eval(&key_prop.value.method)
+            elsif key_prop.value.args.size > 0
               key = key_ctx.send_target(utarget, key_prop.value)
             elsif key_ctx.table[key_prop.value.method]
               key = key_ctx.table[key_prop.value.method]
@@ -966,7 +1114,9 @@ module Hokusai
           children = []
           loop_var = ast.loop.var.to_sym
 
-          ublock.children?&.each do |child|
+          uchildren = ublock.node.meta.children![ast.loop.start, ast.loop.lastlen]
+
+          uchildren.each do |child|
             if key = child.node.meta.get_prop(:key)
               raise Hokusai::Error.new("Loop children must use :key field") unless key
 
@@ -1021,9 +1171,9 @@ module Hokusai
 
               if ast.has_if_condition?
                 if ast.if.args.size > 0
-                  condition = ctx.send_target(target, ast.if.method)
+                  condition = ast.if.method.is_a?(Proc) ? target.instance_eval(&ast.if.method) : ctx.send_target(target, ast.if.method)
                 else
-                  condition = target.send(ast.if.method)
+                  condition = ast.if.method.is_a?(Proc) ? target.instance_eval(&ast.if.method) : target.send(ast.if.method)
                 end
 
                 if !condition && ast.has_else_condition?
@@ -1035,8 +1185,8 @@ module Hokusai
                   next
                 end
               end
-
-              child_block_class = utarget.class.use(target_ast.type)
+              
+              child_block_class = target_ast.dynamic? ? target_ast.type : utarget.class.use(target_ast.type)
               portal = Node.new(ast)
               node = child_block_class.compile(target_ast.type, portal)
               node.add_props_from_block(target, context: ctx)
@@ -1050,14 +1200,14 @@ module Hokusai
                 children.insert(patch.target, child_block)
               end
             when DeletePatch
-              children[patch.target].send(:before_destroy) if children[patch.target].respond_to? :before_destroy
-              children[patch.target].node.destroy
+              children[patch.target]&.send(:before_destroy) if children[patch.target]&.respond_to? :before_destroy
+              children[patch.target]&.node&.destroy
               children[patch.target] = nil
               # TODO: update rest of block props
             end
           end
-
-          ublock.node.meta.children = children.reject(&:nil?)
+          ublock.node.meta.children![ast.loop.start, ast.loop.lastlen] = children.reject(&:nil?)
+          ast.loop.lastlen = children.reject(&:nil?).size
         end
       end
     end
@@ -1112,23 +1262,26 @@ module Hokusai
       end
 
       def mount(context: nil, providers: {})
-        klass = target.class.use(ast.type)
+        klass = ast.dynamic? ? ast.type : target.class.use(ast.type)
         portal = Node.new(ast)
 
+        # compile the ast and get the node
+        # NOTE: for templates, we compile the ast before instatiation
+        # but for build templates we need the block before the node.
         node = klass.compile(ast.type, portal)
         node.add_styles(target.class)
         node.add_props_from_block(target, context: context || ctx)
 
         # handle provides / dependency injection
         child_block = klass.new(node: node, providers: providers.merge(mount_providers))
-        child_block.node.meta.publisher.add(target) # todo
+        child_block.node.meta.publisher.add(target, extra: context&.proxies || ctx&.proxies || {}) # todo
         UpdateEntry.new(child_block, block, target).register(context: context || ctx, providers: providers.merge(mount_providers))
 
         block.node.meta << child_block
 
         yield child_block
 
-        block.send(:on_mounted) if block.respond_to?(:on_mounted)
+        block.on_mounted if block.respond_to?(:on_mounted)
       end
     end
   end
@@ -1159,12 +1312,12 @@ module Hokusai
               end 
 
               if child.if.args.size > 0
-                visible = utarget.send(child.if.method, context: context)
+                visible = child.if.proc? ? utarget.instance_eval(&child.if.method) : utarget.send(child.if.method, context: context)
               else
-                visible = utarget.send(child.if.method)
+                visible = child.if.proc? ? utarget.instance_eval(&child.if.method) : utarget.send(child.if.method)
               end
 
-              child_block_klass = target.class.use(child.type)
+              child_block_klass = child.dynamic? ? child.type : target.class.use(child.type)
 
               if !!visible
                 if child.else_condition_active?
@@ -1270,7 +1423,7 @@ module Hokusai
         end
 
         if entry.ast.has_if_condition?
-          next unless entry.target.send(entry.ast.if.method)
+          next unless (entry.ast.if.proc? ? entry.target.instance_eval(&entry.ast.if.method) : entry.target.send(entry.ast.if.method))
         end
 
         if entry.slot?
@@ -1321,8 +1474,6 @@ module Hokusai
           items = []
 
           entry.ast.children.each_with_index do |child, child_index|
-            child.has_if_condition?
-
             items << Mounting::MountEntry.new(child_index, child, child_block, entry.parent, entry.target, context: entry.ctx, providers: new_mount_providers)
           end
 
@@ -1358,8 +1509,8 @@ module Hokusai
     # by this publisher
     #
     # @param [Hokusai::Block] listener
-    def add(listener)
-      listeners << listener
+    def add(listener, extra: {})
+      listeners << [listener, extra]
     end
 
     # emits `event` with `**args`
@@ -1368,10 +1519,19 @@ module Hokusai
     # @param [String] name the event name
     # @param [**args] the args to emit
     def notify(name, *args, **kwargs)
-      listeners.each do |listener|
-        raise Hokusai::Error.new("No target `##{name}` on #{listener.class}") unless listener.respond_to?(name)
+      listeners.each do |(listener, extra)|
+        raise Hokusai::Error.new("No target `##{name}` on #{listener.class}") unless name.is_a?(Proc) || listener.respond_to?(name)
 
-        listener.send(name, *args, **kwargs)
+        # for built asts
+        if name.is_a?(Proc)
+          extra.each do |proxy, value|
+            proxy.value = value
+          end
+
+          listener.instance_exec(*args, **kwargs, &name)
+        else
+          listener.send(name, *args, **kwargs)
+        end
       end
     end
   end
@@ -1520,14 +1680,24 @@ module Hokusai
 end
 
 module Hokusai
+  class NodeProxy
+    def initialize
+      @events = {}
+    end
+
+    def on(type, &block)
+      @events[type] = block
+    end
+  end
+
   class Node
     attr_reader :ast, :node, :uuid, :meta, :portal
 
-    def self.virtual
-      @virtual ||= parse <<~EOF
-      [template]
-        virtual
-      EOF
+    # returns node..
+    def self.build(klass, parent = nil, &block)
+      ast = NodeBuilder.build(klass, &block)
+
+      new(ast, parent)
     end
 
     def self.parse(template, name = "root", parent = nil)
@@ -1548,6 +1718,8 @@ module Hokusai
       ast.event(name)
     end
 
+    def destroy; end
+
     def initialize(ast, portal = nil)
       @ast = ast
       @portal = portal
@@ -1557,14 +1729,6 @@ module Hokusai
 
     def mount(klass)
       NodeMounter.new(self, klass).mount
-    end
-
-    def destroy
-      # meta.children?&.each do |child|
-      #   child.node.destroy
-      # end
-      #
-      # ast.destroy
     end
 
     def emit(name, **args)
@@ -1624,7 +1788,15 @@ module Hokusai
               elsif context&.table&.[](method)
                 value = context.table[method]
               else
-                value = block.instance_eval(method)
+                if method.is_a?(Proc)
+                  if local_portal.ast.loop?
+                    proxy = local_portal.ast.loop.proxy
+                    proxy.value = context.table[local_portal.ast.loop.var]
+                  end
+                  value = block.instance_eval(&method)
+                else
+                  value = block.instance_eval(method)
+                end
               end
             else
               value = method
@@ -1634,6 +1806,114 @@ module Hokusai
           end
         end
       end
+    end
+  end
+end
+module Hokusai
+  class ProxyValue
+    attr_accessor :value
+    def initialize(value)
+      @value = value
+    end
+  end
+
+  class NodeBuilder
+    # returns mounted block
+    def self.build(name, loopvar = nil, &block)
+      ast = Ast.new
+      ast.type = name
+
+      obj = new(ast)
+      obj.loopvar = loopvar
+      
+      obj.instance_eval(&block)
+      
+      obj.ast
+    end
+
+    attr_accessor :ast, :loopvar
+
+    def initialize(ast)
+      @ast = ast
+      @loopvar = nil
+      @counter = 0
+    end
+
+    def id(value)
+      ast.id = value
+    end
+
+    def merge_styles(*names)
+      names.each do |name|
+        ast.style_list << name
+      end
+    end
+
+    def static(name, value)
+      raise Hokusai::Error.new("Static prop needs a string value") unless value.is_a?(String)
+
+      func = Ast::Func.new(value, [])
+      ast.props[name.to_s] = Ast::Prop.new(true, name, func)
+    end
+
+    def prop(name, value = nil, &block)
+      raise Hokusai::Error.new("Prop needs a value (symbol or block)") if block.nil? && value.nil?
+      
+      param = value.nil? ? block : value.to_s
+
+      func = Ast::Func.new(param, [])
+      ast.props[name.to_s] = Ast::Prop.new(true, name, func)
+    end
+
+    def show_if(method = nil, &block)
+      raise Hokusai::Error.new("Need a method or block for show_if") if method.nil? && block.nil?
+
+      if block.nil?
+        cond = Ast::Func.new(method, [])
+      else
+        cond = Ast::Func.new(block, [])
+      end
+
+      ast.if = cond
+    end
+
+    # define an loop directive
+    def each_child(klass, method, &block)
+      raise Hokusai::Error.new("each cannot be called at the top level currently.") unless ast.dynamic?
+
+      unless block.parameters && block.parameters.first
+        raise Hokusai::Error.new("each needs a block parameter")
+      end
+
+      var = block.parameters.first.last
+
+      start = @counter
+      child = NodeBuilder.build(klass) do
+        proxy = ProxyValue.new(nil)
+        ast.loop = Ast::Loop.new(var.to_s, method.to_s)
+        ast.loop.start = start
+        ast.loop.proxy = proxy
+        instance_exec(proxy, &block)
+      end
+
+      child.siblingindex = @counter
+      ast.children << child
+    end
+
+    def on(event_name, &block)
+      func = Ast::Func.new(block, [])
+      ast.events[event_name.to_s] = Ast::Event.new(event_name, func)
+    end
+
+    # create a new child and add it 
+    # to the children of this node
+    def child(klass, &block)
+      child_ast = NodeBuilder.build(klass, &block)
+      child_ast.siblingindex = @counter
+
+      @counter += 1
+
+      ast.children << child_ast
     end
   end
 end
@@ -1651,8 +1931,8 @@ module Hokusai
     # by this publisher
     #
     # @param [Hokusai::Block] listener
-    def add(listener)
-      listeners << listener
+    def add(listener, extra: {})
+      listeners << [listener, extra]
     end
 
     # emits `event` with `**args`
@@ -1661,10 +1941,19 @@ module Hokusai
     # @param [String] name the event name
     # @param [**args] the args to emit
     def notify(name, *args, **kwargs)
-      listeners.each do |listener|
-        raise Hokusai::Error.new("No target `##{name}` on #{listener.class}") unless listener.respond_to?(name)
+      listeners.each do |(listener, extra)|
+        raise Hokusai::Error.new("No target `##{name}` on #{listener.class}") unless name.is_a?(Proc) || listener.respond_to?(name)
 
-        listener.send(name, *args, **kwargs)
+        # for built asts
+        if name.is_a?(Proc)
+          extra.each do |proxy, value|
+            proxy.value = value
+          end
+
+          listener.instance_exec(*args, **kwargs, &name)
+        else
+          listener.send(name, *args, **kwargs)
+        end
       end
     end
   end
@@ -1699,11 +1988,22 @@ module Hokusai
     end
 
     # Sets the template for this block
+    # or build with NodeBuilder DSL
     #
     # @param [String] template to set
-    def self.template(template)
-      @template = template
-      @uses ||= {}
+    def self.template(template = nil, &block)
+      raise Hokusai::Error.new("Need a template or block") if template.nil? && block.nil?
+
+      if template.nil?
+        @build_template = block
+      else
+        @template = template
+        @uses ||= {}
+      end
+    end
+
+    def self.build_template
+      @build_template
     end
 
     def self.style(template)
@@ -1805,10 +2105,16 @@ module Hokusai
       end
     end
 
+    # return [Hokusai::Node]
     def self.compile(name = "root", parent_node = nil)
-      Node.parse(template_get, name, parent_node)
+      if build_template
+        Node.build(name, parent_node, &build_template)
+      else
+        Node.parse(template_get, name.to_s, parent_node)
+      end
     end
 
+    # return [Hokusai::Block]
     def self.mount(name = "root", parent_node = nil)
       compile(name, parent_node).mount(self)
     end
@@ -1867,7 +2173,7 @@ module Hokusai
 
     def emit(name, *args, **kwargs)
       if portal = node.portal
-        if event = portal.event(name)
+        if event = portal.event(name.to_s)
           node.meta.publisher.notify(event.value.method, *args, **kwargs)
         end
       end
@@ -1876,6 +2182,29 @@ module Hokusai
     def draw(&block)
       instance_eval(&block)
     end
+
+    # def draw_retained(canvas, &block)
+    #   instance_eval(&block)
+
+    #   currenthash = node.meta.commands.hash
+
+
+    #   if @lasthash != currenthash
+    #     p ["last", @lasthash, currenthash]
+
+    #     @last_hokusai_texture = Texture.init(canvas.width, canvas.height)
+    #     @last_hokusai_texture.clear
+    #     @last_hokusai_texture.apply(node.meta.commands.queue)
+    #     @lasthash = currenthash
+    #     node.meta.commands.clear!
+    #   else
+    #     node.meta.commands.clear!
+    #   end
+
+    #   draw do 
+    #     texture(@last_hokusai_texture, canvas.x, canvas.y) {}
+    #   end
+    # end
 
     def method_missing(name, *args,**kwargs, &block)
       if node.meta.commands.respond_to?(name)
@@ -2029,7 +2358,7 @@ module Hokusai
     end
 
     def hash
-      [self.class, x, y, width, height, source].hash
+      [self.class, x, y, width, height].hash
     end
 
     def cache
@@ -2517,6 +2846,10 @@ module Hokusai
       @queue = []
     end
 
+    def hash
+      @queue.hash
+    end
+
     # Draw a rectangle
     #
     # @param [Float] the x coordinate
@@ -2564,7 +2897,7 @@ module Hokusai
     def image(source, x, y, w, h)
       command = Commands::Image.new(source, x, y, w, h)
 
-      yield(command)
+      yield(command) if block_given?
 
       queue << command
     end
@@ -2967,6 +3300,7 @@ module Hokusai
 
     def capture(block, _)
       return unless matches(block) && down.size > 0
+      
       add_capture(block)
     end
   end
@@ -3427,16 +3761,6 @@ module Hokusai
 
           before_render&.call([group.block, group.parent], canvas, input)
 
-          # defer capture for zindexed items so they can stop propagation.
-          if capture && (zindex_counter.zero? && z.zero?)
-            capture_events(group.block, canvas, hovered: hovered)
-          # since evented styles happens during capture and z-index skips capture, well add some
-          elsif capture && input.hovered?(canvas)
-            if target = group.block.node.meta.target
-              group.block.node.add_evented_styles(target.class, "hover")
-            end
-          end
-
           if resize
             group.block.on_resize(canvas)
           end
@@ -3444,6 +3768,16 @@ module Hokusai
           breaked = false
 
           group.block.render(canvas) do |local_canvas|
+            # defer capture for zindexed items so they can stop propagation.
+            if capture && (zindex_counter.zero? && z.zero?)
+              capture_events(group.block, local_canvas, hovered: hovered)
+            # since evented styles happens during capture and z-index skips capture, well add some
+            elsif capture && input.hovered?(local_canvas)
+              if target = group.block.node.meta.target
+                group.block.node.add_evented_styles(target.class, "hover")
+              end
+            end
+
             local_children = (local_canvas.reverse? ? group.block.children?&.reverse : group.block.children?)
 
             unless local_children.nil?

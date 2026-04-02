@@ -18,7 +18,7 @@ module Hokusai
     end
 
     def hash
-      [self.class, x, y, width, height, source].hash
+      [self.class, x, y, width, height].hash
     end
 
     def cache

@@ -114,7 +114,6 @@ void mrb_define_hokusai_texture_class(mrb_state* mrb)
   mrb_define_method(mrb, klass, "apply", hp_texture_apply, MRB_ARGS_REQ(1));
   mrb_define_method(mrb, klass, "clear", hp_texture_clear, MRB_ARGS_NONE());
   mrb_define_method(mrb, klass, "dup", hp_texture_dup, MRB_ARGS_NONE());
-
 }
 
 #endif

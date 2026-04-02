@@ -1,7 +1,9 @@
 
 require_relative './hokusai/error'
 require_relative './hokusai/types'
+require_relative './hokusai/ast'
 require_relative './hokusai/node'
+require_relative "./hokusai/node_builder"
 require_relative './hokusai/block'
 require_relative './hokusai/commands'
 require_relative './hokusai/registry'
