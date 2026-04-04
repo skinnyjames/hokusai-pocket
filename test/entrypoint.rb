@@ -47,6 +47,7 @@ def get_blocks_by_type(block, type, results = [])
 end
 
 require_relative "./ast"
+require_relative "./ast_builder"
 require_relative "./diff"
 require_relative "./directives"
 require_relative "./providers"

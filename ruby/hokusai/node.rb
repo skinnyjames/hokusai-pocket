@@ -4,14 +4,24 @@ require_relative "./node_mounter"
 require_relative "./meta"
 
 module Hokusai
+  class NodeProxy
+    def initialize
+      @events = {}
+    end
+
+    def on(type, &block)
+      @events[type] = block
+    end
+  end
+
   class Node
     attr_reader :ast, :node, :uuid, :meta, :portal
 
-    def self.virtual
-      @virtual ||= parse <<~EOF
-      [template]
-        virtual
-      EOF
+    # returns node..
+    def self.build(klass, parent = nil, &block)
+      ast = NodeBuilder.build(klass, &block)
+
+      new(ast, parent)
     end
 
     def self.parse(template, name = "root", parent = nil)
@@ -32,6 +42,8 @@ module Hokusai
       ast.event(name)
     end
 
+    def destroy; end
+
     def initialize(ast, portal = nil)
       @ast = ast
       @portal = portal
@@ -41,14 +53,6 @@ module Hokusai
 
     def mount(klass)
       NodeMounter.new(self, klass).mount
-    end
-
-    def destroy
-      # meta.children?&.each do |child|
-      #   child.node.destroy
-      # end
-      #
-      # ast.destroy
     end
 
     def emit(name, **args)
@@ -108,7 +112,15 @@ module Hokusai
               elsif context&.table&.[](method)
                 value = context.table[method]
               else
-                value = block.instance_eval(method)
+                if method.is_a?(Proc)
+                  if local_portal.ast.loop?
+                    proxy = local_portal.ast.loop.proxy
+                    proxy.value = context.table[local_portal.ast.loop.var]
+                  end
+                  value = block.instance_eval(&method)
+                else
+                  value = block.instance_eval(method)
+                end
               end
             else
               value = method

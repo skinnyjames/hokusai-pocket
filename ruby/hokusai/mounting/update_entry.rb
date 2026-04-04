@@ -24,12 +24,12 @@ module Hokusai
               end 
 
               if child.if.args.size > 0
-                visible = utarget.send(child.if.method, context: context)
+                visible = child.if.proc? ? utarget.instance_eval(&child.if.method) : utarget.send(child.if.method, context: context)
               else
-                visible = utarget.send(child.if.method)
+                visible = child.if.proc? ? utarget.instance_eval(&child.if.method) : utarget.send(child.if.method)
               end
 
-              child_block_klass = target.class.use(child.type)
+              child_block_klass = child.dynamic? ? child.type : target.class.use(child.type)
 
               if !!visible
                 if child.else_condition_active?

@@ -29,11 +29,22 @@ module Hokusai
     end
 
     # Sets the template for this block
+    # or build with NodeBuilder DSL
     #
     # @param [String] template to set
-    def self.template(template)
-      @template = template
-      @uses ||= {}
+    def self.template(template = nil, &block)
+      raise Hokusai::Error.new("Need a template or block") if template.nil? && block.nil?
+
+      if template.nil?
+        @build_template = block
+      else
+        @template = template
+        @uses ||= {}
+      end
+    end
+
+    def self.build_template
+      @build_template
     end
 
     def self.style(template)
@@ -135,10 +146,16 @@ module Hokusai
       end
     end
 
+    # return [Hokusai::Node]
     def self.compile(name = "root", parent_node = nil)
-      Node.parse(template_get, name, parent_node)
+      if build_template
+        Node.build(name, parent_node, &build_template)
+      else
+        Node.parse(template_get, name.to_s, parent_node)
+      end
     end
 
+    # return [Hokusai::Block]
     def self.mount(name = "root", parent_node = nil)
       compile(name, parent_node).mount(self)
     end
@@ -197,7 +214,7 @@ module Hokusai
 
     def emit(name, *args, **kwargs)
       if portal = node.portal
-        if event = portal.event(name)
+        if event = portal.event(name.to_s)
           node.meta.publisher.notify(event.value.method, *args, **kwargs)
         end
       end
@@ -206,6 +223,29 @@ module Hokusai
     def draw(&block)
       instance_eval(&block)
     end
+
+    # def draw_retained(canvas, &block)
+    #   instance_eval(&block)
+
+    #   currenthash = node.meta.commands.hash
+
+
+    #   if @lasthash != currenthash
+    #     p ["last", @lasthash, currenthash]
+
+    #     @last_hokusai_texture = Texture.init(canvas.width, canvas.height)
+    #     @last_hokusai_texture.clear
+    #     @last_hokusai_texture.apply(node.meta.commands.queue)
+    #     @lasthash = currenthash
+    #     node.meta.commands.clear!
+    #   else
+    #     node.meta.commands.clear!
+    #   end
+
+    #   draw do 
+    #     texture(@last_hokusai_texture, canvas.x, canvas.y) {}
+    #   end
+    # end
 
     def method_missing(name, *args,**kwargs, &block)
       if node.meta.commands.respond_to?(name)

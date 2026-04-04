@@ -1069,12 +1069,14 @@ int hp_backend_run(mrb_state* mrb, struct RClass* hokusai_module, mrb_value back
   int height = mrb_int(mrb, mrb_funcall_argv(mrb, config, mrb_intern_lit(mrb, "height"), 0, NULL));
   const char* title = mrb_string_cstr(mrb,  mrb_funcall_argv(mrb, config, mrb_intern_lit(mrb, "title"), 0, NULL));
   bool draw_fps = mrb_bool(mrb_funcall(mrb, config, "draw_fps", 0, NULL));
+  mrb_value mrb_fps = mrb_funcall(mrb, config, "fps", 0, NULL);
+  int fps = mrb_nil_p(mrb_fps) ? 60 : mrb_int(mrb, mrb_fps);
   bool event_waiting = mrb_bool(mrb_funcall(mrb, config, "event_waiting", 0, NULL));
 
   bool resize = false;
 
   InitWindow(width, height, title);
-  SetTargetFPS(60);
+  SetTargetFPS(fps);
   if (audio) {
     InitAudioDevice();
   }

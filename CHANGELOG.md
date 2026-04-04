@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.5.0
+
+## Added
+
+* Introduces a DSL for building templates `Hokusai::NodeBuilder`
+
+## Modified
+
+* Moves `Hokusai::Ast` into Ruby space
+* Moves event capturing logic inside the components `render` block.
+
+## Removed
+
+* Removes `src/ast/**.c`
+
 ## 0.4.6
 
 ## Added

@@ -165,7 +165,7 @@ class Hokusai::Blocks::Text < Hokusai::Block
     end
 
     draw do
-      tokens = cache.tokens_for(Hokusai::Canvas.new(canvas.width, pheight, canvas.x + padding.left, canvas.y))
+      tokens = cache.tokens_for(Hokusai::Canvas.new(canvas.width, pheight, canvas.x + padding.left, pptop))
       pad = Hokusai::Padding.new(padding.top, 0.0, 0.0, padding.left)
 
       if selection && animate_selection
