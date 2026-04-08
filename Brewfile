@@ -13,7 +13,7 @@ spec("hokusai-pocket") do |config|
       command("git clone --branch 5.5 --depth 1 https://github.com/raysan5/raylib.git vendor/raylib")
       command("git clone --depth 1 https://github.com/tree-sitter/tree-sitter.git vendor/tree-sitter")
       command("git clone --branch 3.4.0 --depth 1 https://github.com/mruby/mruby.git vendor/mruby")
-      command("git clone https://github.com/mlabbe/nativefiledialog.git vendor/nfd")
+      command("git clone --branch devel --depth 1 https://github.com/mlabbe/nativefiledialog.git vendor/nfd")
       command("git clone https://github.com/libuv/libuv vendor/libuv")
     end
   end
@@ -114,6 +114,8 @@ spec("hokusai-pocket") do |config|
     end
 
     def build
+      platform = args[:arm64] ? "arm64" : "x64"      
+
       if mac?
         folder = "build/gmake_macosx"
       elsif windows?
@@ -125,8 +127,10 @@ spec("hokusai-pocket") do |config|
       if windows?
         command("make config=release_x64", chdir: "vendor/nfd/#{folder}")
       else
-        command("make config=release_x64 all", chdir: "vendor/nfd/#{folder}")
+        command("make config=release_#{platform} all", chdir: "vendor/nfd/#{folder}")
       end
+
+      command("cp build/lib/Release/#{platform}/#{NFD_LIB} build/#{NFD_LIB}", chdir: "vendor/nfd")
     end
   end
 
@@ -273,7 +277,7 @@ spec("hokusai-pocket") do |config|
     end
 
     dependency "nfd" do
-      files "vendor/nfd/build/lib/Release/x64/#{NFD_LIB}"
+      files "vendor/nfd/build/#{NFD_LIB}"
     end
 
     dependency "libuv" do
@@ -389,7 +393,7 @@ spec("hokusai-pocket") do |config|
           vendor/mruby/build/host/lib/libmruby.a 
           vendor/raylib/src/libraylib.a
           vendor/tree-sitter/build/lib/libtree-sitter.a
-        ] + ["vendor/nfd/build/lib/Release/x64/#{NFD_LIB}", "vendor/libuv/#{LIBUV_LIB}"]
+        ] + ["vendor/nfd/build/#{NFD_LIB}", "vendor/libuv/#{LIBUV_LIB}"]
 
       if args[:platform] == "sdl"
         links << "vendor/sdl3/build/libSDL3.a"

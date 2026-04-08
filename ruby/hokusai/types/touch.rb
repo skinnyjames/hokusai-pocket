@@ -13,7 +13,7 @@ module Hokusai
     0 => :none,
     1 => :tap,
     2 => :doubletap,
-    4 => :taphold,
+    4 => :hold,
     8 => :drag,
     16 => :swipe_right,
     32 => :swipe_left,

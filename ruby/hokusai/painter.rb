@@ -50,9 +50,10 @@ module Hokusai
       events.merge!({
         tap: TapEvent.new(input, state),
         drag: DragEvent.new(input, state),
+        doubletap: DoubletapEvent.new(input, state),
         taphold: TapHoldEvent.new(input, state),
-        pinch_in: PinchInEvent.new(input, state),
-        pinch_out: PinchOutEvent.new(input, state),
+        pinchin: PinchInEvent.new(input, state),
+        pinchout: PinchOutEvent.new(input, state),
         swipe: SwipeEvent.new(input, state),
       })
     end
@@ -97,8 +98,12 @@ module Hokusai
       root_entry = PainterEntry.new(root, canvas.x, canvas.y, canvas.width, canvas.height)
       groups << [root_entry, measure([root], canvas)]
 
-      mouse_y = input.mouse.pos.y
-      can_capture = mouse_y >= (canvas.y || 0.0) && mouse_y <= (canvas.y || 0.0) + canvas.height
+      unless input.touch
+        mouse_y = input.mouse.pos.y
+        can_capture = mouse_y >= (canvas.y || 0.0) && mouse_y <= (canvas.y || 0.0) + canvas.height
+      else
+        can_capture = true
+      end
 
       hovered = false
       while payload = groups.pop
@@ -142,7 +147,7 @@ module Hokusai
             if capture && (zindex_counter.zero? && z.zero?)
               capture_events(group.block, local_canvas, hovered: hovered)
             # since evented styles happens during capture and z-index skips capture, well add some
-            elsif capture && input.hovered?(local_canvas)
+            elsif capture && !input.touch && input.hovered?(local_canvas)
               if target = group.block.node.meta.target
                 group.block.node.add_evented_styles(target.class, "hover")
               end
@@ -203,8 +208,12 @@ module Hokusai
         events[:keydown].bubble
 
         unless input.touch.nil?
+          events[:tap].bubble
+          events[:doubletap].bubble
+          events[:drag].bubble
           events[:taphold].bubble
-          events[:pinch].bubble
+          events[:pinchin].bubble
+          events[:pinchout].bubble
           events[:swipe].bubble
         end
       end
@@ -286,28 +295,33 @@ module Hokusai
       
       events[:keydown].capture(block, canvas)
 
-      if input.hovered?(canvas)
-        events[:hover].capture(block, canvas)
-        events[:click].capture(block, canvas)
-        events[:wheel].capture(block, canvas)
-        events[:mouseup].capture(block, canvas)
-        events[:mousedown].capture(block, canvas)
-      else
-        events[:mouseout].capture(block, canvas)
-      end
-      events[:mousemove].capture(block, canvas)
-
-      if input.hovered?(canvas) || block.node.meta.focused || input.keyboard_override
-        events[:keyup].capture(block, canvas)
-        events[:keypress].capture(block, canvas)
+      if !input.touch
+        if input.hovered?(canvas)
+          events[:hover].capture(block, canvas)
+          events[:click].capture(block, canvas)
+          events[:wheel].capture(block, canvas)
+          events[:mouseup].capture(block, canvas)
+          events[:mousedown].capture(block, canvas)
+        else
+          events[:mouseout].capture(block, canvas)
+        end
+        events[:mousemove].capture(block, canvas)
+    
+        if input.hovered?(canvas) || block.node.meta.focused || input.keyboard_override
+          events[:keyup].capture(block, canvas)
+          events[:keypress].capture(block, canvas)
+        end
       end
 
       unless input.touch.nil?
+        events[:keyup].capture(block, canvas)
+        events[:keypress].capture(block, canvas)
+        events[:doubletap].capture(block, canvas)
         events[:tap].capture(block, canvas)
         events[:drag].capture(block, canvas)
         events[:taphold].capture(block, canvas)
-        events[:pinch_in].capture(block, canvas)
-        events[:pinch_out].capture(block, canvas)
+        events[:pinchin].capture(block, canvas)
+        events[:pinchout].capture(block, canvas)
         events[:swipe].capture(block, canvas)
       end
     end

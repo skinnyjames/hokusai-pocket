@@ -1003,7 +1003,7 @@ void hp_process_input(mrb_state* mrb, mrb_value input, bool use_touch)
     int touchcount = GetTouchPointCount();
     mrb_funcall(mrb, touchpos, "x=", 1, mrb_int_value(mrb, touchx));
     mrb_funcall(mrb, touchpos, "y=", 1, mrb_int_value(mrb, touchy));
-    mrb_funcall(mrb, touch, "count", 1, mrb_int_value(mrb, touchcount));
+    mrb_funcall(mrb, touch, "count=", 1, mrb_int_value(mrb, touchcount));
     
     /* set */
     int gesture = GetGestureDetected();

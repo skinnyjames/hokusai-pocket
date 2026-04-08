@@ -31,7 +31,7 @@ module Hokusai
     end
 
     def swiped_down?
-      @touch.swiped_down?
+      @touch.swipe_down?
     end
 
     def swipe_direction
@@ -85,7 +85,8 @@ module Hokusai
     end
 
     def hovered(canvas)
-      input.hovered?(canvas)
+      pos = @touch.pos
+      pos.x >= canvas.x && pos.x <= canvas.x + canvas.width && pos.y >= canvas.y && pos.y <= canvas.y + canvas.height
     end
 
     def to_json
@@ -102,7 +103,17 @@ module Hokusai
     name "tap"
 
     def capture(block, canvas)
-      if matches(block) && tap? && hovered(canvas) 
+      if matches(block) && tapped? && hovered(canvas)
+        captures << block
+      end
+    end
+  end
+
+  class DoubletapEvent < TouchEvent
+    name "doubletap"
+
+    def capture(block, canvas)
+      if matches(block) && doubletapped? && hovered(canvas)
         captures << block
       end
     end
@@ -122,7 +133,7 @@ module Hokusai
     name "taphold"
 
     def capture(block, canvas)
-      if matches(block) && hold? && @touch.hold_duration > 0.3 && hovered(canvas) 
+      if matches(block) && hold? && hovered(canvas)
         captures << block
       end
     end
@@ -142,7 +153,7 @@ module Hokusai
     name "pinchin"
 
     def capture(block, canvas)
-      if pinch_direction == :in && matches(block)
+      if pinched? && matches(block)
         captures << block
       end
     end
