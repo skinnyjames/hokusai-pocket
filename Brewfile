@@ -9,6 +9,7 @@ spec("hokusai-pocket") do |config|
   task "setup" do
     def build
       command("mkdir vendor; touch vendor/.keep") unless Dir.exists?("vendor")
+      command("git clone --branch release-3.4.4 --depth 1 https://github.com/libsdl-org/SDL.git vendor/sdl3")
       command("git clone --branch 5.5 --depth 1 https://github.com/raysan5/raylib.git vendor/raylib")
       command("git clone --depth 1 https://github.com/tree-sitter/tree-sitter.git vendor/tree-sitter")
       command("git clone --branch 3.4.0 --depth 1 https://github.com/mruby/mruby.git vendor/mruby")
@@ -23,23 +24,58 @@ spec("hokusai-pocket") do |config|
     end
   end
 
+  task "sdl3" do |args|
+    dependency "setup" do
+      files "vendor/.keep"
+    end
+
+    def build
+      command("mkdir -p build", chdir: "vendor/sdl3")
+      command("cmake -S . -B build -DBUILD_SHARED_LIBS=OFF", chdir: "vendor/sdl3")
+      command("cmake --build build", chdir: "vendor/sdl3")
+    end
+  end
+
   task "raylib" do |args|
     dependency "setup" do
       files "vendor/.keep"
     end
 
-    def platform(args)
+    dependency "sdl3" do
+      if args[:platform] == "sdl"
+        files "vendor/sdl3/build/libSDL3.a"
+      end
+    end
+
+    def opengl
+      case args[:opengl]
+      when "es"
+        "GRAPHICS_API_OPENGL_ES2"
+      else
+        "GRAPHICS_API_OPENGL_33"
+      end
+    end
+    
+    def platform
       case args[:platform]
       when "sdl"
-        "PLATFORM_SDL" # to be supported
+        "PLATFORM_DESKTOP_SDL" # to be supported
       else
         "PLATFORM_DESKTOP"
       end
     end
 
+    def includes
+      if args[:platform] == "sdl"
+        %w[sdl3/include/SDL3 sdl3/include].map do |path|
+          "../../#{path}"
+        end.join(":")
+      end
+    end
+
     def build
       command("make clean", chdir: "vendor/raylib/src")
-      command("make -j 5 PLATFORM=#{platform(args)}", chdir: "vendor/raylib/src")
+      command("make -j 5 PLATFORM=#{platform} GRAPHICS=#{opengl} C_INCLUDE_PATH=#{includes}", chdir: "vendor/raylib/src")
     end
   end
 
@@ -331,7 +367,10 @@ spec("hokusai-pocket") do |config|
     def frameworks(args)
       case detected_os
       when "MacOS"
-        "-framework CoreVideo -framework CoreAudio -framework AppKit -framework IOKit -framework Cocoa -framework GLUT -framework OpenGL"
+        if args[:platform] == "sdl"
+          extras = "-framework CoreGraphics -framework UniformTypeIdentifiers -framework QuartzCore -framework Metal -framework GameController -framework AudioToolbox -framework AVFoundation -framework Foundation -framework CoreHaptics -framework CoreMedia -framework Carbon -framework ForceFeedback"
+        end
+        "-framework CoreVideo -framework CoreAudio -framework AppKit -framework IOKit -framework Cocoa -framework GLUT -framework OpenGL #{extras}"
       when "Windows"
         # add -mwindows after figuring out why apps don't launch... 
         "-lgdi32 -lwinmm -lws2_32 -lcomctl32 -lcomdlg32 -lole32 -luuid -ldbghelp -luserenv -liphlpapi"
@@ -343,7 +382,7 @@ spec("hokusai-pocket") do |config|
     end
 
     def links
-      %w[
+      links = %w[
           grammar/src/parser.c
           grammar/src/scanner.c
           vendor/hokusai-pocket/libhokusai.a
@@ -351,6 +390,12 @@ spec("hokusai-pocket") do |config|
           vendor/raylib/src/libraylib.a
           vendor/tree-sitter/build/lib/libtree-sitter.a
         ] + ["vendor/nfd/build/lib/Release/x64/#{NFD_LIB}", "vendor/libuv/#{LIBUV_LIB}"]
+
+      if args[:platform] == "sdl"
+        links << "vendor/sdl3/build/libSDL3.a"
+      end
+
+      links
     end
   end
 

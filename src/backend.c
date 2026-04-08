@@ -977,7 +977,7 @@ static char* key_codes[110] = {
   "kp_equal", "back", "menu", "volume_up", "volume_down"
 };
 
-void hp_process_input(mrb_state* mrb, mrb_value input)
+void hp_process_input(mrb_state* mrb, mrb_value input, bool use_touch)
 {
   mrb_value keyboard = mrb_funcall_argv(mrb, input, mrb_intern_lit(mrb, "keyboard"), 0, NULL);
   mrb_value mouse = mrb_funcall_argv(mrb, input, mrb_intern_lit(mrb, "mouse"), 0, NULL);
@@ -991,6 +991,42 @@ void hp_process_input(mrb_state* mrb, mrb_value input)
     // mrb_value key = mrb_hash_get(mrb, input_keys, sym);
     mrb_value args[2] = {sym, mrb_bool_value(IsKeyDown(keys[i]))};
     mrb_funcall_argv(mrb, keyboard, mrb_intern_lit(mrb, "set"), 2, args);
+  }
+
+  if (use_touch)
+  {
+    /* set pos and count */
+    mrb_value touch = mrb_funcall_argv(mrb, input, mrb_intern_lit(mrb, "touch"), 0, NULL);
+    mrb_value touchpos = mrb_funcall(mrb, touch, "pos", 0, NULL);
+    int touchx = GetTouchX();
+    int touchy = GetTouchY();
+    int touchcount = GetTouchPointCount();
+    mrb_funcall(mrb, touchpos, "x=", 1, mrb_int_value(mrb, touchx));
+    mrb_funcall(mrb, touchpos, "y=", 1, mrb_int_value(mrb, touchy));
+    mrb_funcall(mrb, touch, "count", 1, mrb_int_value(mrb, touchcount));
+    
+    /* set */
+    int gesture = GetGestureDetected();
+    float gesture_hold_duration = GetGestureHoldDuration();
+    mrb_funcall(mrb, touch, "set", 1, mrb_int_value(mrb, gesture));
+    mrb_funcall(mrb, touch, "hold_duration", 1, mrb_float_value(mrb, gesture_hold_duration));
+
+    Vector2 gdragvec = GetGestureDragVector();
+    float gdragangle = GetGestureDragAngle();
+    Vector2 gpinchvec = GetGesturePinchVector();
+    float gpinchangle = GetGesturePinchAngle();
+
+    mrb_value drag = mrb_funcall(mrb, touch, "drag", 0, NULL);
+    mrb_value dragpos = mrb_funcall(mrb, drag, "pos", 0, NULL);
+    mrb_funcall(mrb, drag, "angle=", 1, mrb_float_value(mrb, gdragangle));
+    mrb_funcall(mrb, dragpos, "x=", 1, mrb_float_value(mrb, gdragvec.x));
+    mrb_funcall(mrb, dragpos, "y=", 1, mrb_float_value(mrb, gdragvec.y));
+
+    mrb_value pinch = mrb_funcall(mrb, touch, "pinch", 0, NULL);
+    mrb_value pinchpos = mrb_funcall(mrb, pinch, "pos", 0, NULL);
+    mrb_funcall(mrb, pinch, "angle=", 1, mrb_float_value(mrb, gpinchangle));
+    mrb_funcall(mrb, pinchpos, "x=", 1, mrb_float_value(mrb, gpinchvec.x));
+    mrb_funcall(mrb, pinchpos, "y=", 1, mrb_float_value(mrb, gpinchvec.y));
   }
 
   mrb_value left = mrb_funcall_argv(mrb, mouse, mrb_intern_lit(mrb, "left"), 0, NULL);
@@ -1052,6 +1088,10 @@ int hp_backend_run(mrb_state* mrb, struct RClass* hokusai_module, mrb_value back
   {
     f_logger_set_level(F_LOG_FINE | F_LOG_DEBUG | F_LOG_INFO | F_LOG_WARN);
   }
+  else
+  {
+    SetTraceLogLevel(LOG_ERROR); 
+  }
 
   int config_flags = mrb_fixnum(mrb_funcall(mrb, config, "config_flags", 0, NULL));
   bool audio = mrb_bool(mrb_funcall(mrb, config, "audio", 0, NULL));
@@ -1064,7 +1104,6 @@ int hp_backend_run(mrb_state* mrb, struct RClass* hokusai_module, mrb_value back
   if (mrb->exc) mrb_print_error(mrb);
   // raylib stuff
   SetConfigFlags(config_flags);
-
   int width = mrb_int(mrb, mrb_funcall_argv(mrb, config, mrb_intern_lit(mrb, "width"), 0, NULL));
   int height = mrb_int(mrb, mrb_funcall_argv(mrb, config, mrb_intern_lit(mrb, "height"), 0, NULL));
   const char* title = mrb_string_cstr(mrb,  mrb_funcall_argv(mrb, config, mrb_intern_lit(mrb, "title"), 0, NULL));
@@ -1072,6 +1111,9 @@ int hp_backend_run(mrb_state* mrb, struct RClass* hokusai_module, mrb_value back
   mrb_value mrb_fps = mrb_funcall(mrb, config, "fps", 0, NULL);
   int fps = mrb_nil_p(mrb_fps) ? 60 : mrb_int(mrb, mrb_fps);
   bool event_waiting = mrb_bool(mrb_funcall(mrb, config, "event_waiting", 0, NULL));
+  bool use_touch = mrb_bool(mrb_funcall(mrb, config, "touch", 0, NULL));
+
+  if (use_touch) mrb_funcall(mrb, input, "support_touch!", 0, NULL);
 
   bool resize = false;
 
@@ -1101,7 +1143,7 @@ int hp_backend_run(mrb_state* mrb, struct RClass* hokusai_module, mrb_value back
     
     BeginDrawing();
       // f_log(F_LOG_DEBUG, "proces input");
-      hp_process_input(mrb, input);
+      hp_process_input(mrb, input, use_touch);
       int render_width = GetScreenWidth();
       int render_height = GetScreenHeight();
 

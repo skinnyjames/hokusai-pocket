@@ -48,8 +48,11 @@ module Hokusai
 
     def add_touch_events(events, input, state)
       events.merge!({
+        tap: TapEvent.new(input, state),
+        drag: DragEvent.new(input, state),
         taphold: TapHoldEvent.new(input, state),
-        pinch: PinchEvent.new(input, state),
+        pinch_in: PinchInEvent.new(input, state),
+        pinch_out: PinchOutEvent.new(input, state),
         swipe: SwipeEvent.new(input, state),
       })
     end
@@ -300,8 +303,11 @@ module Hokusai
       end
 
       unless input.touch.nil?
+        events[:tap].capture(block, canvas)
+        events[:drag].capture(block, canvas)
         events[:taphold].capture(block, canvas)
-        events[:pinch].capture(block, canvas)
+        events[:pinch_in].capture(block, canvas)
+        events[:pinch_out].capture(block, canvas)
         events[:swipe].capture(block, canvas)
       end
     end
