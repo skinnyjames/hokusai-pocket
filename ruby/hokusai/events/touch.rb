@@ -11,63 +11,82 @@ module Hokusai
     end
 
     def tapped?
-      @touch.tapped?
+      @touch.tap?
+    end
+
+    def doubletapped?
+      @touch.doubletap?
+    end
+
+    def swiped_right?
+      @touch.swipe_right?
+    end
+
+    def swiped_up?
+      @touch.swipe_up?
+    end
+
+    def swiped_left?
+      @touch.swipe_left?
+    end
+
+    def swiped_down?
+      @touch.swipe_down?
+    end
+
+    def swipe_direction
+      case @touch.type
+      when :swipe_left
+        :left
+      when :swipe_right
+        :right
+      when :swipe_up
+        :up
+      when :swipe_down
+        :down
+      end
+    end
+
+    def pinch_direction
+      case @touch.type
+      when :pinch_in
+        :in
+      when :pinch_out
+        :out
+      end
+    end
+
+    def pinched?
+      pinch_direction == :in || pinch_direction == :out
     end
 
     def swiped?
-      @touch.swiped?
+      swiped_right? || swiped_left? || swiped_up? || swiped_down?
+    end
+
+    def hold?
+      @touch.hold?
     end
     
-    def longtapped?
-      @touch.longtapped?
-    end
-
-    def longtapping?
-      @touch.longtapping?
-    end
-
-    def touching?
-      @touch.touching?
-    end
-
     def duration
-      @touch.duration
+      @touch.hold_duration
     end
 
-    def direction
-      @touch.direction
+    def pos
+      @touch.pos
     end
 
-    def distance
-      @touch.distance
+    def drag
+      @touch.drag
     end
 
-    def angle
-      @touch.angle
-    end
-
-    def position
-      @touch.position
-    end
-
-    def last_position
-      @touch.last_position
-    end
-
-    def touch_len
-      @touch.touch_len
-    end
-
-    def touch_count
-      @touch.touch_count
-    end
-
-    def timer
-      @touch.timer
+    def pinch
+      @touch.pinch
     end
 
     def hovered(canvas)
-      input.hovered?(canvas)
+      pos = @touch.pos
+      pos.x >= canvas.x && pos.x <= canvas.x + canvas.width && pos.y >= canvas.y && pos.y <= canvas.y + canvas.height
     end
 
     def to_json
@@ -80,21 +99,61 @@ module Hokusai
     end
   end
 
-  class TapHoldEvent < TouchEvent
-    name "taphold"
+  class TapEvent < TouchEvent
+    name "tap"
 
     def capture(block, canvas)
-      if matches(block) && longtapped? && hovered(canvas) 
+      if matches(block) && tapped? && hovered(canvas)
         captures << block
       end
     end
   end
 
-  class PinchEvent < TouchEvent
-    name "pinch"
+  class DoubletapEvent < TouchEvent
+    name "doubletap"
 
     def capture(block, canvas)
-      if false && matches(block)
+      if matches(block) && doubletapped? && hovered(canvas)
+        captures << block
+      end
+    end
+  end
+
+  class DragEvent < TouchEvent
+    name "drag"
+
+    def capture(block, canvas)
+      if matches(block) && @touch.drag?
+        captures << block
+      end
+    end
+  end
+
+  class TapHoldEvent < TouchEvent
+    name "taphold"
+
+    def capture(block, canvas)
+      if matches(block) && hold? && hovered(canvas)
+        captures << block
+      end
+    end
+  end
+
+  class PinchOutEvent < TouchEvent
+    name "pinchout"
+
+    def capture(block, canvas)
+      if pinch_direction == :out && matches(block)
+        captures << block
+      end
+    end
+  end
+
+  class PinchInEvent < TouchEvent
+    name "pinchin"
+
+    def capture(block, canvas)
+      if pinched? && matches(block)
         captures << block
       end
     end
