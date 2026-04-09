@@ -510,7 +510,44 @@ spec("hokusai-pocket") do |config|
         gem_config = args[:gem_config] ? File.read(args[:gem_config]) : ""
 
         platforms.each do |platform|
-          deps = platform == "linux" ? "libasound2-dev libgl1-mesa-dev libglu1-mesa-dev libx11-dev libxi-dev libxrandr-dev mesa-common-dev xorg-dev" : ""
+          if platform == "linux"
+            deps = %w[
+              libasound2-dev
+              libgl1-mesa-dev
+              libglu1-mesa-dev
+              libx11-dev
+              libxi-dev
+              libxrandr-dev
+              mesa-common-dev
+              xorg-dev
+
+              ninja-build
+              gnome-desktop-testing
+              libasound2-dev
+              libpulse-dev
+              libaudio-dev
+              libfribidi-dev
+              libjack-dev
+              libsndio-dev
+              libxext-dev 
+              libxcursor-dev 
+              libxfixes-dev 
+              libxss-dev 
+              libxtst-dev 
+              libxkbcommon-dev 
+              libdrm-dev 
+              libgbm-dev 
+              libgl1-mesa-dev 
+              libgles2-mesa-dev 
+              libegl1-mesa-dev 
+              libdbus-1-dev 
+              libibus-1.0-dev 
+              libudev-dev 
+              libthai-dev
+            ].join(" ")
+          else
+            deps = ""
+          end
 
           processed = erb(
             Hokusai.docker_template, 

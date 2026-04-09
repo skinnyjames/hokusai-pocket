@@ -24,7 +24,7 @@ jobs:
       - name: unpack barista
         run: tar -xvf barista.tar.gz --strip-components 1
       - name: build pocket
-        run: chmod 755 barista && barista cli,raylib,nfd,hokusai:arm64=true:platform=sdl:opengl=es
+        run: chmod 755 barista && ./barista cli,raylib,nfd,hokusai:arm64=true:platform=sdl:opengl=es
       - uses: actions/upload-artifact@v4
         with:
           name: hokusai-pocket-linux-arm64
@@ -114,7 +114,7 @@ jobs:
     - name: zip artifacts
       run: |
         tar -czvf hokusai-pocket-x86-linux.tar.gz hokusai-pocket-linux
-        tar -czvf hokusai-pocket-x86-linux.tar.gz hokusai-pocket-linux-arm64
+        tar -czvf hokusai-pocket-arm64-linux.tar.gz hokusai-pocket-linux-arm64
         tar -czvf hokusai-pocket-x86-osx.tar.gz hokusai-pocket-osx
         tar -czvf hokusai-pocket-x86-windows.tar.gz hokusai-pocket-windows
     - uses: ncipollo/release-action@v1

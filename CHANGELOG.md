@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.0
+
+## Added
+
+* Mobile support via SDL Backend and Hokusai::Touch
+
 ## 0.5.0
 
 ## Added
