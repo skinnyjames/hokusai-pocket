@@ -123,7 +123,7 @@ module Hokusai
     name "drag"
 
     def capture(block, canvas)
-      if matches(block) && @touch.drag?
+      if matches(block) && @touch.drag? && hovered(canvas)
         captures << block
       end
     end
@@ -143,7 +143,7 @@ module Hokusai
     name "pinchout"
 
     def capture(block, canvas)
-      if pinch_direction == :out && matches(block)
+      if pinch_direction == :out && matches(block) && hovered(canvas)
         captures << block
       end
     end
@@ -153,7 +153,7 @@ module Hokusai
     name "pinchin"
 
     def capture(block, canvas)
-      if pinched? && matches(block)
+      if pinched? && matches(block) && hovered(canvas)
         captures << block
       end
     end
@@ -163,7 +163,7 @@ module Hokusai
     name "swipe"
 
     def capture(block, canvas)
-      if swiped? && matches(block)
+      if swiped? && matches(block) && hovered(canvas)
         captures << block
       end
     end

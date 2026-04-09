@@ -1009,7 +1009,7 @@ void hp_process_input(mrb_state* mrb, mrb_value input, bool use_touch)
     int gesture = GetGestureDetected();
     float gesture_hold_duration = GetGestureHoldDuration();
     mrb_funcall(mrb, touch, "set", 1, mrb_int_value(mrb, gesture));
-    mrb_funcall(mrb, touch, "hold_duration", 1, mrb_float_value(mrb, gesture_hold_duration));
+    mrb_funcall(mrb, touch, "hold_duration=", 1, mrb_float_value(mrb, gesture_hold_duration));
 
     Vector2 gdragvec = GetGestureDragVector();
     float gdragangle = GetGestureDragAngle();
