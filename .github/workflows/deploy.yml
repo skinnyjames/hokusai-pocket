@@ -7,12 +7,11 @@ jobs:
   publish-linux-arm64:
     runs-on: ubuntu-22.04-arm
     container:
-      image: ubuntu:latest
+      image: alpine:latest
     steps:
       - name: deps
-        run: apt-get update -y && apt-get install -y git cmake automake libtool ruby clang build-essential libasound2-dev libgl1-mesa-dev libglu1-mesa-dev libx11-dev libxi-dev libxrandr-dev mesa-common-dev xorg-dev
-      - name: more-deps
-        run: apt-get update -y && apt-get install -y pkg-config cmake ninja-build gnome-desktop-testing libasound2-dev libpulse-dev libaudio-dev libfribidi-dev libjack-dev libsndio-dev libx11-dev libxext-dev libxrandr-dev libxcursor-dev libxfixes-dev libxi-dev libxss-dev libxtst-dev libxkbcommon-dev libdrm-dev libgbm-dev libgl1-mesa-dev libgles2-mesa-dev libegl1-mesa-dev libdbus-1-dev libibus-1.0-dev libudev-dev libthai-dev
+        run: apk add git make cmake automake libtool ruby clang alsa-lib-dev eudev-dev jack-dev libdecor-dev libsamplerate-dev libusb-dev libx11-dev libxcursor-dev libxext-dev libxi-dev libxkbcommon-dev libxrandr-dev libxrender-dev libxscrnsaver-dev libxtst-dev pipewire-dev pulseaudio-dev samurai wayland-dev wayland-protocols mesa-dev
+      - uses: laverdet/alpine-arm64@v1
       - uses: actions/checkout@v5
       - uses: dsaltares/fetch-gh-release-asset@master
         with:
@@ -23,6 +22,8 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
       - name: unpack barista
         run: tar -xvf barista.tar.gz --strip-components 1
+      - name: gem install rake
+        run: gem install rake
       - name: build pocket
         run: chmod 755 barista && ./barista cli,raylib,nfd,hokusai:arm64=true:platform=sdl:opengl=es
       - uses: actions/upload-artifact@v4
