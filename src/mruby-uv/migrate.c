@@ -1,4 +1,5 @@
 // adjusted from mruby-thread
+#include "migrate.h"
 #include <mruby.h>
 #include <mruby/string.h>
 #include <mruby/array.h>
@@ -11,6 +12,9 @@
 #include <mruby/variable.h>
 #include <mruby/dump.h>
 #include <mruby/internal.h>
+#include <mruby/data.h>
+#include <mruby/class.h>
+#include <mruby/compile.h>
 #include <time.h>
 
 #ifdef mrb_range_ptr
@@ -30,7 +34,6 @@
   p->target_class = tc
 #endif
 
-mrb_value mrb_thread_migrate_value(mrb_state *mrb, mrb_value v, mrb_state *mrb2);
 
 static mrb_sym
 migrate_sym(mrb_state *mrb, mrb_sym sym, mrb_state *mrb2)

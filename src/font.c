@@ -90,7 +90,7 @@ mrb_value hp_font_from_ext(mrb_state* mrb, mrb_value self)
   int count;
   int* codepoints = LoadCodepoints(codepoint_str, &count);
   Font font = LoadFontEx(cpath, size, codepoints, count);
-  SetTextureFilter(font.texture, TEXTURE_FILTER_BILINEAR);
+  SetTextureFilter(font.texture, TEXTURE_FILTER_POINT);
   UnloadCodepoints(codepoints);
 
   hp_font_wrapper* wrapper;

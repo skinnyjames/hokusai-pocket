@@ -132,6 +132,34 @@ Hokusai::Backend.run(Counter) do |config|
 end
 
 ```
+# recipes
+
+* `hokusai-pocket @desktop` build a desktop cli with raylib and mruby
+* `hokusai-pocket @mobile` builds a cli using SDL + Raylib for ARM64 architecture using OpenGL ES2
+
+# customizing the build
+
+When building hokusai-pocket, every MRuby gem is embedded into the [final binary.](https://github.com/mruby/mruby/blob/master/doc/guides/mrbgems.md).
+
+New gems can be mixed in / compiled into the binary by rebuilding hokusai-pocket.
+
+`hokusai-pocket cli,hokusai:remote=true mruby:gem_config=./gems` tells us a couple things
+
+* pull hokusai-pocket code from github
+* build mruby with a gem snippet located in the file `gems`
+
+The gems file is interpolated into the mruby config and looks like this:
+
+```ruby
+conf.gem mgem: "mruby-zlib" 
+```
+
+Since typing this out is tedious, a barista recipe encapsulates this
+
+`hokusai-pocket @rebuild`
+
+will rebuild the hokusai-pocket binary with new gems
+
 
 # development
 
@@ -142,6 +170,8 @@ First, build or obtain a [barista](https://github.com/skinnyjames/mruby-bin-bari
     * libtree-sitter.a [task: treesitter]
     * libraylib.a      [task: raylib]
     * libmruby.a       [task: mruby]
+    * libnfd.a/nfd.lib [task: nfd]
+    * libuv.a          [task: libuv]
     * libhokusai.a     [task: hokusai]
 
 When updating any hokusai code, just run `barista hokusai` to update `libhokusai.a`.

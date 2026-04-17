@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.1
+
+* Updated arm64 build script to use alpine/musl
+
 ## 0.6.0
 
 ## Added

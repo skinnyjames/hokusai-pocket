@@ -160,21 +160,6 @@ module Hokusai
       compile(name, parent_node).mount(self)
     end
 
-    # you probably don't need this.
-    def self.render(props)
-      node = Hokusai::Node.virtual
-
-      props.each do |k, v|
-        node.meta.set_prop(k.to_sym, v)
-      end
-
-
-      block = new(node: node)
-      yield block
-
-      node.meta.commands.clear!
-    end
-
     def initialize(**args)
       raise Hokusai::Error.new("Must supply node argument to #{self.class}.new") unless args[:node]
 
@@ -224,29 +209,6 @@ module Hokusai
       instance_eval(&block)
     end
 
-    # def draw_retained(canvas, &block)
-    #   instance_eval(&block)
-
-    #   currenthash = node.meta.commands.hash
-
-
-    #   if @lasthash != currenthash
-    #     p ["last", @lasthash, currenthash]
-
-    #     @last_hokusai_texture = Texture.init(canvas.width, canvas.height)
-    #     @last_hokusai_texture.clear
-    #     @last_hokusai_texture.apply(node.meta.commands.queue)
-    #     @lasthash = currenthash
-    #     node.meta.commands.clear!
-    #   else
-    #     node.meta.commands.clear!
-    #   end
-
-    #   draw do 
-    #     texture(@last_hokusai_texture, canvas.x, canvas.y) {}
-    #   end
-    # end
-
     def method_missing(name, *args,**kwargs, &block)
       if node.meta.commands.respond_to?(name)
         return node.meta.commands.send(name, *args, **kwargs, &block)
@@ -257,6 +219,13 @@ module Hokusai
 
     def draw_with
       yield node.meta.commands
+    end
+
+    def fetch(url, opts, &block)
+      instance_eval do
+        req = Hokusai::Request.init(self, url)
+        req.execute("/", opts, &block)
+      end
     end
 
     def execute_draw

@@ -101,6 +101,14 @@ mrb_value hp_texture_apply(mrb_state* mrb, mrb_value self)
   return mrb_nil_value();
 }
 
+mrb_value hp_texture_update(mrb_state* mrb, mrb_value self)
+{
+    mrb_value str;
+    mrb_get_args(mrb, "S", &str);
+    hp_texture_wrapper* wrap = hp_texture_get(mrb, self);
+    UpdateTexture(wrap->texture.texture, RSTRING_PTR(str));
+    return mrb_nil_value();
+}
 
 void mrb_define_hokusai_texture_class(mrb_state* mrb)
 {
@@ -114,6 +122,7 @@ void mrb_define_hokusai_texture_class(mrb_state* mrb)
   mrb_define_method(mrb, klass, "apply", hp_texture_apply, MRB_ARGS_REQ(1));
   mrb_define_method(mrb, klass, "clear", hp_texture_clear, MRB_ARGS_NONE());
   mrb_define_method(mrb, klass, "dup", hp_texture_dup, MRB_ARGS_NONE());
+  mrb_define_method(mrb, klass, "update", hp_texture_update, MRB_ARGS_REQ(1));
 }
 
 #endif

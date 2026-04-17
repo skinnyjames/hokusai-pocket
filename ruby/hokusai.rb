@@ -1,6 +1,7 @@
 
 require_relative './hokusai/error'
 require_relative './hokusai/types'
+require_relative './hokusai/http'
 require_relative './hokusai/ast'
 require_relative './hokusai/node'
 require_relative "./hokusai/node_builder"
@@ -51,6 +52,7 @@ require_relative './hokusai/blocks/tooltip'
 require_relative './hokusai/blocks/icon'
 require_relative './hokusai/blocks/dropdown'
 
+require_relative './patches'
 require_relative './build_templates'
 
 HP_SHADER_UNIFORM_FLOAT = 0      # Shader uniform type: float
@@ -95,6 +97,18 @@ module Hokusai
     def finish(receiver, value = nil)
       receiver.instance_exec(value, &@on_finished_cb)
     end
+  end
+  
+  def self.http
+    HTTP
+  end
+
+  def self.tmpdir
+    @tmpdir || "."
+  end
+
+  def self.tmpdir=(val)
+    @tmpdir = val
   end
 
   # Access the font registry

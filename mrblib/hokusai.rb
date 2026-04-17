@@ -253,7 +253,7 @@ module Hokusai
     0 => :none,
     1 => :tap,
     2 => :doubletap,
-    4 => :taphold,
+    4 => :hold,
     8 => :drag,
     16 => :swipe_right,
     32 => :swipe_left,
@@ -552,6 +552,62 @@ module Hokusai
     def hovered?(canvas)
       pos = mouse.pos
       pos.x >= canvas.x && pos.x <= canvas.x + canvas.width && pos.y >= canvas.y && pos.y <= canvas.y + canvas.height
+    end
+  end
+end
+
+module Hokusai
+  module HTTP
+    class ResponseBody
+      attr_reader :finished, :tmp
+      attr_accessor :value, :buffer
+
+      def initialize
+        @buffer = ""
+        @value = ""
+        @tmp = "#{Hokusai.tmpdir}/#{Hokusai.monotonic}"
+        @finished = false
+      end
+
+      def on_read(&block)
+        io = File.open(@tmp, "r")
+        io.each do |group|
+          block.call(group)
+        end
+
+        io.close
+      end
+      
+      def write(content)
+        @io ||= File.open(@tmp, "w")
+        @io << content
+      end
+
+      def finish
+        @finished = true
+        @io.close
+      end
+
+      def json
+        JSON.parse(all)
+      end
+
+      def all
+        File.read(@tmp)
+      end
+    end
+
+    class Response
+      attr_accessor :code, :status
+      def initialize
+        @code = nil
+        @status = nil
+        @body = ResponseBody.new
+      end
+
+      def body
+        @body
+      end
     end
   end
 end
@@ -1149,7 +1205,7 @@ module Hokusai
 
         yield child_block
 
-        block.on_mounted if block.respond_to?(:on_mounted)
+        block.on_mounted if block.respond_to?(:on_mounted) if ast.siblingindex.zero?
       end
     end
   end
@@ -1987,21 +2043,6 @@ module Hokusai
       compile(name, parent_node).mount(self)
     end
 
-    # you probably don't need this.
-    def self.render(props)
-      node = Hokusai::Node.virtual
-
-      props.each do |k, v|
-        node.meta.set_prop(k.to_sym, v)
-      end
-
-
-      block = new(node: node)
-      yield block
-
-      node.meta.commands.clear!
-    end
-
     def initialize(**args)
       raise Hokusai::Error.new("Must supply node argument to #{self.class}.new") unless args[:node]
 
@@ -2051,29 +2092,6 @@ module Hokusai
       instance_eval(&block)
     end
 
-    # def draw_retained(canvas, &block)
-    #   instance_eval(&block)
-
-    #   currenthash = node.meta.commands.hash
-
-
-    #   if @lasthash != currenthash
-    #     p ["last", @lasthash, currenthash]
-
-    #     @last_hokusai_texture = Texture.init(canvas.width, canvas.height)
-    #     @last_hokusai_texture.clear
-    #     @last_hokusai_texture.apply(node.meta.commands.queue)
-    #     @lasthash = currenthash
-    #     node.meta.commands.clear!
-    #   else
-    #     node.meta.commands.clear!
-    #   end
-
-    #   draw do 
-    #     texture(@last_hokusai_texture, canvas.x, canvas.y) {}
-    #   end
-    # end
-
     def method_missing(name, *args,**kwargs, &block)
       if node.meta.commands.respond_to?(name)
         return node.meta.commands.send(name, *args, **kwargs, &block)
@@ -2084,6 +2102,13 @@ module Hokusai
 
     def draw_with
       yield node.meta.commands
+    end
+
+    def fetch(url, opts, &block)
+      instance_eval do
+        req = Hokusai::Request.init(self, url)
+        req.execute("/", opts, &block)
+      end
     end
 
     def execute_draw
@@ -3420,7 +3445,7 @@ module Hokusai
     end
 
     def swiped_down?
-      @touch.swiped_down?
+      @touch.swipe_down?
     end
 
     def swipe_direction
@@ -3474,7 +3499,8 @@ module Hokusai
     end
 
     def hovered(canvas)
-      input.hovered?(canvas)
+      pos = @touch.pos
+      pos.x >= canvas.x && pos.x <= canvas.x + canvas.width && pos.y >= canvas.y && pos.y <= canvas.y + canvas.height
     end
 
     def to_json
@@ -3491,7 +3517,17 @@ module Hokusai
     name "tap"
 
     def capture(block, canvas)
-      if matches(block) && tap? && hovered(canvas) 
+      if matches(block) && tapped? && hovered(canvas)
+        captures << block
+      end
+    end
+  end
+
+  class DoubletapEvent < TouchEvent
+    name "doubletap"
+
+    def capture(block, canvas)
+      if matches(block) && doubletapped? && hovered(canvas)
         captures << block
       end
     end
@@ -3501,7 +3537,7 @@ module Hokusai
     name "drag"
 
     def capture(block, canvas)
-      if matches(block) && @touch.drag?
+      if matches(block) && @touch.drag? && hovered(canvas)
         captures << block
       end
     end
@@ -3511,7 +3547,7 @@ module Hokusai
     name "taphold"
 
     def capture(block, canvas)
-      if matches(block) && hold? && @touch.hold_duration > 0.3 && hovered(canvas) 
+      if matches(block) && hold? && hovered(canvas)
         captures << block
       end
     end
@@ -3521,7 +3557,7 @@ module Hokusai
     name "pinchout"
 
     def capture(block, canvas)
-      if pinch_direction == :out && matches(block)
+      if pinch_direction == :out && matches(block) && hovered(canvas)
         captures << block
       end
     end
@@ -3531,7 +3567,7 @@ module Hokusai
     name "pinchin"
 
     def capture(block, canvas)
-      if pinch_direction == :in && matches(block)
+      if pinched? && matches(block) && hovered(canvas)
         captures << block
       end
     end
@@ -3541,7 +3577,7 @@ module Hokusai
     name "swipe"
 
     def capture(block, canvas)
-      if swiped? && matches(block)
+      if swiped? && matches(block) && hovered(canvas)
         captures << block
       end
     end
@@ -3599,9 +3635,10 @@ module Hokusai
       events.merge!({
         tap: TapEvent.new(input, state),
         drag: DragEvent.new(input, state),
+        doubletap: DoubletapEvent.new(input, state),
         taphold: TapHoldEvent.new(input, state),
-        pinch_in: PinchInEvent.new(input, state),
-        pinch_out: PinchOutEvent.new(input, state),
+        pinchin: PinchInEvent.new(input, state),
+        pinchout: PinchOutEvent.new(input, state),
         swipe: SwipeEvent.new(input, state),
       })
     end
@@ -3646,8 +3683,12 @@ module Hokusai
       root_entry = PainterEntry.new(root, canvas.x, canvas.y, canvas.width, canvas.height)
       groups << [root_entry, measure([root], canvas)]
 
-      mouse_y = input.mouse.pos.y
-      can_capture = mouse_y >= (canvas.y || 0.0) && mouse_y <= (canvas.y || 0.0) + canvas.height
+      unless input.touch
+        mouse_y = input.mouse.pos.y
+        can_capture = mouse_y >= (canvas.y || 0.0) && mouse_y <= (canvas.y || 0.0) + canvas.height
+      else
+        can_capture = true
+      end
 
       hovered = false
       while payload = groups.pop
@@ -3691,7 +3732,7 @@ module Hokusai
             if capture && (zindex_counter.zero? && z.zero?)
               capture_events(group.block, local_canvas, hovered: hovered)
             # since evented styles happens during capture and z-index skips capture, well add some
-            elsif capture && input.hovered?(local_canvas)
+            elsif capture && !input.touch && input.hovered?(local_canvas)
               if target = group.block.node.meta.target
                 group.block.node.add_evented_styles(target.class, "hover")
               end
@@ -3752,8 +3793,12 @@ module Hokusai
         events[:keydown].bubble
 
         unless input.touch.nil?
+          events[:tap].bubble
+          events[:doubletap].bubble
+          events[:drag].bubble
           events[:taphold].bubble
-          events[:pinch].bubble
+          events[:pinchin].bubble
+          events[:pinchout].bubble
           events[:swipe].bubble
         end
       end
@@ -3835,28 +3880,34 @@ module Hokusai
       
       events[:keydown].capture(block, canvas)
 
-      if input.hovered?(canvas)
-        events[:hover].capture(block, canvas)
-        events[:click].capture(block, canvas)
-        events[:wheel].capture(block, canvas)
-        events[:mouseup].capture(block, canvas)
-        events[:mousedown].capture(block, canvas)
-      else
-        events[:mouseout].capture(block, canvas)
-      end
-      events[:mousemove].capture(block, canvas)
-
-      if input.hovered?(canvas) || block.node.meta.focused || input.keyboard_override
-        events[:keyup].capture(block, canvas)
-        events[:keypress].capture(block, canvas)
+      if !input.touch
+        if input.hovered?(canvas)
+          events[:hover].capture(block, canvas)
+          events[:click].capture(block, canvas)
+          events[:wheel].capture(block, canvas)
+          events[:mouseup].capture(block, canvas)
+          events[:mousedown].capture(block, canvas)
+        else
+          events[:mouseout].capture(block, canvas)
+        end
+        events[:mousemove].capture(block, canvas)
+    
+        if input.hovered?(canvas) || block.node.meta.focused || input.keyboard_override
+          events[:keyup].capture(block, canvas)
+          events[:keypress].capture(block, canvas)
+        end
       end
 
       unless input.touch.nil?
+        events[:click].capture(block, canvas)
+        events[:keyup].capture(block, canvas)
+        events[:keypress].capture(block, canvas)
+        events[:doubletap].capture(block, canvas)
         events[:tap].capture(block, canvas)
         events[:drag].capture(block, canvas)
         events[:taphold].capture(block, canvas)
-        events[:pinch_in].capture(block, canvas)
-        events[:pinch_out].capture(block, canvas)
+        events[:pinchin].capture(block, canvas)
+        events[:pinchout].capture(block, canvas)
         events[:swipe].capture(block, canvas)
       end
     end
@@ -5001,9 +5052,8 @@ module Hokusai
     def self.run(klass, &block)
       config = Backend::Config.new
       block.call config
-      app = klass.mount
-
-      obj = new(app, config)
+      
+      obj = new(klass, config)
       obj.run
     end
 
@@ -11765,6 +11815,304 @@ class Hokusai::Blocks::Dropdown < Hokusai::Block
   end
 end
 
+module Hokusai
+  module Patches
+    def self.raylib_patch
+      <<~BAD
+
+# Raylib patch
+COPY <<EOT /app/vendor/raylib/tweaks.patch
+diff --git a/src/Makefile b/src/Makefile
+index 7dde52fb..666fe315 100644
+--- a/src/Makefile
++++ b/src/Makefile
+@@ -270,10 +270,22 @@ CC = gcc
+ AR = ar
+ 
+ ifeq ($(TARGET_PLATFORM),PLATFORM_DESKTOP_GLFW)
+-    ifeq ($(PLATFORM_OS),OSX)
+-        # OSX default compiler
+-        CC = clang
+-        GLFW_OSX = -x objective-c
++    ifeq ($(CROSS),MINGW)
++        CC = x86_64-w64-mingw32-gcc
++        AR = x86_64-w64-mingw32-ar
++        CFLAGS += -static-libgcc -lopengl32 -lgdi32 -lwinmm
++    endif
++    ifeq ($(CROSS),OSX_INTEL)
++      CC = x86_64-apple-darwin20.4-clang
++      AR = x86_64-apple-darwin20.4-ar
++      CFLAGS = -compatibility_version $(RAYLIB_API_VERSION) -current_version $(RAYLIB_VERSION) -framework OpenGL -framework Cocoa -framework IOKit -framework CoreAudio -framework CoreVideo
++      GLFW_OSX = -x objective-c
++    endif
++    ifeq ($(CROSS),OSX_APPLE)
++      CC = arm64-apple-darwin20.4-clang
++      AR = arm64-apple-darwin20.4-ar
++      CFLAGS = -compatibility_version $(RAYLIB_API_VERSION) -current_version $(RAYLIB_VERSION) -framework OpenGL -framework Cocoa -framework IOKit -framework CoreAudio -framework CoreVideo
++      GLFW_OSX = -x objective-c
+     endif
+     ifeq ($(PLATFORM_OS),BSD)
+         # FreeBSD, OpenBSD, NetBSD, DragonFly default compiler
+diff --git a/src/config.h b/src/config.h
+index e3749c56..b271a525 100644
+--- a/src/config.h
++++ b/src/config.h
+@@ -165,14 +165,14 @@
+ //------------------------------------------------------------------------------------
+ // Selecte desired fileformats to be supported for image data loading
+ #define SUPPORT_FILEFORMAT_PNG      1
+-//#define SUPPORT_FILEFORMAT_BMP      1
++#define SUPPORT_FILEFORMAT_BMP      1
+ //#define SUPPORT_FILEFORMAT_TGA      1
+-//#define SUPPORT_FILEFORMAT_JPG      1
++#define SUPPORT_FILEFORMAT_JPG      1
+ #define SUPPORT_FILEFORMAT_GIF      1
+ #define SUPPORT_FILEFORMAT_QOI      1
+ //#define SUPPORT_FILEFORMAT_PSD      1
+ #define SUPPORT_FILEFORMAT_DDS      1
+-//#define SUPPORT_FILEFORMAT_HDR      1
++#define SUPPORT_FILEFORMAT_HDR      1
+ //#define SUPPORT_FILEFORMAT_PIC          1
+ //#define SUPPORT_FILEFORMAT_KTX      1
+ //#define SUPPORT_FILEFORMAT_ASTC     1
+diff --git a/src/raylib.h b/src/raylib.h
+index a26b8ce6..798d7bd0 100644
+--- a/src/raylib.h
++++ b/src/raylib.h
+@@ -1360,7 +1360,7 @@ RLAPI void ImageAlphaPremultiply(Image *image);
+ RLAPI void ImageBlurGaussian(Image *image, int blurSize);                                                // Apply Gaussian blur using a box blur approximation
+ RLAPI void ImageKernelConvolution(Image *image, const float *kernel, int kernelSize);                    // Apply custom square convolution kernel to image
+ RLAPI void ImageResize(Image *image, int newWidth, int newHeight);                                       // Resize image (Bicubic scaling algorithm)
+-RLAPI void ImageResizeNN(Image *image, int newWidth,int newHeight);                                      // Resize image (Nearest-Neighbor scaling algorithm)
++RLAPI void ImageResizeNN(Image *image, int newWidth, int newHeight);                                     // Resize image (Nearest-Neighbor scaling algorithm)
+ RLAPI void ImageResizeCanvas(Image *image, int newWidth, int newHeight, int offsetX, int offsetY, Color fill); // Resize canvas and fill with color
+ RLAPI void ImageMipmaps(Image *image);                                                                   // Compute all mipmap levels for a provided image
+ RLAPI void ImageDither(Image *image, int rBpp, int gBpp, int bBpp, int aBpp);                            // Dither image data to 16bpp or lower (Floyd-Steinberg dithering)
+EOT
+
+BAD
+    end
+
+    def self.tlsuv_patch
+      <<-BAD
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index b7e81c5..acb182f 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -100,6 +100,8 @@ if (TARGET libuv::uv)
+     message(NOTICE "upstream project set libuv target")
+     set(TLSUV_LIBUV_LIB libuv::uv)
+     set(libuv_FOUND TRUE)
++elseif(TLSUV_LIBUV_LIB)
++  message(NOTICE, "Setting from cli")
+ else ()
+     find_package(libuv CONFIG QUIET)
+     # newer libuv versions (via VCPKG) have proper namespacing
+@@ -114,11 +116,6 @@ else ()
+     endif()
+ endif ()
+ 
+-if (NOT libuv_FOUND)
+-    pkg_check_modules(libuv REQUIRED IMPORTED_TARGET libuv)
+-    set(TLSUV_LIBUV_LIB PkgConfig::libuv)
+-endif()
+-
+ add_library(tlsuv STATIC
+         ${tlsuv_sources}
+         )
+@@ -134,6 +131,10 @@ target_include_directories(tlsuv
+         $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/generated>
+         PRIVATE
+         ${CMAKE_CURRENT_SOURCE_DIR}/src
++        ${CMAKE_CURRENT_SOURCE_DIR}/${TLSUV_LIBUV_INCLUDE}
++        ${CMAKE_CURRENT_SOURCE_DIR}/${LLHTTP_INCLUDE}
++        ${CMAKE_CURRENT_SOURCE_DIR}/${MBEDTLS_INCLUDE}
++        ${CMAKE_CURRENT_SOURCE_DIR}/${ZLIB_INCLUDE}
+ )
+ 
+ target_compile_definitions(tlsuv PRIVATE
+@@ -179,18 +180,22 @@ if (TLSUV_HTTP)
+     add_subdirectory(deps)
+     target_link_libraries(tlsuv PUBLIC uv_link)
+ 
+-    find_package(ZLIB 1 REQUIRED)
+-    target_link_libraries(tlsuv PRIVATE ZLIB::ZLIB)
++    message(NOTICE "${CMAKE_CURRENT_SOURCE_DIR}/../../${ZLIB_LIB}")
++    target_link_libraries(tlsuv PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/${ZLIB_LIB}")
+ 
+-    find_package(llhttp CONFIG REQUIRED)
+-    message(NOTICE "llhttp = ${llhttp_CONFIG}")
+-    if (TARGET llhttp::llhttp_static)
+-        target_link_libraries(tlsuv PUBLIC llhttp::llhttp_static)
+-    elseif (TARGET llhttp::llhttp_shared)
+-        target_link_libraries(tlsuv PUBLIC llhttp::llhttp_shared)
++    if (LLHTTP_LIB)
++      target_link_libraries(tlsuv PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/${LLHTTP_LIB}")
+     else ()
+-        target_link_libraries(tlsuv PUBLIC llhttp::llhttp)
+-    endif ()
++
++      message(NOTICE "llhttp = ${llhttp_CONFIG}")
++      if (TARGET llhttp::llhttp_static)
++          target_link_libraries(tlsuv PUBLIC llhttp::llhttp_static)
++      elseif (TARGET llhttp::llhttp_shared)
++          target_link_libraries(tlsuv PUBLIC llhttp::llhttp_shared)
++      else ()
++          target_link_libraries(tlsuv PUBLIC llhttp::llhttp)
++      endif ()
++    endif (LLHTTP_LIB)
+ 
+ endif (TLSUV_HTTP)
+ 
+diff --git a/cmake/FindMbedTLS.cmake b/cmake/FindMbedTLS.cmake
+index 7dd4e32..132ef2a 100644
+--- a/cmake/FindMbedTLS.cmake
++++ b/cmake/FindMbedTLS.cmake
+@@ -1,17 +1,23 @@
+-find_path(MBEDTLS_INCLUDE_DIRS mbedtls/ssl.h)
++ find_path(${CMAKE_CURRENT_SOURCE_DIR}/MBEDTLS_INCLUDE_DIRS mbedtls/ssl.h)
+ 
+ # mbedtls-3.0 changed headers files, and we need to ifdef'out a few things
+-find_path(MBEDTLS_VERSION_GREATER_THAN_3 mbedtls/build_info.h)
++find_path(MBEDTLS_VERSION_GREATER_THAN_3 ${CMAKE_CURRENT_SOURCE_DIR}/../MBEDTLS_INCLUDE_DIRS mbedtls/build_info.h)
+ message("MBEDTLS_VERSION_GREATER_THAN_3 = ${MBEDTLS_VERSION_GREATER_THAN_3}")
++if (true)
++      message(NOTICE "Looking:${CMAKE_CURRENT_SOURCE_DIR}/../../${MBEDTLS_LIBRARY}")
++      message(NOTICE "Looking:${CMAKE_CURRENT_SOURCE_DIR}/../../${MBEDTLS_LIBRARY}")
++      message(NOTICE "Looking:${CMAKE_CURRENT_SOURCE_DIR}/../../${MBEDTLS_LIBRARY}")
+ 
+-find_library(MBEDTLS_LIBRARY mbedtls)
+-find_library(MBEDX509_LIBRARY mbedx509)
+-find_library(MBEDCRYPTO_LIBRARY mbedcrypto)
++endif()
++
++find_library("${CMAKE_CURRENT_SOURCE_DIR}/../../${MBEDTLS_LIBRARY}" mbedtls)
++find_library("${CMAKE_CURRENT_SOURCE_DIR}/../../${MBEDX509_LIBRARY}" mbedx509)
++find_library("${CMAKE_CURRENT_SOURCE_DIR}/../../${MBEDCRYPTO_LIBRARY}" mbedcrypto)
+ 
+ set(MBEDTLS_LIBRARIES "${MBEDTLS_LIBRARY}" "${MBEDX509_LIBRARY}" "${MBEDCRYPTO_LIBRARY}")
+ 
+-include(FindPackageHandleStandardArgs)
+-find_package_handle_standard_args(MbedTLS DEFAULT_MSG
+-    MBEDTLS_INCLUDE_DIRS MBEDTLS_LIBRARY MBEDX509_LIBRARY MBEDCRYPTO_LIBRARY)
++# include(FindPackageHandleStandardArgs)
++# find_package_handle_standard_args(MbedTLS DEFAULT_MSG
++#     MBEDTLS_INCLUDE_DIRS MBEDTLS_LIBRARY MBEDX509_LIBRARY MBEDCRYPTO_LIBRARY)
+ 
+-mark_as_advanced(MBEDTLS_INCLUDE_DIRS MBEDTLS_LIBRARY MBEDX509_LIBRARY MBEDCRYPTO_LIBRARY)
++mark_as_advanced(MBEDTLS_INCLUDE_DIRS MBEDTLS_LIBRARY MBEDX509_LIBRARY MBEDCRYPTO_LIBRARY)
+\\ No newline at end of file
+diff --git a/deps/CMakeLists.txt b/deps/CMakeLists.txt
+index 2279051..3d74473 100644
+--- a/deps/CMakeLists.txt
++++ b/deps/CMakeLists.txt
+@@ -1,2 +1,17 @@
++set(uvl_src ${CMAKE_CURRENT_SOURCE_DIR}/uv_link_t)
++add_library(uv_link OBJECT
++        ${uvl_src}/src/uv_link_t.c
++        ${uvl_src}/src/uv_link_source_t.c
++        ${uvl_src}/src/uv_link_observer_t.c
++        ${uvl_src}/src/defaults.c)
+ 
+-include(uv_link.cmake)
+\\ No newline at end of file
++target_include_directories(uv_link
++        PUBLIC ${uvl_src}/include
++        PRIVATE ${uvl_src}
++        PUBLIC
++        ${CMAKE_CURRENT_SOURCE_DIR}/../${TLSUV_LIBUV_INCLUDE}
++        ${CMAKE_CURRENT_SOURCE_DIR}/../${LLHTTP_INCLUDE}
++)
++
++set_target_properties(uv_link PROPERTIES POSITION_INDEPENDENT_CODE ON)
++target_link_libraries(uv_link ${TLSUV_LIBUV_LIB})
+diff --git a/src/mbedtls/CMakeLists.txt b/src/mbedtls/CMakeLists.txt
+index 323f500..85aed28 100644
+--- a/src/mbedtls/CMakeLists.txt
++++ b/src/mbedtls/CMakeLists.txt
+@@ -1,14 +1,25 @@
+ find_package(MbedTLS REQUIRED)
+ 
+ add_library(mbedtls-impl OBJECT
+-        engine.c
+-        keys.c
+-        keys.h
++      engine.c
++      keys.c
++      keys.h
++)
++
++if (true)
++      message(NOTICE "Found:${CMAKE_CURRENT_SOURCE_DIR}/../../${MBEDTLS_INCLUDE_DIRS}")
++endif()
++include_directories(mbedtls-impl
++      PRIVATE ${PROJECT_SOURCE_DIR}/include
++      PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..
++      PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../../${MBEDTLS_INCLUDE_DIRS}
+ )
+ 
+ target_include_directories(mbedtls-impl
+-        PRIVATE ${PROJECT_SOURCE_DIR}/include
+-        PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..
+-        PRIVATE $<BUILD_INTERFACE:${MBEDTLS_INCLUDE_DIRS}>
++  PUBLIC
++  "${CMAKE_CURRENT_SOURCE_DIR}/../../${TLSUV_LIBUV_INCLUDE}"
++  "${CMAKE_CURRENT_SOURCE_DIR}/../../${LLHTTP_INCLUDE}"
++  "${CMAKE_CURRENT_SOURCE_DIR}/../../${MBEDTLS_INCLUDE}"
+ )
+-target_link_libraries(mbedtls-impl PRIVATE ${MBEDTLS_LIBRARIES})
++
++target_link_libraries(mbedtls-impl PRIVATE MBEDTLS_LIBRARIES)
+\\ No newline at end of file
+diff --git a/src/mbedtls/engine.c b/src/mbedtls/engine.c
+index 3d9e2f9..6dc6dad 100644
+--- a/src/mbedtls/engine.c
++++ b/src/mbedtls/engine.c
+@@ -91,7 +91,7 @@ struct mbedtls_engine {
+     mbedtls_ssl_session *session;
+ 
+     io_ctx io;
+-    uv_os_fd_t io_fd;
++    uv_os_sock_t io_fd;
+     io_read read_f;
+     io_write write_f;
+ 
+@@ -111,7 +111,7 @@ static int mbedtls_set_own_cert(tls_context *ctx, tlsuv_private_key_t key, tlsuv
+ tlsuv_engine_t new_mbedtls_engine(tls_context *ctx, const char *host);
+ 
+ static void mbedtls_set_io(tlsuv_engine_t, io_ctx , io_read , io_write );
+-static void mbedtls_set_fd(tlsuv_engine_t, uv_os_fd_t );
++static void mbedtls_set_fd(tlsuv_engine_t, uv_os_sock_t );
+ 
+ static tls_handshake_state mbedtls_hs_state(tlsuv_engine_t engine);
+ static tls_handshake_state
+@@ -720,7 +720,7 @@ static void mbedtls_set_io(tlsuv_engine_t e, io_ctx io, io_read read_f, io_write
+     mbedtls_ssl_set_bio(eng->ssl, eng, engine_io_write, engine_io_read, NULL);
+ }
+ 
+-static void mbedtls_set_fd(tlsuv_engine_t e, uv_os_fd_t fd) {
++static void mbedtls_set_fd(tlsuv_engine_t e, uv_os_sock_t fd) {
+     struct mbedtls_engine *eng = (struct mbedtls_engine *) e;
+     assert(eng->io == NULL);
+     eng->io_fd = fd;
+diff --git a/src/apple/keychain.c b/src/apple/keychain.c
+index 24fe128..42dd256 100644
+--- a/src/apple/keychain.c
++++ b/src/apple/keychain.c
+@@ -1,6 +1,6 @@
+ 
+-#include <security/SecKey.h>
+-#include <security/Security.h>
++#include <Security/SecKey.h>
++#include <Security/Security.h>
+ 
+ #include "../keychain.h"
+ #include "um_debug.h"
+BAD
+    end
+  end
+end
+
 # Depends on docker for cross-compilation
 # All cross-compilation is done on linux
 #
@@ -11773,25 +12121,38 @@ end
 # target: <app.rb>
 module Hokusai
   def self.docker_template
-    <<~EOF
+    <<~HELL
 FROM skinnyjames/mruby-cross-<%= os %> as cross
     
 RUN apt update -y && apt-get install -y wget <%= deps %>
 
 WORKDIR /temp
-RUN wget https://github.com/skinnyjames/mruby-bin-barista/releases/download/0.2.4/barista-linux-x86.tar.gz && \
+RUN wget https://github.com/skinnyjames/mruby-bin-barista/releases/download/0.3.1/barista-linux-x86.tar.gz && \
     tar -xvf barista-linux-x86.tar.gz && \
-    chmod 755 barista-linux/barista && \
-    cp barista-linux/barista /usr/bin/.
+    chmod 755 barista-linux-x86/barista && \
+    cp barista-linux-x86/barista /usr/bin/.
 
 WORKDIR /app
 
 RUN git clone --branch 5.5 --depth 1 https://github.com/raysan5/raylib.git vendor/raylib
 RUN git clone --depth 1 https://github.com/tree-sitter/tree-sitter.git vendor/tree-sitter
 RUN git clone --branch stable --depth 1 https://github.com/mruby/mruby.git vendor/mruby
-RUN git clone --branch main --depth 1 https://github.com/skinnyjames/hokusai-pocket.git vendor/hp
+RUN git clone --branch feature/networking --depth 1 https://github.com/skinnyjames/hokusai-pocket.git vendor/hp
 RUN git clone https://github.com/mlabbe/nativefiledialog.git vendor/nfd
 RUN git clone https://github.com/libuv/libuv vendor/libuv
+
+# fetch http deps
+RUN wget -O vendor/llhttp.tar.gz https://github.com/nodejs/llhttp/archive/refs/tags/release/v9.3.1.tar.gz && \
+    cd vendor && tar -xvf llhttp.tar.gz && mv llhttp-release-v9.3.1 llhttp
+
+RUN wget -O vendor/mbedtls.tar.bz2 https://github.com/Mbed-TLS/mbedtls/releases/download/mbedtls-3.6.6/mbedtls-3.6.6.tar.bz2 && \
+    cd vendor && tar -xvf mbedtls.tar.bz2 && mv mbedtls-3.6.6 mbedtls
+
+RUN git clone https://github.com/madler/zlib.git vendor/zlib
+
+RUN wget -O vendor/tlsuv.tar.gz https://github.com/openziti/tlsuv/archive/refs/tags/v0.41.1.tar.gz && \
+    cd vendor && tar -xvf tlsuv.tar.gz && mv tlsuv-0.41.1 tlsuv
+    
 
 # build mruby
 WORKDIR /app/vendor/mruby
@@ -11939,15 +12300,40 @@ index a26b8ce6..798d7bd0 100644
  RLAPI void ImageDither(Image *image, int rBpp, int gBpp, int bBpp, int aBpp);                            // Dither image data to 16bpp or lower (Floyd-Steinberg dithering)
 EOT
 
+RUN apt install -y gpg
+
+# Source - https://stackoverflow.com/a/56690743
+# Posted by Liu Hao Cheng, modified by community. See post 'Timeline' for change history
+# Retrieved 2026-05-18, License - CC BY-SA 4.0
+RUN wget -O - https://apt.kitware.com/keys/kitware-archive-latest.asc 2>/dev/null | gpg --dearmor - | tee /usr/share/keyrings/kitware-archive-keyring.gpg >/dev/null
+RUN echo 'deb [signed-by=/usr/share/keyrings/kitware-archive-keyring.gpg] https://apt.kitware.com/ubuntu/ jammy main' | tee /etc/apt/sources.list.d/kitware.list >/dev/null
+RUN apt-get update -y && apt-get install -y cmake
+
 <% if os == "windows" %>
+# Create the mingw64-cmake wrapper
+RUN echo '#!/bin/sh\\nexec cmake -DCMAKE_SYSTEM_NAME=Windows -DCMAKE_C_COMPILER=x86_64-w64-mingw32-gcc -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-g++ -DCMAKE_FIND_ROOT_PATH=/usr/x86_64-w64-mingw32 "$@"' > /usr/local/bin/cmake-wrap \
+    && chmod +x /usr/local/bin/cmake-wrap
 ENV CC=x86_64-w64-mingw32-gcc-posix
 ENV AR=x86_64-w64-mingw32-gcc-ar
+ENV ZLIBA="libzs.a"
 <% elsif os == "osx" %>
+RUN echo '#!/bin/sh\\nexec cmake -DCMAKE_SYSTEM_NAME=Darwin -DCMAKE_C_COMPILER=x86_64-apple-darwin20.4-clang -DCMAKE_CXX_COMPILER=x86_64-apple-darwin20.4-clang++ -DCMAKE_FIND_ROOT_PATH=/opt/osxcross/target "$@"' > /usr/local/bin/cmake-wrap \
+    && chmod +x /usr/local/bin/cmake-wrap
+ENV OSXCROSS_ROOT=/opt/osxcross/target
+ENV OSXCROSS_HOST=x86_64-linux-gnu
+ENV OSXCROSS_TARGET_DIR=/opt/osxcross/target
+ENV OSXCROSS_TARGET=x86_64-apple-darwin20.4
+ENV OSXCROSS_SDK_DIR=$OSXCROSS_TARGET_DIR/SDK
+ENV OSXCROSS_SDK="MacOSX11.3.sdk"
 ENV CC=x86_64-apple-darwin20.4-clang
 ENV AR=x86_64-apple-darwin20.4-ar
+ENV ZLIBA="libz.a"
 <% else %>
+RUN echo '#!/bin/sh\\nexec cmake "$@"' > /usr/local/bin/cmake-wrap \
+    && chmod +x /usr/local/bin/cmake-wrap
 ENV CC=gcc
 ENV AR=ar
+ENV ZLIBA="libz.a"
 <% end %>
 
 WORKDIR /app/vendor/raylib
@@ -11985,16 +12371,62 @@ RUN cd build/gmake_macosx && make config=release_x64
 RUN cd build/gmake_linux_zenity && make config=release_x64
 <% end %>
 
+
 # build libuv
 WORKDIR /app/vendor/libuv
-RUN apt update -y && apt install -y automake libtool
-<% if os == "osx" %>
-RUN ./autogen.sh && ./configure --host=x86_64-apple-darwin20.4 && make
-<% elsif os == "windows" %>
-RUN ./autogen.sh && ./configure --host=x86_64-w64-mingw32 && make
-<% else %>
-RUN ./autogen.sh && ./configure && make
-<% end %>
+RUN cmake-wrap -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_LIBDIR=lib -DCMAKE_INSTALL_PREFIX=build/dist
+RUN cd build && make -j 5 all install
+
+# build llhttp
+WORKDIR /app/vendor/llhttp
+RUN mkdir -p build
+RUN mkdir -p dist
+RUN cmake-wrap -S . -B build -DCMAKE_BUILD_TYPE=Release -DLLHTTP_BUILD_STATIC_LIBS=ON -DCMAKE_INSTALL_LIBDIR=lib -DCMAKE_INSTALL_PREFIX=dist
+RUN cd build && make -j 5 install
+
+# build mbedtls
+WORKDIR /app/vendor/mbedtls
+RUN mkdir -p build
+RUN cmake-wrap -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=build/dist -DCMAKE_INSTALL_LIBDIR=lib -DENABLE_TESTING=OFF -DENABLE_PROGRAMS=OFF
+RUN cd build && make -j 5 install
+
+# build zlib
+WORKDIR /app/vendor/zlib
+RUN mkdir -p build
+RUN cmake-wrap -S . -B build -DCMAKE_BUILD_TYPE=Release -DZLIB_BUILD_TESTING=OFF -DZLIB_BUILD_SHARED=OFF -DZLIB_INSTALL=OFF
+RUN cd build && make -j 5
+
+# build tlsuv
+WORKDIR /app/vendor/tlsuv
+COPY <<'FUCK' tlsuv.patch
+#{Hokusai::Patches.tlsuv_patch}
+FUCK
+
+RUN git init
+RUN git add .
+RUN git apply tlsuv.patch
+
+RUN cmake-wrap -S . -B build DMBEDCRYPTO_LIBRARY='../../vendor/mbedtls/build/dist/libmbedcrypto.a' \
+  -DMBEDTLS_INCLUDE_DIRS='../../vendor/mbedtls/build/dist/include' \
+  -DMBEDTLS_LIBRARY='../../vendor/mbedtls/build/dist/lib/libmbedtls.a' \
+  -DMBEDX509_LIBRARY='../../vendor/mbedtls/build/dist/lib/libmbedx509.a' \
+  -DBUILD_SHARED_LIBS=OFF \
+  -DCMAKE_BUILD_TYPE=Release \
+  -DTLSUV_HTTP=ON \
+  -DTLSUV_TLSLIB=mbedtls \
+  -DZLIB_INCLUDE='../../vendor/zlib' \
+  -DZLIB_LIB="../../vendor/zlib/build/$ZLIBA" \
+  -DLLHTTP_LIB='../../vendor/llhtp/dist/lib/libllhttp.a' \
+  -DLLHTTP_INCLUDE='../../vendor/llhttp/dist/include' \
+  -DTLSUV_LIBUV_LIB='../../vendor/libuv/libuv.a' \
+  -DTLSUV_LIBUV_INCLUDE='../../vendor/libuv/build/dist/include' \
+<% if os == "osx" %>\
+  -DCMAKE_FRAMEWORK_PATH='/opt/osxcross/target/SDK/MacOSX11.3.sdk/System/Library/Frameworks' \
+  -DCMAKE_EXE_LINKER_FLAGS='-framework Security'\
+<% end %>\
+  -DMBEDTLS_INCLUDE='../../vendor/mbedtls/build/dist/include/' 
+
+RUN cd build && make -j 5 all 
 
 WORKDIR /app
 RUN mkdir -p /app/vendor/hokusai-pocket
@@ -12007,10 +12439,18 @@ spec("hokusai-pocket-app") do
     end
 
 <% if os.eql?("windows")%>
+    def zlib
+      "libzs.a"
+    end
+
     def nfd
       "nfd.lib"
     end
 <% else %>
+    def zlib
+      "libz.a"
+    end
+
     def nfd
       "libnfd.a"
     end
@@ -12018,11 +12458,11 @@ spec("hokusai-pocket-app") do
 
 <% if os.eql?("windows") %>
     def libs
-      "-lws2_32 -lgdi32 -lwinmm -lcomctl32 -lcomdlg32 -lole32 -luuid -ldbghelp -liphlpapi -luserenv"
+      "-lws2_32 -lgdi32 -lwinmm -lcomctl32 -lcomdlg32 -lole32 -luuid -ldbghelp -liphlpapi -luserenv -lbcrypt -lcrypt32 -static -lwinpthread"
     end
 <% elsif os.eql?("osx") %>
     def libs
-      "-framework CoreVideo -framework CoreAudio -framework AppKit -framework IOKit -framework Cocoa -framework GLUT -framework OpenGL"
+      "-framework CoreVideo -framework Security -framework CoreAudio -framework AppKit -framework IOKit -framework Cocoa -framework GLUT -framework OpenGL"
     end
 <% else %>
     def libs
@@ -12034,24 +12474,45 @@ spec("hokusai-pocket-app") do
           vendor/tree-sitter/build/include 
           vendor/raylib/src 
           vendor/mruby/include
+          vendor/mruby/build/host/include
           vendor/hp/grammar/tree_sitter
           vendor/hp/src
           vendor/hp/src/mruby-uv
           vendor/nfd/src/include
           vendor/libuv/include
+          vendor/llhttp/include
+          vendor/tlsuv/deps/uv_link_t/include
+          vendor/tlsuv/build/generated
+          vendor/tlsuv/include
+          vendor/zlib
+          vendor/hp/src/http
         ]
     end
 
+    def mbedtls_libs
+      %w[libmbedtls.a libmbedx509.a libmbedcrypto.a]
+    end
+
     def links
-      (%w[
+      ln = %w[
         vendor/hp/grammar/src/parser.c
         vendor/hp/grammar/src/scanner.c
         vendor/hokusai-pocket/libhokusai.a
         vendor/mruby/build/platform/lib/libmruby.a 
         vendor/raylib/src/libraylib.a
         vendor/tree-sitter/build/lib/libtree-sitter.a
-        vendor/libuv/.libs/libuv.a
-      ] + ["vendor/nfd/build/lib/Release/x64/\#{nfd}"]).join(" ")
+        vendor/libuv/build/dist/lib/libuv.a
+      ] + ["vendor/nfd/build/lib/Release/x64/\#{nfd}"]
+
+      ln << "vendor/tlsuv/build/libtlsuv.a"
+      ln << "vendor/llhttp/dist/lib/libllhttp.a"
+
+      mbedtls_libs.each do |lib|
+        ln << "vendor/mbedtls/build/dist/lib/\#{lib}"
+      end
+
+      ln << "vendor/zlib/build/\#{zlib}"
+      ln.join(" ")
     end
 
     def h_includes
@@ -12107,6 +12568,7 @@ spec("hokusai-pocket-app") do
       # ugh, need separate libuv/raylib compilation units because of windows.h collisions
       loop_includes = %w[
         vendor/mruby/include
+        vendor/mruby/build/host/include
         vendor/libuv/include
         vendor/tree-sitter/build/include
         vendor/hp/src
@@ -12169,6 +12631,7 @@ spec("hokusai-pocket-app") do
         vendor/raylib/src
         vendor/tree-sitter/build/include 
         vendor/mruby/include
+        vendor/mruby/build/host/include
         .
         vendor/hokusai-pocket
         vendor/hp/src
@@ -12204,7 +12667,7 @@ RUN barista build
 # export
 FROM scratch
 COPY --from=cross /app/bin/ /<%= outfile %>
-EOF
+HELL
   end
 end
 
@@ -12250,6 +12713,18 @@ module Hokusai
     def finish(receiver, value = nil)
       receiver.instance_exec(value, &@on_finished_cb)
     end
+  end
+  
+  def self.http
+    HTTP
+  end
+
+  def self.tmpdir
+    @tmpdir || "."
+  end
+
+  def self.tmpdir=(val)
+    @tmpdir = val
   end
 
   # Access the font registry

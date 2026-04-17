@@ -1078,7 +1078,7 @@ int hp_backend_run(mrb_state* mrb, struct RClass* hokusai_module, mrb_value back
   mrb_value config = mrb_funcall_argv(mrb, backend, mrb_intern_lit(mrb, "config"), 0, NULL);
   if (mrb->exc) mrb_print_error(mrb);
 
-  mrb_value block = mrb_funcall_argv(mrb, backend, mrb_intern_lit(mrb, "app"), 0, NULL);
+  mrb_value app = mrb_funcall_argv(mrb, backend, mrb_intern_lit(mrb, "app"), 0, NULL);
   if (mrb->exc) mrb_print_error(mrb);
 
   mrb_value worker = mrb_funcall(mrb, mrb_obj_value(hokusai_module), "worker", 0, NULL);
@@ -1123,11 +1123,14 @@ int hp_backend_run(mrb_state* mrb, struct RClass* hokusai_module, mrb_value back
     InitAudioDevice();
   }
 
+  mrb_value block = mrb_funcall_argv(mrb, app, mrb_intern_lit(mrb, "mount"), 0, NULL);
+
   mrb_value after_load_proc = mrb_funcall_argv(mrb, config, mrb_intern_lit(mrb, "after_load_cb"), 0, NULL);
   if(!mrb_nil_p(after_load_proc)) mrb_funcall_argv(mrb, after_load_proc, mrb_intern_lit(mrb, "call"), 0, NULL);
   // SetTraceLogLevel(LOG_ERROR); 
   // mrb_value cargs[] = { mrb_float_value(mrb, 400.0), mrb_float_value(mrb, 400.0), mrb_float_value(mrb, 0.0), mrb_float_value(mrb, 0.0) };
   // mrb_value canvas = mrb_obj_new(mrb, canvas_class, 4, cargs);
+
   while(!WindowShouldClose())
   {
 
