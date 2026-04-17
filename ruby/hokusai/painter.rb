@@ -314,6 +314,7 @@ module Hokusai
       end
 
       unless input.touch.nil?
+        events[:click].capture(block, canvas)
         events[:keyup].capture(block, canvas)
         events[:keypress].capture(block, canvas)
         events[:doubletap].capture(block, canvas)

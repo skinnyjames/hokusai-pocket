@@ -314,6 +314,15 @@ mrb_value mrb_uv_loop_queue(mrb_state* mrb, mrb_value self)
   return mrb_nil_value();
 }
 
+mrb_value mrb_define_uv_sleep(mrb_state* mrb, mrb_value self)
+{
+  mrb_value ms;
+  mrb_get_args(mrb, "o", &ms);
+  uv_sleep(mrb_int(mrb, ms));
+
+  return mrb_nil_value();
+}
+
 void mrb_define_uv_loop_class(mrb_state* mrb)
 {
   /*
@@ -331,12 +340,12 @@ void mrb_define_uv_loop_class(mrb_state* mrb)
     initialize the mutex
   */
   uv_mutex_init(&mm);
-
+  struct RClass* hokusai = mrb_module_get(mrb, "Hokusai");
   struct RClass* module = mrb_module_get(mrb, "UV");
   struct RClass* klass = mrb_define_class_under(mrb, module, "Loop", mrb->object_class);
 
   MRB_SET_INSTANCE_TT(klass, MRB_TT_DATA);
-
+  mrb_define_class_method(mrb, hokusai, "sleep", mrb_define_uv_sleep, MRB_ARGS_REQ(1));
   mrb_define_class_method(mrb, klass, "init", mrb_uv_loop_init, MRB_ARGS_NONE());
   mrb_define_class_method(mrb, klass, "default", mrb_uv_loop_default, MRB_ARGS_NONE());
 

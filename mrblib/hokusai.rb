@@ -253,7 +253,7 @@ module Hokusai
     0 => :none,
     1 => :tap,
     2 => :doubletap,
-    4 => :taphold,
+    4 => :hold,
     8 => :drag,
     16 => :swipe_right,
     32 => :swipe_left,
@@ -554,6 +554,63 @@ module Hokusai
       pos.x >= canvas.x && pos.x <= canvas.x + canvas.width && pos.y >= canvas.y && pos.y <= canvas.y + canvas.height
     end
   end
+end
+
+module Hokusai
+  module HTTP
+  class ResponseBody
+    attr_reader :finished
+    attr_accessor :value, :buffer
+
+    def initialize
+      @buffer = ""
+      @value = ""
+      @tmp = "/tmp/#{Hokusai.monotonic}"
+      @finished = false
+    end
+
+    def on_read(&block)
+      io = File.open(@tmp, "r")
+      io.each do |group|
+        block.call(group)
+      end
+
+      io.close
+    end
+    
+    def write(content)
+      io = File.open(@tmp, "a")
+      io << content
+      io.close
+    end
+
+    def finish
+      @finished = true
+      @tmp.rewind
+    end
+
+    def json
+      JSON.parse(@buffer)
+    end
+
+    def all
+      File.read(@tmp)
+    end
+  end
+
+  class Response
+    attr_accessor :code, :status
+    def initialize
+      @code = nil
+      @status = nil
+      @body = ResponseBody.new
+    end
+
+    def body
+      @body
+    end
+  end
+end
 end
 
 module Hokusai
@@ -1149,7 +1206,7 @@ module Hokusai
 
         yield child_block
 
-        block.on_mounted if block.respond_to?(:on_mounted)
+        block.on_mounted if block.respond_to?(:on_mounted) if ast.siblingindex.zero?
       end
     end
   end
@@ -1987,21 +2044,6 @@ module Hokusai
       compile(name, parent_node).mount(self)
     end
 
-    # you probably don't need this.
-    def self.render(props)
-      node = Hokusai::Node.virtual
-
-      props.each do |k, v|
-        node.meta.set_prop(k.to_sym, v)
-      end
-
-
-      block = new(node: node)
-      yield block
-
-      node.meta.commands.clear!
-    end
-
     def initialize(**args)
       raise Hokusai::Error.new("Must supply node argument to #{self.class}.new") unless args[:node]
 
@@ -2051,29 +2093,6 @@ module Hokusai
       instance_eval(&block)
     end
 
-    # def draw_retained(canvas, &block)
-    #   instance_eval(&block)
-
-    #   currenthash = node.meta.commands.hash
-
-
-    #   if @lasthash != currenthash
-    #     p ["last", @lasthash, currenthash]
-
-    #     @last_hokusai_texture = Texture.init(canvas.width, canvas.height)
-    #     @last_hokusai_texture.clear
-    #     @last_hokusai_texture.apply(node.meta.commands.queue)
-    #     @lasthash = currenthash
-    #     node.meta.commands.clear!
-    #   else
-    #     node.meta.commands.clear!
-    #   end
-
-    #   draw do 
-    #     texture(@last_hokusai_texture, canvas.x, canvas.y) {}
-    #   end
-    # end
-
     def method_missing(name, *args,**kwargs, &block)
       if node.meta.commands.respond_to?(name)
         return node.meta.commands.send(name, *args, **kwargs, &block)
@@ -2084,6 +2103,13 @@ module Hokusai
 
     def draw_with
       yield node.meta.commands
+    end
+
+    def fetch(url, opts, &block)
+      instance_eval do
+        req = Hokusai::Request.init(self, url)
+        req.execute("/", opts, &block)
+      end
     end
 
     def execute_draw
@@ -3420,7 +3446,7 @@ module Hokusai
     end
 
     def swiped_down?
-      @touch.swiped_down?
+      @touch.swipe_down?
     end
 
     def swipe_direction
@@ -3474,7 +3500,8 @@ module Hokusai
     end
 
     def hovered(canvas)
-      input.hovered?(canvas)
+      pos = @touch.pos
+      pos.x >= canvas.x && pos.x <= canvas.x + canvas.width && pos.y >= canvas.y && pos.y <= canvas.y + canvas.height
     end
 
     def to_json
@@ -3491,7 +3518,17 @@ module Hokusai
     name "tap"
 
     def capture(block, canvas)
-      if matches(block) && tap? && hovered(canvas) 
+      if matches(block) && tapped? && hovered(canvas)
+        captures << block
+      end
+    end
+  end
+
+  class DoubletapEvent < TouchEvent
+    name "doubletap"
+
+    def capture(block, canvas)
+      if matches(block) && doubletapped? && hovered(canvas)
         captures << block
       end
     end
@@ -3501,7 +3538,7 @@ module Hokusai
     name "drag"
 
     def capture(block, canvas)
-      if matches(block) && @touch.drag?
+      if matches(block) && @touch.drag? && hovered(canvas)
         captures << block
       end
     end
@@ -3511,7 +3548,7 @@ module Hokusai
     name "taphold"
 
     def capture(block, canvas)
-      if matches(block) && hold? && @touch.hold_duration > 0.3 && hovered(canvas) 
+      if matches(block) && hold? && hovered(canvas)
         captures << block
       end
     end
@@ -3521,7 +3558,7 @@ module Hokusai
     name "pinchout"
 
     def capture(block, canvas)
-      if pinch_direction == :out && matches(block)
+      if pinch_direction == :out && matches(block) && hovered(canvas)
         captures << block
       end
     end
@@ -3531,7 +3568,7 @@ module Hokusai
     name "pinchin"
 
     def capture(block, canvas)
-      if pinch_direction == :in && matches(block)
+      if pinched? && matches(block) && hovered(canvas)
         captures << block
       end
     end
@@ -3541,7 +3578,7 @@ module Hokusai
     name "swipe"
 
     def capture(block, canvas)
-      if swiped? && matches(block)
+      if swiped? && matches(block) && hovered(canvas)
         captures << block
       end
     end
@@ -3599,9 +3636,10 @@ module Hokusai
       events.merge!({
         tap: TapEvent.new(input, state),
         drag: DragEvent.new(input, state),
+        doubletap: DoubletapEvent.new(input, state),
         taphold: TapHoldEvent.new(input, state),
-        pinch_in: PinchInEvent.new(input, state),
-        pinch_out: PinchOutEvent.new(input, state),
+        pinchin: PinchInEvent.new(input, state),
+        pinchout: PinchOutEvent.new(input, state),
         swipe: SwipeEvent.new(input, state),
       })
     end
@@ -3646,8 +3684,12 @@ module Hokusai
       root_entry = PainterEntry.new(root, canvas.x, canvas.y, canvas.width, canvas.height)
       groups << [root_entry, measure([root], canvas)]
 
-      mouse_y = input.mouse.pos.y
-      can_capture = mouse_y >= (canvas.y || 0.0) && mouse_y <= (canvas.y || 0.0) + canvas.height
+      unless input.touch
+        mouse_y = input.mouse.pos.y
+        can_capture = mouse_y >= (canvas.y || 0.0) && mouse_y <= (canvas.y || 0.0) + canvas.height
+      else
+        can_capture = true
+      end
 
       hovered = false
       while payload = groups.pop
@@ -3691,7 +3733,7 @@ module Hokusai
             if capture && (zindex_counter.zero? && z.zero?)
               capture_events(group.block, local_canvas, hovered: hovered)
             # since evented styles happens during capture and z-index skips capture, well add some
-            elsif capture && input.hovered?(local_canvas)
+            elsif capture && !input.touch && input.hovered?(local_canvas)
               if target = group.block.node.meta.target
                 group.block.node.add_evented_styles(target.class, "hover")
               end
@@ -3752,8 +3794,12 @@ module Hokusai
         events[:keydown].bubble
 
         unless input.touch.nil?
+          events[:tap].bubble
+          events[:doubletap].bubble
+          events[:drag].bubble
           events[:taphold].bubble
-          events[:pinch].bubble
+          events[:pinchin].bubble
+          events[:pinchout].bubble
           events[:swipe].bubble
         end
       end
@@ -3835,28 +3881,34 @@ module Hokusai
       
       events[:keydown].capture(block, canvas)
 
-      if input.hovered?(canvas)
-        events[:hover].capture(block, canvas)
-        events[:click].capture(block, canvas)
-        events[:wheel].capture(block, canvas)
-        events[:mouseup].capture(block, canvas)
-        events[:mousedown].capture(block, canvas)
-      else
-        events[:mouseout].capture(block, canvas)
-      end
-      events[:mousemove].capture(block, canvas)
-
-      if input.hovered?(canvas) || block.node.meta.focused || input.keyboard_override
-        events[:keyup].capture(block, canvas)
-        events[:keypress].capture(block, canvas)
+      if !input.touch
+        if input.hovered?(canvas)
+          events[:hover].capture(block, canvas)
+          events[:click].capture(block, canvas)
+          events[:wheel].capture(block, canvas)
+          events[:mouseup].capture(block, canvas)
+          events[:mousedown].capture(block, canvas)
+        else
+          events[:mouseout].capture(block, canvas)
+        end
+        events[:mousemove].capture(block, canvas)
+    
+        if input.hovered?(canvas) || block.node.meta.focused || input.keyboard_override
+          events[:keyup].capture(block, canvas)
+          events[:keypress].capture(block, canvas)
+        end
       end
 
       unless input.touch.nil?
+        events[:click].capture(block, canvas)
+        events[:keyup].capture(block, canvas)
+        events[:keypress].capture(block, canvas)
+        events[:doubletap].capture(block, canvas)
         events[:tap].capture(block, canvas)
         events[:drag].capture(block, canvas)
         events[:taphold].capture(block, canvas)
-        events[:pinch_in].capture(block, canvas)
-        events[:pinch_out].capture(block, canvas)
+        events[:pinchin].capture(block, canvas)
+        events[:pinchout].capture(block, canvas)
         events[:swipe].capture(block, canvas)
       end
     end
@@ -5001,9 +5053,8 @@ module Hokusai
     def self.run(klass, &block)
       config = Backend::Config.new
       block.call config
-      app = klass.mount
-
-      obj = new(app, config)
+      
+      obj = new(klass, config)
       obj.run
     end
 
@@ -12250,6 +12301,10 @@ module Hokusai
     def finish(receiver, value = nil)
       receiver.instance_exec(value, &@on_finished_cb)
     end
+  end
+  
+  def self.http
+    HTTP
   end
 
   # Access the font registry

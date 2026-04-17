@@ -20,9 +20,8 @@ module Hokusai
     def self.run(klass, &block)
       config = Backend::Config.new
       block.call config
-      app = klass.mount
-
-      obj = new(app, config)
+      
+      obj = new(klass, config)
       obj.run
     end
 

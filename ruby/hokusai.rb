@@ -1,6 +1,7 @@
 
 require_relative './hokusai/error'
 require_relative './hokusai/types'
+require_relative './hokusai/http'
 require_relative './hokusai/ast'
 require_relative './hokusai/node'
 require_relative "./hokusai/node_builder"
@@ -95,6 +96,10 @@ module Hokusai
     def finish(receiver, value = nil)
       receiver.instance_exec(value, &@on_finished_cb)
     end
+  end
+  
+  def self.http
+    HTTP
   end
 
   # Access the font registry
