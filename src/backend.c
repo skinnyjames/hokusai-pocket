@@ -977,6 +977,9 @@ static char* key_codes[110] = {
   "kp_equal", "back", "menu", "volume_up", "volume_down"
 };
 
+
+static bool was_touching = false;
+
 void hp_process_input(mrb_state* mrb, mrb_value input, bool use_touch)
 {
   mrb_value keyboard = mrb_funcall_argv(mrb, input, mrb_intern_lit(mrb, "keyboard"), 0, NULL);
@@ -1001,14 +1004,26 @@ void hp_process_input(mrb_state* mrb, mrb_value input, bool use_touch)
     int touchx = GetTouchX();
     int touchy = GetTouchY();
     int touchcount = GetTouchPointCount();
+
     mrb_funcall(mrb, touchpos, "x=", 1, mrb_int_value(mrb, touchx));
     mrb_funcall(mrb, touchpos, "y=", 1, mrb_int_value(mrb, touchy));
     mrb_funcall(mrb, touch, "count=", 1, mrb_int_value(mrb, touchcount));
-    
+
     /* set */
     int gesture = GetGestureDetected();
     float gesture_hold_duration = GetGestureHoldDuration();
-    mrb_funcall(mrb, touch, "set", 1, mrb_int_value(mrb, gesture));
+
+    if (touchcount == 0 && was_touching && gesture == GESTURE_NONE)
+    {
+      mrb_funcall(mrb, touch, "set", 1, mrb_int_value(mrb, HP_TOUCH_RELEASED));
+      was_touching = false;
+    }
+    else
+    {
+      mrb_funcall(mrb, touch, "set", 1, mrb_int_value(mrb, gesture));
+      if (gesture != GESTURE_NONE) was_touching = true;
+    }
+
     mrb_funcall(mrb, touch, "hold_duration=", 1, mrb_float_value(mrb, gesture_hold_duration));
 
     Vector2 gdragvec = GetGestureDragVector();
@@ -1027,47 +1042,66 @@ void hp_process_input(mrb_state* mrb, mrb_value input, bool use_touch)
     mrb_funcall(mrb, pinch, "angle=", 1, mrb_float_value(mrb, gpinchangle));
     mrb_funcall(mrb, pinchpos, "x=", 1, mrb_float_value(mrb, gpinchvec.x));
     mrb_funcall(mrb, pinchpos, "y=", 1, mrb_float_value(mrb, gpinchvec.y));
+
+    /* populate click events anyway*/
+    mrb_value left = mrb_funcall_argv(mrb, mouse, mrb_intern_lit(mrb, "left"), 0, NULL);
+    mrb_value lclicked = mrb_bool_value(gesture == GESTURE_TAP);
+    mrb_value ldown =  mrb_bool_value(touchcount > 0);
+    mrb_value lup = mrb_bool_value(touchcount <= 0);
+    mrb_value lreleased = mrb_bool_value(gesture == GESTURE_TAP);
+
+    mrb_funcall_argv(mrb, left, mrb_intern_lit(mrb, "clicked="), 1, &lclicked);
+    mrb_funcall_argv(mrb, left, mrb_intern_lit(mrb, "down="), 1, &ldown);
+    mrb_funcall_argv(mrb, left, mrb_intern_lit(mrb, "up="), 1, &lup);
+    mrb_funcall_argv(mrb, left, mrb_intern_lit(mrb, "released="), 1, &lreleased);
+    
+    /* and pos events*/
+    mrb_value pos = mrb_funcall_argv(mrb, mouse, mrb_intern_lit(mrb, "pos"), 0, NULL);
+    mrb_funcall(mrb, pos, "x=", 1, mrb_int_value(mrb, touchx));
+    mrb_funcall(mrb, pos, "y=", 1, mrb_int_value(mrb, touchy));
   }
+  else
+  {
+    mrb_value left = mrb_funcall_argv(mrb, mouse, mrb_intern_lit(mrb, "left"), 0, NULL);
+    mrb_value right = mrb_funcall_argv(mrb, mouse, mrb_intern_lit(mrb, "right"), 0, NULL);
+    // mrb_value middle = mrb_funcall_argv(mrb, mouse, mrb_intern_lit(mrb, "middle"), 0, NULL);
 
-  mrb_value left = mrb_funcall_argv(mrb, mouse, mrb_intern_lit(mrb, "left"), 0, NULL);
-  mrb_value right = mrb_funcall_argv(mrb, mouse, mrb_intern_lit(mrb, "right"), 0, NULL);
-  // mrb_value middle = mrb_funcall_argv(mrb, mouse, mrb_intern_lit(mrb, "middle"), 0, NULL);
+    mrb_value scroll = mrb_float_value(mrb, GetMouseWheelMove());
+    mrb_funcall_argv(mrb, mouse, mrb_intern_lit(mrb, "scroll="), 1, &scroll);
 
-  mrb_value scroll = mrb_float_value(mrb, GetMouseWheelMove());
-  mrb_funcall_argv(mrb, mouse, mrb_intern_lit(mrb, "scroll="), 1, &scroll);
+    mrb_value lclicked = mrb_bool_value(IsMouseButtonPressed(0));
+    mrb_value ldown =  mrb_bool_value(IsMouseButtonDown(0));
+    mrb_value lup = mrb_bool_value(IsMouseButtonUp(0));
+    mrb_value lreleased = mrb_bool_value(IsMouseButtonReleased(0));
 
-  mrb_value lclicked = mrb_bool_value(IsMouseButtonPressed(0));
-  mrb_value ldown =  mrb_bool_value(IsMouseButtonDown(0));
-  mrb_value lup = mrb_bool_value(IsMouseButtonUp(0));
-  mrb_value lreleased = mrb_bool_value(IsMouseButtonReleased(0));
+    mrb_funcall_argv(mrb, left, mrb_intern_lit(mrb, "clicked="), 1, &lclicked);
+    mrb_funcall_argv(mrb, left, mrb_intern_lit(mrb, "down="), 1, &ldown);
+    mrb_funcall_argv(mrb, left, mrb_intern_lit(mrb, "up="), 1, &lup);
+    mrb_funcall_argv(mrb, left, mrb_intern_lit(mrb, "released="), 1, &lreleased);
 
-  mrb_funcall_argv(mrb, left, mrb_intern_lit(mrb, "clicked="), 1, &lclicked);
-  mrb_funcall_argv(mrb, left, mrb_intern_lit(mrb, "down="), 1, &ldown);
-  mrb_funcall_argv(mrb, left, mrb_intern_lit(mrb, "up="), 1, &lup);
-  mrb_funcall_argv(mrb, left, mrb_intern_lit(mrb, "released="), 1, &lreleased);
+    mrb_value rclicked = mrb_bool_value(IsMouseButtonPressed(2));
+    mrb_value rdown =  mrb_bool_value(IsMouseButtonDown(2));
+    mrb_value rup = mrb_bool_value(IsMouseButtonUp(2));
+    mrb_value rreleased = mrb_bool_value(IsMouseButtonReleased(2));
 
-  mrb_value rclicked = mrb_bool_value(IsMouseButtonPressed(2));
-  mrb_value rdown =  mrb_bool_value(IsMouseButtonDown(2));
-  mrb_value rup = mrb_bool_value(IsMouseButtonUp(2));
-  mrb_value rreleased = mrb_bool_value(IsMouseButtonReleased(2));
+    mrb_funcall_argv(mrb, right, mrb_intern_lit(mrb, "clicked="), 1, &rclicked);
+    mrb_funcall_argv(mrb, right, mrb_intern_lit(mrb, "down="), 1, &rdown);
+    mrb_funcall_argv(mrb, right, mrb_intern_lit(mrb, "up="), 1, &rup);
+    mrb_funcall_argv(mrb, right, mrb_intern_lit(mrb, "released="), 1, &rreleased);
 
-  mrb_funcall_argv(mrb, right, mrb_intern_lit(mrb, "clicked="), 1, &rclicked);
-  mrb_funcall_argv(mrb, right, mrb_intern_lit(mrb, "down="), 1, &rdown);
-  mrb_funcall_argv(mrb, right, mrb_intern_lit(mrb, "up="), 1, &rup);
-  mrb_funcall_argv(mrb, right, mrb_intern_lit(mrb, "released="), 1, &rreleased);
+    mrb_value posy = mrb_float_value(mrb, GetMouseY());
+    mrb_value posx = mrb_float_value(mrb, GetMouseX());
+    mrb_value pos = mrb_funcall_argv(mrb, mouse, mrb_intern_lit(mrb, "pos"), 0, NULL);
+    mrb_funcall_argv(mrb, pos, mrb_intern_lit(mrb, "y="), 1, &posy);
+    mrb_funcall_argv(mrb, pos, mrb_intern_lit(mrb, "x="), 1, &posx);
 
-  mrb_value posy = mrb_float_value(mrb, GetMouseY());
-  mrb_value posx = mrb_float_value(mrb, GetMouseX());
-  mrb_value pos = mrb_funcall_argv(mrb, mouse, mrb_intern_lit(mrb, "pos"), 0, NULL);
-  mrb_funcall_argv(mrb, pos, mrb_intern_lit(mrb, "y="), 1, &posy);
-  mrb_funcall_argv(mrb, pos, mrb_intern_lit(mrb, "x="), 1, &posx);
-
-  Vector2 d = GetMouseDelta();
-  mrb_value deltay = mrb_float_value(mrb, d.y);
-  mrb_value deltax = mrb_float_value(mrb, d.x);
-  mrb_value delta = mrb_funcall_argv(mrb, mouse, mrb_intern_lit(mrb, "delta"), 0, NULL);
-  mrb_funcall_argv(mrb, delta, mrb_intern_lit(mrb, "y="), 1, &deltay);
-  mrb_funcall_argv(mrb, delta, mrb_intern_lit(mrb, "x="), 1, &deltax);
+    Vector2 d = GetMouseDelta();
+    mrb_value deltay = mrb_float_value(mrb, d.y);
+    mrb_value deltax = mrb_float_value(mrb, d.x);
+    mrb_value delta = mrb_funcall_argv(mrb, mouse, mrb_intern_lit(mrb, "delta"), 0, NULL);
+    mrb_funcall_argv(mrb, delta, mrb_intern_lit(mrb, "y="), 1, &deltay);
+    mrb_funcall_argv(mrb, delta, mrb_intern_lit(mrb, "x="), 1, &deltax);
+  }
 }
 
 int hp_backend_run(mrb_state* mrb, struct RClass* hokusai_module, mrb_value backend)

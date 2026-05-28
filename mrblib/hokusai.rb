@@ -260,11 +260,12 @@ module Hokusai
     64 => :swipe_up,
     128 => :swipe_down,
     256 => :pinch_in,
-    512 => :pinch_out
+    512 => :pinch_out,
+    1024 => :released,
   }
 
   class Touch
-    attr_accessor :type, :hold_duration, :drag, :pinch,
+    attr_accessor :type, :hold_duration, :drag, :pinch, :down, :up,
                   :pos, :count
     def initialize
       @type = :none
@@ -3424,6 +3425,18 @@ module Hokusai
       @touch = input.touch
     end
 
+    def down?
+      @touch.count > 0
+    end
+
+    def up?
+      @touch.count <= 0
+    end
+
+    def released?
+      @touch.released?
+    end
+
     def tapped?
       @touch.tap?
     end
@@ -3522,6 +3535,36 @@ module Hokusai
       end
     end
   end
+  
+  class TapDownEvent < TouchEvent
+    name "tapdown"
+
+    def capture(block, canvas)
+      if matches(block) && down? && hovered(canvas)
+        captures << block
+      end
+    end
+  end
+    
+  class TapUpEvent < TouchEvent
+    name "tapup"
+
+    def capture(block, canvas)
+      if matches(block) && up? && hovered(canvas)
+        captures << block
+      end
+    end
+  end
+
+  class TapReleaseEvent < TouchEvent
+    name "taprelease"
+
+    def capture(block, canvas)
+      if matches(block) && released? && hovered(canvas)
+        captures << block
+      end
+    end
+  end
 
   class DoubletapEvent < TouchEvent
     name "doubletap"
@@ -3567,7 +3610,7 @@ module Hokusai
     name "pinchin"
 
     def capture(block, canvas)
-      if pinched? && matches(block) && hovered(canvas)
+      if pinch_direction == :in && matches(block) && hovered(canvas)
         captures << block
       end
     end
@@ -3640,6 +3683,9 @@ module Hokusai
         pinchin: PinchInEvent.new(input, state),
         pinchout: PinchOutEvent.new(input, state),
         swipe: SwipeEvent.new(input, state),
+        taprelease: TapReleaseEvent.new(input, state),
+        tapdown: TapDownEvent.new(input, state),
+        tapup: TapUpEvent.new(input, state),
       })
     end
 
@@ -3800,10 +3846,23 @@ module Hokusai
           events[:pinchin].bubble
           events[:pinchout].bubble
           events[:swipe].bubble
+          events[:taprelease].bubble
+          events[:tapdown].bubble
+          events[:tapup].bubble
         end
       end
 
       after_render&.call
+    end
+
+    def resolve_percent(value, total)
+      return nil if value.nil?
+      str = value.to_s
+      if str.end_with?("%")
+        (str[0...-1].to_f / 100.0) * total
+      else
+        str.to_f
+      end
     end
 
     def measure(children, canvas, wrap: false)
@@ -3825,6 +3884,9 @@ module Hokusai
         w = block.node.meta.get_prop?(:width)&.to_f
 
         next if z > 0
+
+        w = resolve_percent(w, width)
+        h = resolve_percent(h, height)
 
         if w
           wsum += w
@@ -3904,6 +3966,9 @@ module Hokusai
         events[:keypress].capture(block, canvas)
         events[:doubletap].capture(block, canvas)
         events[:tap].capture(block, canvas)
+        events[:tapdown].capture(block, canvas)
+        events[:taprelease].capture(block, canvas)
+        events[:tapup].capture(block, canvas)
         events[:drag].capture(block, canvas)
         events[:taphold].capture(block, canvas)
         events[:pinchin].capture(block, canvas)
