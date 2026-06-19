@@ -125,6 +125,10 @@ Hokusai::Backend.run(Counter) do |config|
   config.width = 550
   config.height = 500
 
+  # turn on hot reloading with entrypoint file
+  # if you wish
+  config.hot_reload = "counter.rb"
+
   config.after_load do         # register fonts
     Hokusai.fonts.register "default", Hokusai::Backend::Font.default
     Hokusai.fonts.activate "default"
@@ -159,7 +163,6 @@ Since typing this out is tedious, a barista recipe encapsulates this
 `hokusai-pocket @rebuild`
 
 will rebuild the hokusai-pocket binary with new gems
-
 
 # development
 

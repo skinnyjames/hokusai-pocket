@@ -105,7 +105,7 @@ module Hokusai
         self.after_load_cb = block
       end
 
-      def hot_reload(topper)
+      def hot_reload=(topper)
         @mtimes = {}
   
         on_reload do
