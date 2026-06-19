@@ -51,8 +51,8 @@ module Hokusai
       @meta = Meta.new
     end
 
-    def mount(klass)
-      NodeMounter.new(self, klass).mount
+    def mount(klass, providers: {})
+      NodeMounter.new(self, klass, previous_providers: providers).mount
     end
 
     def emit(name, **args)

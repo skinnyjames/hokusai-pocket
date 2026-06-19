@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.7.0
+
+## Added
+
+* Hot reloading via `config.hot_reload = "entrypoint.rb"`
+* http client via tlsuv
+
+## Modified
+
+* Blocks can now mount with existing providers
+
+## 0.6.1
+
+* Updated arm64 build script to use alpine/musl
+
 ## 0.6.0
 
 ## Added

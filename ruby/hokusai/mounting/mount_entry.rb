@@ -65,7 +65,7 @@ module Hokusai
 
         yield child_block
 
-        block.on_mounted if block.respond_to?(:on_mounted)
+        block.on_mounted if block.respond_to?(:on_mounted) if ast.siblingindex.zero?
       end
     end
   end

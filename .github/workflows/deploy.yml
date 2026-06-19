@@ -10,13 +10,13 @@ jobs:
       image: alpine:latest
     steps:
       - name: deps
-        run: apk add git make cmake automake libtool ruby clang alsa-lib-dev eudev-dev jack-dev libdecor-dev libsamplerate-dev libusb-dev libx11-dev libxcursor-dev libxext-dev libxi-dev libxkbcommon-dev libxrandr-dev libxrender-dev libxscrnsaver-dev libxtst-dev pipewire-dev pulseaudio-dev samurai wayland-dev wayland-protocols mesa-dev
+        run: apk add git make cmake automake libtool ruby build-base clang alsa-lib-dev eudev-dev jack-dev libdecor-dev libsamplerate-dev libusb-dev libx11-dev libxcursor-dev libxext-dev libxi-dev libxkbcommon-dev libxrandr-dev libxrender-dev libxscrnsaver-dev libxtst-dev pipewire-dev pulseaudio-dev samurai wayland-dev wayland-protocols mesa-dev
       - uses: laverdet/alpine-arm64@v1
       - uses: actions/checkout@v5
       - uses: dsaltares/fetch-gh-release-asset@master
         with:
           repo: 'skinnyjames/mruby-bin-barista'
-          version: 'tags/0.3.0'
+          version: 'tags/0.3.1'
           file: 'barista-linux-arm64.tar.gz'
           target: 'barista.tar.gz'
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -25,7 +25,7 @@ jobs:
       - name: gem install rake
         run: gem install rake
       - name: build pocket
-        run: chmod 755 barista && ./barista cli,raylib,nfd,hokusai:arm64=true:platform=sdl:opengl=es
+        run: chmod 755 barista && ./barista @mobile
       - uses: actions/upload-artifact@v4
         with:
           name: hokusai-pocket-linux-arm64
@@ -37,19 +37,19 @@ jobs:
       image: ubuntu:latest
     steps:
       - name: deps
-        run: apt-get update -y && apt-get install -y git cmake automake libtool ruby clang build-essential libasound2-dev libgl1-mesa-dev libglu1-mesa-dev libx11-dev libxi-dev libxrandr-dev mesa-common-dev xorg-dev
+        run: apt-get update -y && apt-get install -y git wget cmake automake libtool ruby clang build-essential libasound2-dev libgl1-mesa-dev libglu1-mesa-dev libx11-dev libxi-dev libxrandr-dev mesa-common-dev xorg-dev
       - uses: actions/checkout@v5
       - uses: dsaltares/fetch-gh-release-asset@master
         with:
           repo: 'skinnyjames/mruby-bin-barista'
-          version: 'tags/0.3.0'
+          version: 'tags/0.3.1'
           file: 'barista-linux-x86.tar.gz'
           target: 'barista.tar.gz'
           token: ${{ secrets.GITHUB_TOKEN }}
       - name: unpack barista
         run: tar -xvf barista.tar.gz --strip-components 1
       - name: build pocket
-        run: chmod 755 barista && ./barista cli
+        run: chmod 755 barista && ./barista @desktop
       - uses: actions/upload-artifact@v4
         with:
           name: hokusai-pocket-linux
@@ -62,7 +62,7 @@ jobs:
       - uses: dsaltares/fetch-gh-release-asset@master
         with:
           repo: 'skinnyjames/mruby-bin-barista'
-          version: 'tags/0.3.0'
+          version: 'tags/0.3.1'
           file: 'barista-osx-x86.tar.gz'
           target: 'barista.tar.gz'
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -71,7 +71,7 @@ jobs:
       - name: deps
         run: brew install automake
       - name: build pocket
-        run: chmod 755 barista && ./barista cli
+        run: chmod 755 barista && ./barista @desktop
         shell: bash
       - uses: actions/upload-artifact@v4
         with:
@@ -79,24 +79,30 @@ jobs:
           path: bin/hokusai-pocket*
           overwrite: true
   publish-windows:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
+    container:
+      image: skinnyjames/mruby-cross-windows:latest
     steps:
       - uses: actions/checkout@v5
-      - name: Setup Ninja
-        uses: ashutoshvarma/setup-ninja@master
-        with:
-          version: 1.10.0
       - uses: dsaltares/fetch-gh-release-asset@master
         with:
           repo: 'skinnyjames/mruby-bin-barista'
-          version: 'tags/0.3.0'
-          file: 'barista-windows-x86.tar.gz'
+          version: 'tags/0.3.1'
+          file: 'barista-linux-x86.tar.gz'
           target: 'barista.tar.gz'
           token: ${{ secrets.GITHUB_TOKEN }}
       - name: unpack barista
         run: tar -xvf barista.tar.gz --strip-components 1
+      - name: cmake
+        run: apt update -y && apt install -y cmake wget
       - name: build pocket
-        run: chmod 755 barista && ./barista cli
+        env:
+          AR: x86_64-w64-mingw32-ar
+          GCC: x86_64-w64-mingw32-gcc
+          CXX: x86_64-w64-mingw32-g++
+          CMAKE: cmake -DCMAKE_SYSTEM_NAME=Windows -DCMAKE_C_COMPILER=x86_64-w64-mingw32-gcc -DCMAKE_CXX_COMPILER=x86_64-w64-mingw32-g++ -DCMAKE_FIND_ROOT_PATH=/usr/x86_64-w64-mingw32
+          MINGW: true
+        run: chmod 755 barista && ./barista @desktop
         shell: bash
       - uses: actions/upload-artifact@v4
         with:

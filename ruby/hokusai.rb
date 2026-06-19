@@ -1,6 +1,7 @@
 
 require_relative './hokusai/error'
 require_relative './hokusai/types'
+require_relative './hokusai/http'
 require_relative './hokusai/ast'
 require_relative './hokusai/node'
 require_relative "./hokusai/node_builder"
@@ -51,6 +52,7 @@ require_relative './hokusai/blocks/tooltip'
 require_relative './hokusai/blocks/icon'
 require_relative './hokusai/blocks/dropdown'
 
+require_relative './patches'
 require_relative './build_templates'
 
 HP_SHADER_UNIFORM_FLOAT = 0      # Shader uniform type: float
@@ -95,6 +97,18 @@ module Hokusai
     def finish(receiver, value = nil)
       receiver.instance_exec(value, &@on_finished_cb)
     end
+  end
+  
+  def self.http
+    HTTP
+  end
+
+  def self.tmpdir
+    @tmpdir || "."
+  end
+
+  def self.tmpdir=(val)
+    @tmpdir = val
   end
 
   # Access the font registry
@@ -270,6 +284,29 @@ module Hokusai
 
   def self.keyboard_visible?
     @on_keyboard_visible&.call
+  end
+
+  def self.copy_state(src, target)
+    stack = [src]
+    tstack = [target]
+
+    while src_block = stack.pop
+      if t_block = tstack.pop
+        if t_block.class == src_block.class 
+          src_block.instance_variables.each do |var|
+            t_block.instance_variable_set(var, src_block.instance_variable_get(var))
+          end
+
+          src_block.node.meta.props.each do |k, v|
+            t_block.node.meta.set_prop(k, v)
+          end
+        end
+
+        tstack.concat t_block.children.reverse
+      end
+
+      stack.concat src_block.children.reverse
+    end
   end
 
   def self.update(block)

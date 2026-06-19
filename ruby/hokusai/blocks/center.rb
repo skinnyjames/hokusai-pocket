@@ -21,7 +21,7 @@ class Hokusai::Blocks::Center < Hokusai::Block
     a = cwidth ? cwidth / 2 : 0.0
     b = cheight ? cheight / 2 : 0.0
 
-    canvas.x = (canvas.x + canvas.width) / 2.0 - a if horizontal || (!horizontal && !vertical)
+    canvas.x = canvas.x + (canvas.width / 2.0) - a if horizontal || (!horizontal && !vertical)
     canvas.y = canvas.y + (canvas.height / 2.0) - b if vertical || (!horizontal && !vertical)
 
     yield canvas

@@ -10,6 +10,18 @@ module Hokusai
       @touch = input.touch
     end
 
+    def down?
+      @touch.count > 0
+    end
+
+    def up?
+      @touch.count <= 0
+    end
+
+    def released?
+      @touch.released?
+    end
+
     def tapped?
       @touch.tap?
     end
@@ -103,7 +115,37 @@ module Hokusai
     name "tap"
 
     def capture(block, canvas)
-      if matches(block) && tapped? && hovered(canvas)
+      if matches(block) && (tapped? || doubletapped?) && hovered(canvas)
+        captures << block
+      end
+    end
+  end
+  
+  class TapDownEvent < TouchEvent
+    name "tapdown"
+
+    def capture(block, canvas)
+      if matches(block) && down? && hovered(canvas)
+        captures << block
+      end
+    end
+  end
+    
+  class TapUpEvent < TouchEvent
+    name "tapup"
+
+    def capture(block, canvas)
+      if matches(block) && up? && hovered(canvas)
+        captures << block
+      end
+    end
+  end
+
+  class TapReleaseEvent < TouchEvent
+    name "taprelease"
+
+    def capture(block, canvas)
+      if matches(block) && released? && hovered(canvas)
         captures << block
       end
     end
@@ -153,7 +195,7 @@ module Hokusai
     name "pinchin"
 
     def capture(block, canvas)
-      if pinched? && matches(block) && hovered(canvas)
+      if pinch_direction == :in && matches(block) && hovered(canvas)
         captures << block
       end
     end

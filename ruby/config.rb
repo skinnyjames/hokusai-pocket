@@ -15,14 +15,42 @@ HP_FLAG_BORDERLESS_WINDOWED_MODE = 32768 # Set to run program in borderless wind
 HP_FLAG_MSAA_4X_HINT = 32                # Set to try enabling MSAA 4X
 HP_FLAG_INTERLACED_HINT = 65536          # Set to try enabling interlaced video format (for V3D)
 
+
+
 module Hokusai
+  class Reloader
+    def initialize(file_path, document = File.read(file_path))
+      @file_path = file_path
+      @document = document        
+    end
+
+    def traverse(&block)
+      file_path_dir = File.dirname(@file_path)
+
+      @document.gsub(/(?:require_relative\s+["'](.*)["'])/) do |path|
+        base_path = Pathname.new(@file_path)
+        path = Pathname.new("#{path.gsub(/require_relative\s+["']/, "").chop}.rb")
+        resolved_path = Pathname.join(File.dirname(base_path.to_s), path).to_s
+
+        block.call resolved_path
+
+        Reloader.new(resolved_path).traverse(&block)
+      end
+    end
+  end
+
   class Backend
+    def self.htop  
+      @running = true
+      binding
+    end
+
     def self.run(klass, &block)
+      return if @running
       config = Backend::Config.new
       block.call config
-      app = klass.mount
 
-      obj = new(app, config)
+      obj = new(klass, config)
       obj.run
     end
 
@@ -37,7 +65,7 @@ module Hokusai
       attr_accessor :width, :height, :fps,
                   :title, :config_flags, :window_state_flags,
                   :automation_driver, :background, :after_load_cb,
-                  :host, :port, :automated, :on_reload, :event_waiting, :touch,
+                  :host, :port, :automated, :on_reload_proc, :event_waiting, :touch,
                   :draw_fps, :log, :audio
 
       def initialize
@@ -55,7 +83,7 @@ module Hokusai
         @host = "127.0.0.1"
         @port = 4333
         @automated = false
-        @on_reload = ->(_){}
+        @on_reload_proc = nil
         @event_waiting = true
         @touch = false
         @log = false
@@ -77,8 +105,39 @@ module Hokusai
         self.after_load_cb = block
       end
 
+      def hot_reload=(topper)
+        @mtimes = {}
+  
+        on_reload do
+          reload = false
+
+          mtime = File::Stat.new(topper).mtime
+          if !@mtimes[topper]
+            @mtimes[topper] = mtime
+          elsif @mtimes[topper] < mtime
+            reload = true
+            eval RubyResolver.new(topper).code, Backend.htop
+            @mtimes[topper] = mtime
+          end
+
+          Reloader.new(topper).traverse do |file|
+            mtime = File::Stat.new(file).mtime
+            if !@mtimes[file]
+              @mtimes[file] = mtime
+            elsif @mtimes[file] < mtime
+              reload = true
+
+              eval RubyResolver.new(file).code, Backend.htop
+              @mtimes[file] = mtime
+            end
+          end
+
+          reload
+        end
+      end
+
       def on_reload(&block)
-        @on_reload = block
+        @on_reload_proc = block
       end
     end
   end

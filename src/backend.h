@@ -52,6 +52,11 @@ typedef struct MeasureCache
 static struct hashmap* textures = NULL;
 static struct hashmap* shaders = NULL;
 
+enum HP_TOUCH_EXTENSIONS
+{
+  HP_TOUCH_RELEASED = 1024
+};
+
 int hp_backend_run(mrb_state* mrb, struct RClass* hokusai_module, mrb_value backend);
 int hp_backend_run_str(mrb_state* mrb, char* code);
 int hp_backend_run_irep(mrb_state* mrb, uint8_t* code);

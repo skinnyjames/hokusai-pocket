@@ -20,11 +20,12 @@ module Hokusai
     64 => :swipe_up,
     128 => :swipe_down,
     256 => :pinch_in,
-    512 => :pinch_out
+    512 => :pinch_out,
+    1024 => :released,
   }
 
   class Touch
-    attr_accessor :type, :hold_duration, :drag, :pinch,
+    attr_accessor :type, :hold_duration, :drag, :pinch, :down, :up,
                   :pos, :count
     def initialize
       @type = :none
@@ -33,6 +34,10 @@ module Hokusai
       @hold_duration = 0.0
       @drag = Drag.new
       @pinch = Pinch.new
+    end
+
+    def released?
+      @type == :released || @type == :none
     end
 
     def set(event)
