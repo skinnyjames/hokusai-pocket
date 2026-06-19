@@ -7,7 +7,7 @@ jobs:
       image: alpine:latest
     steps:
       - name: deps
-        run: apk add git make cmake automake libtool ruby wget clang alsa-lib-dev eudev-dev jack-dev libdecor-dev libsamplerate-dev libusb-dev libx11-dev libxcursor-dev libxext-dev libxi-dev libxkbcommon-dev libxrandr-dev libxrender-dev libxscrnsaver-dev libxtst-dev pipewire-dev pulseaudio-dev samurai wayland-dev wayland-protocols mesa-dev
+        run: apk add git make cmake automake libtool ruby wget build-base clang alsa-lib-dev eudev-dev jack-dev libdecor-dev libsamplerate-dev libusb-dev libx11-dev libxcursor-dev libxext-dev libxi-dev libxkbcommon-dev libxrandr-dev libxrender-dev libxscrnsaver-dev libxtst-dev pipewire-dev pulseaudio-dev samurai wayland-dev wayland-protocols mesa-dev
       - uses: laverdet/alpine-arm64@v1
       - uses: actions/checkout@v5
       - uses: dsaltares/fetch-gh-release-asset@master

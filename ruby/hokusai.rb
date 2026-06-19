@@ -286,6 +286,29 @@ module Hokusai
     @on_keyboard_visible&.call
   end
 
+  def self.copy_state(src, target)
+    stack = [src]
+    tstack = [target]
+
+    while src_block = stack.pop
+      if t_block = tstack.pop
+        if t_block.class == src_block.class 
+          src_block.instance_variables.each do |var|
+            t_block.instance_variable_set(var, src_block.instance_variable_get(var))
+          end
+
+          src_block.node.meta.props.each do |k, v|
+            t_block.node.meta.set_prop(k, v)
+          end
+        end
+
+        tstack.concat t_block.children.reverse
+      end
+
+      stack.concat src_block.children.reverse
+    end
+  end
+
   def self.update(block)
     stack = [block]
   

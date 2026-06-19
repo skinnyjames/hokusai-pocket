@@ -1112,6 +1112,7 @@ int hp_backend_run(mrb_state* mrb, struct RClass* hokusai_module, mrb_value back
   mrb_value config = mrb_funcall_argv(mrb, backend, mrb_intern_lit(mrb, "config"), 0, NULL);
   if (mrb->exc) mrb_print_error(mrb);
 
+  mrb_value on_reload = mrb_funcall(mrb, config, "on_reload_proc", 0, NULL);
   mrb_value app = mrb_funcall_argv(mrb, backend, mrb_intern_lit(mrb, "app"), 0, NULL);
   if (mrb->exc) mrb_print_error(mrb);
 
@@ -1179,6 +1180,24 @@ int hp_backend_run(mrb_state* mrb, struct RClass* hokusai_module, mrb_value back
     }
     
     BeginDrawing();
+      // manage hot reload
+      if (!mrb_nil_p(on_reload))
+      {
+        if (mrb_test(mrb_funcall(mrb, on_reload, "call", 0, NULL)))
+        {          
+          mrb_value new_block = mrb_funcall_argv(mrb, app, mrb_intern_lit(mrb, "mount"), 0, NULL);
+          if (mrb->exc)
+          {
+            mrb_print_error(mrb);
+          }
+          else
+          {
+            mrb_funcall(mrb, mrb_obj_value(hokusai_module), "copy_state", 2, block, new_block);
+            block = new_block;
+          }
+        }
+      }
+
       // f_log(F_LOG_DEBUG, "proces input");
       hp_process_input(mrb, input, use_touch);
       int render_width = GetScreenWidth();

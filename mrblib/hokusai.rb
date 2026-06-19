@@ -3530,7 +3530,7 @@ module Hokusai
     name "tap"
 
     def capture(block, canvas)
-      if matches(block) && tapped? && hovered(canvas)
+      if matches(block) && (tapped? || doubletapped?) && hovered(canvas)
         captures << block
       end
     end
@@ -5112,12 +5112,41 @@ HP_FLAG_BORDERLESS_WINDOWED_MODE = 32768 # Set to run program in borderless wind
 HP_FLAG_MSAA_4X_HINT = 32                # Set to try enabling MSAA 4X
 HP_FLAG_INTERLACED_HINT = 65536          # Set to try enabling interlaced video format (for V3D)
 
+
+
 module Hokusai
+  class Reloader
+    def initialize(file_path, document = File.read(file_path))
+      @file_path = file_path
+      @document = document        
+    end
+
+    def traverse(&block)
+      file_path_dir = File.dirname(@file_path)
+
+      @document.gsub(/(?:require_relative\s+["'](.*)["'])/) do |path|
+        base_path = Pathname.new(@file_path)
+        path = Pathname.new("#{path.gsub(/require_relative\s+["']/, "").chop}.rb")
+        resolved_path = Pathname.join(File.dirname(base_path.to_s), path).to_s
+
+        block.call resolved_path
+
+        Reloader.new(resolved_path).traverse(&block)
+      end
+    end
+  end
+
   class Backend
+    def self.htop  
+      @running = true
+      binding
+    end
+
     def self.run(klass, &block)
+      return if @running
       config = Backend::Config.new
       block.call config
-      
+
       obj = new(klass, config)
       obj.run
     end
@@ -5133,7 +5162,7 @@ module Hokusai
       attr_accessor :width, :height, :fps,
                   :title, :config_flags, :window_state_flags,
                   :automation_driver, :background, :after_load_cb,
-                  :host, :port, :automated, :on_reload, :event_waiting, :touch,
+                  :host, :port, :automated, :on_reload_proc, :event_waiting, :touch,
                   :draw_fps, :log, :audio
 
       def initialize
@@ -5151,7 +5180,7 @@ module Hokusai
         @host = "127.0.0.1"
         @port = 4333
         @automated = false
-        @on_reload = ->(_){}
+        @on_reload_proc = nil
         @event_waiting = true
         @touch = false
         @log = false
@@ -5173,8 +5202,39 @@ module Hokusai
         self.after_load_cb = block
       end
 
+      def hot_reload(topper)
+        @mtimes = {}
+  
+        on_reload do
+          reload = false
+
+          mtime = File::Stat.new(topper).mtime
+          if !@mtimes[topper]
+            @mtimes[topper] = mtime
+          elsif @mtimes[topper] < mtime
+            reload = true
+            eval RubyResolver.new(topper).code, Backend.htop
+            @mtimes[topper] = mtime
+          end
+
+          Reloader.new(topper).traverse do |file|
+            mtime = File::Stat.new(file).mtime
+            if !@mtimes[file]
+              @mtimes[file] = mtime
+            elsif @mtimes[file] < mtime
+              reload = true
+
+              eval RubyResolver.new(file).code, Backend.htop
+              @mtimes[file] = mtime
+            end
+          end
+
+          reload
+        end
+      end
+
       def on_reload(&block)
-        @on_reload = block
+        @on_reload_proc = block
       end
     end
   end
@@ -11882,6 +11942,114 @@ end
 
 module Hokusai
   module Patches
+    def self.sdl_patch
+      <<~BAD
+diff --git a/src/platforms/rcore_desktop_sdl.c b/src/platforms/rcore_desktop_sdl.c
+index a201f2c..3d0e4a1 100644
+--- a/src/platforms/rcore_desktop_sdl.c
++++ b/src/platforms/rcore_desktop_sdl.c
+@@ -1342,10 +1342,17 @@ void PollInputEvents(void)
+     }
+ 
+     // Register previous touch states
+-    for (int i = 0; i < MAX_TOUCH_POINTS; i++) CORE.Input.Touch.previousTouchState[i] = CORE.Input.Touch.currentTouchState[i];
++    for (int i = 0; i < MAX_TOUCH_POINTS; i++)
++    {
++      CORE.Input.Touch.previousTouchState[i] = CORE.Input.Touch.currentTouchState[i];
++      // todo clear touch position?
++      // CORE.Input.Touch.position[i].x = -1;
++      // CORE.Input.Touch.position[i].y = -1;
++      // CORE.Input.Touch.pointId[i] = -1;
++    }
+ 
+-    // Map touch position to mouse position for convenience
+-    CORE.Input.Touch.position[0] = CORE.Input.Mouse.currentPosition;
++    // // Map touch position to mouse position for convenience
++    // CORE.Input.Touch.position[0] = CORE.Input.Mouse.currentPosition;
+ 
+     int touchAction = -1;       // 0-TOUCH_ACTION_UP, 1-TOUCH_ACTION_DOWN, 2-TOUCH_ACTION_MOVE
+     bool realTouch = false;     // Flag to differentiate real touch gestures from mouse ones
+@@ -1583,13 +1590,19 @@ void PollInputEvents(void)
+             } break;
+             case SDL_FINGERUP:
+             {
++                int count = CORE.Input.Touch.pointCount;
+                 UpdateTouchPointsSDL(event.tfinger);
++                CORE.Input.Touch.pointCount = count;
++
+                 touchAction = 0;
+                 realTouch = true;
+             } break;
+             case SDL_FINGERMOTION:
+             {
++                int count = CORE.Input.Touch.pointCount;
+                 UpdateTouchPointsSDL(event.tfinger);
++                CORE.Input.Touch.pointCount = count;
++
+                 touchAction = 2;
+                 realTouch = true;
+             } break;
+@@ -1738,28 +1751,42 @@ void PollInputEvents(void)
+         {
+             // Process mouse events as touches to be able to use mouse-gestures
+             GestureEvent gestureEvent = { 0 };
+-
+             // Register touch actions
+             gestureEvent.touchAction = touchAction;
+ 
+-            // Assign a pointer ID
+-            gestureEvent.pointId[0] = 0;
+-
+-            // Register touch points count
+-            gestureEvent.pointCount = 1;
+-
+-            // Register touch points position, only one point registered
+-            if (touchAction == 2 || realTouch) gestureEvent.position[0] = CORE.Input.Touch.position[0];
+-            else gestureEvent.position[0] = GetMousePosition();
+-
+-            // Normalize gestureEvent.position[0] for CORE.Window.screen.width and CORE.Window.screen.height
+-            gestureEvent.position[0].x /= (float)GetScreenWidth();
+-            gestureEvent.position[0].y /= (float)GetScreenHeight();
++            if (realTouch)
++            {
++              // Register touch points count
++              gestureEvent.pointCount = CORE.Input.Touch.pointCount;
++
++              // we want to track every touch.
++              for (int i = 0; i < CORE.Input.Touch.pointCount; i++)
++              {
++                gestureEvent.pointId[i] = i;
++                gestureEvent.position[i].x = CORE.Input.Touch.position[i].x / (float)GetScreenWidth();
++                gestureEvent.position[i].y = CORE.Input.Touch.position[i].y / (float)GetScreenWidth();
++              }
++            }
++            else
++            {
++              // Register touch points count
++              gestureEvent.pointCount = 1;
++              // Assign a pointer ID
++              gestureEvent.pointId[0] = 0;
++              // Register touch points position, only one point registered
++              if (touchAction == 2 || realTouch) gestureEvent.position[0] = CORE.Input.Touch.position[0];
++              else gestureEvent.position[0] = GetMousePosition();
++
++              // Normalize gestureEvent.position[0] for CORE.Window.screen.width and CORE.Window.screen.height
++              gestureEvent.position[0].x /= (float)GetScreenWidth();
++              gestureEvent.position[0].y /= (float)GetScreenHeight();
++            }
+ 
+             // Gesture data is sent to gestures-system for processing
+             ProcessGestureEvent(gestureEvent);
+ 
+             touchAction = -1;
++            realTouch = false;
+         }
+ #endif
+     }
+
+BAD
+    end
+
     def self.raylib_patch
       <<~BAD
 
@@ -12965,6 +13133,29 @@ module Hokusai
 
   def self.keyboard_visible?
     @on_keyboard_visible&.call
+  end
+
+  def self.copy_state(src, target)
+    stack = [src]
+    tstack = [target]
+
+    while src_block = stack.pop
+      if t_block = tstack.pop
+        if t_block.class == src_block.class 
+          src_block.instance_variables.each do |var|
+            t_block.instance_variable_set(var, src_block.instance_variable_get(var))
+          end
+
+          src_block.node.meta.props.each do |k, v|
+            t_block.node.meta.set_prop(k, v)
+          end
+        end
+
+        tstack.concat t_block.children.reverse
+      end
+
+      stack.concat src_block.children.reverse
+    end
   end
 
   def self.update(block)
