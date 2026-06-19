@@ -276,6 +276,10 @@ module Hokusai
       @pinch = Pinch.new
     end
 
+    def released?
+      @type == :released || @type == :none
+    end
+
     def set(event)
       @type = EVENTS[event]
     end
@@ -594,7 +598,11 @@ module Hokusai
       end
 
       def all
-        File.read(@tmp)
+        tmp = File.read(@tmp)
+
+        IO.popen("rm #{@tmp}") if File.exist?(@tmp)
+
+        tmp
       end
     end
 
@@ -1652,8 +1660,8 @@ module Hokusai
       @meta = Meta.new
     end
 
-    def mount(klass)
-      NodeMounter.new(self, klass).mount
+    def mount(klass, providers: {})
+      NodeMounter.new(self, klass, previous_providers: providers).mount
     end
 
     def emit(name, **args)
@@ -2040,8 +2048,8 @@ module Hokusai
     end
 
     # return [Hokusai::Block]
-    def self.mount(name = "root", parent_node = nil)
-      compile(name, parent_node).mount(self)
+    def self.mount(name = "root", parent_node = nil, providers: {})
+      compile(name, parent_node).mount(self, providers: providers)
     end
 
     def initialize(**args)
@@ -2105,10 +2113,10 @@ module Hokusai
       yield node.meta.commands
     end
 
-    def fetch(url, opts, &block)
+    def fetch(url, opts, path: "/", &block)
       instance_eval do
         req = Hokusai::Request.init(self, url)
-        req.execute("/", opts, &block)
+        req.execute(path, opts, &block)
       end
     end
 
@@ -11538,7 +11546,7 @@ class Hokusai::Blocks::Center < Hokusai::Block
     a = cwidth ? cwidth / 2 : 0.0
     b = cheight ? cheight / 2 : 0.0
 
-    canvas.x = (canvas.x + canvas.width) / 2.0 - a if horizontal || (!horizontal && !vertical)
+    canvas.x = canvas.x + (canvas.width / 2.0) - a if horizontal || (!horizontal && !vertical)
     canvas.y = canvas.y + (canvas.height / 2.0) - b if vertical || (!horizontal && !vertical)
 
     yield canvas

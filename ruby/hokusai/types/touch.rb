@@ -36,6 +36,10 @@ module Hokusai
       @pinch = Pinch.new
     end
 
+    def released?
+      @type == :released || @type == :none
+    end
+
     def set(event)
       @type = EVENTS[event]
     end

@@ -35,7 +35,11 @@ module Hokusai
       end
 
       def all
-        File.read(@tmp)
+        tmp = File.read(@tmp)
+
+        IO.popen("rm #{@tmp}") if File.exist?(@tmp)
+
+        tmp
       end
     end
 

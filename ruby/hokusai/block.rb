@@ -156,8 +156,8 @@ module Hokusai
     end
 
     # return [Hokusai::Block]
-    def self.mount(name = "root", parent_node = nil)
-      compile(name, parent_node).mount(self)
+    def self.mount(name = "root", parent_node = nil, providers: {})
+      compile(name, parent_node).mount(self, providers: providers)
     end
 
     def initialize(**args)
@@ -221,10 +221,10 @@ module Hokusai
       yield node.meta.commands
     end
 
-    def fetch(url, opts, &block)
+    def fetch(url, opts, path: "/", &block)
       instance_eval do
         req = Hokusai::Request.init(self, url)
-        req.execute("/", opts, &block)
+        req.execute(path, opts, &block)
       end
     end
 
