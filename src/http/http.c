@@ -181,6 +181,14 @@ mrb_value mrb_http_req_execute(mrb_state* mrb, mrb_value self)
   mrb_value headers = mrb_hash_fetch(mrb, opts, mrb_str_new_cstr(mrb, "headers"), mrb_hash_new(mrb));
   mrb_hash_foreach(mrb, RHASH(headers), mrb_http_set_header, (void*)req);
 
+  // set body if there is one
+  mrb_value body = mrb_hash_get(mrb, opts, mrb_str_new_cstr(mrb, "body"));
+  if (!mrb_nil_p(body))
+  {
+    char* msg = mrb_str_to_cstr(mrb, body);
+    tlsuv_http_req_data(req, msg, strlen(msg), NULL);
+  }
+
   return mrb_nil_value();
 }
 
