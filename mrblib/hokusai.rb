@@ -5210,7 +5210,7 @@ module Hokusai
         self.after_load_cb = block
       end
 
-      def hot_reload(topper)
+      def hot_reload=(topper)
         @mtimes = {}
   
         on_reload do
@@ -12378,7 +12378,7 @@ WORKDIR /app
 RUN git clone --branch 5.5 --depth 1 https://github.com/raysan5/raylib.git vendor/raylib
 RUN git clone --depth 1 https://github.com/tree-sitter/tree-sitter.git vendor/tree-sitter
 RUN git clone --branch stable --depth 1 https://github.com/mruby/mruby.git vendor/mruby
-RUN git clone --branch feature/networking --depth 1 https://github.com/skinnyjames/hokusai-pocket.git vendor/hp
+RUN git clone --branch main --depth 1 https://github.com/skinnyjames/hokusai-pocket.git vendor/hp
 RUN git clone https://github.com/mlabbe/nativefiledialog.git vendor/nfd
 RUN git clone https://github.com/libuv/libuv vendor/libuv
 
@@ -13149,9 +13149,26 @@ module Hokusai
 
     while src_block = stack.pop
       if t_block = tstack.pop
+        if stack.size > tstack.size
+          # nodes have been removed
+          # drop nodes until they match up again.
+          while src_block.class != t_block.class
+            src_block = stack.pop
+          end
+
+        elsif tstack.size > stack.size
+          # nodes have been added
+          # skip until they match up again
+          while src_block.class != t_block.class
+            t_block = tstack.pop
+          end
+        end
+
         if t_block.class == src_block.class 
           src_block.instance_variables.each do |var|
-            t_block.instance_variable_set(var, src_block.instance_variable_get(var))
+            unless var == :@node
+              t_block.instance_variable_set(var, src_block.instance_variable_get(var))
+            end
           end
 
           src_block.node.meta.props.each do |k, v|
