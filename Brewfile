@@ -820,8 +820,20 @@ spec("hokusai-pocket") do |config|
       begin
         eval code, top
       rescue => e
+        lines = code.split("\n")
         puts "An error occurred: #{e.message}"
         puts "Error backtrace: #{e.backtrace.join("\n")}"
+
+        e.backtrace.each_with_index do |trace, idx|
+          ev, lineno, func = trace.split(":")
+
+          puts "#{func}"
+          puts "#{lines[(lineno.to_i)]}"
+          if idx.zero?
+            puts "#{lines[(lineno.to_i + 1)..(lineno.to_i + 5)].join("\n")}"
+          end
+        end
+
       end
     end
   end
