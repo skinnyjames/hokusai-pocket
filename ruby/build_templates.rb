@@ -22,7 +22,7 @@ WORKDIR /app
 RUN git clone --branch 5.5 --depth 1 https://github.com/raysan5/raylib.git vendor/raylib
 RUN git clone --depth 1 https://github.com/tree-sitter/tree-sitter.git vendor/tree-sitter
 RUN git clone --branch stable --depth 1 https://github.com/mruby/mruby.git vendor/mruby
-RUN git clone --branch feature/networking --depth 1 https://github.com/skinnyjames/hokusai-pocket.git vendor/hp
+RUN git clone --branch main --depth 1 https://github.com/skinnyjames/hokusai-pocket.git vendor/hp
 RUN git clone https://github.com/mlabbe/nativefiledialog.git vendor/nfd
 RUN git clone https://github.com/libuv/libuv vendor/libuv
 
@@ -64,7 +64,7 @@ MRuby::CrossBuild.new("platform") do |conf|
   conf.gembox "stdlib-io"
   conf.gembox "math"
   conf.gembox "metaprog"
-
+  conf.gem :github => 'iij/mruby-env'
   conf.gem github: "skinnyjames-mruby/mruby-regexp-pcre"
   conf.gem github: "skinnyjames-mruby/mruby-dir-glob", canonical: true
   <%= gem_config %>
@@ -87,7 +87,7 @@ MRuby::CrossBuild.new("platform") do |conf|
   conf.linker.command = conf.cc.command
   conf.archiver.command = "\#{conf.host_target}-gcc-ar"
   conf.exts.executable = ".exe"
-
+  conf.gem :github => 'iij/mruby-env'
   conf.gem github: "skinnyjames-mruby/mruby-regexp-pcre"
   conf.gem github: "skinnyjames-mruby/mruby-dir-glob", canonical: true
   <%= gem_config %>
@@ -103,7 +103,7 @@ MRuby::CrossBuild.new("platform") do |conf|
   else
     toolchain :gcc
   end
-
+  conf.gem :github => 'iij/mruby-env'
   conf.gem github: "skinnyjames-mruby/mruby-regexp-pcre"
   conf.gem github: "skinnyjames-mruby/mruby-dir-glob", canonical: true
   <%= gem_config %>
@@ -113,7 +113,7 @@ end
 EOT
 <% end %>
 
-RUN rake MRUBY_CONFIG=build_config.rb
+RUN unset LD && unset CC && unset CXX && unset AR && rake MRUBY_CONFIG=build_config.rb
 
 # Raylib patch
 COPY <<EOT /app/vendor/raylib/tweaks.patch

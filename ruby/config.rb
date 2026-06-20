@@ -15,8 +15,6 @@ HP_FLAG_BORDERLESS_WINDOWED_MODE = 32768 # Set to run program in borderless wind
 HP_FLAG_MSAA_4X_HINT = 32                # Set to try enabling MSAA 4X
 HP_FLAG_INTERLACED_HINT = 65536          # Set to try enabling interlaced video format (for V3D)
 
-
-
 module Hokusai
   class Reloader
     def initialize(file_path, document = File.read(file_path))
