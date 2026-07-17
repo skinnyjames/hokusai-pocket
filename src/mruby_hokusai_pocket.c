@@ -8,6 +8,7 @@
 
 #if defined(HP_HTTP)
   #include "http/http.h"
+  #include "mruby-uv/udp.h"
 #endif
 
 mrb_value mruby_hokusai_pocket_backend_run(mrb_state* mrb, mrb_value self)
@@ -52,16 +53,16 @@ void mrb_mruby_hokusai_pocket_gem_init(mrb_state* mrb)
   mrb_define_hokusai_image_class(mrb);
   mrb_define_hokusai_music_class(mrb);
 
-#if defined(HP_HTTP)
-  mrb_define_http_req_class(mrb);
-#endif
-
   mrb_define_module(mrb, "UV");
   mrb_define_uv_loop_class(mrb);
 
   if (mrb->exc) mrb_print_error(mrb);
   load_pocket(mrb);
-
+  
+#if defined(HP_HTTP)
+  mrb_define_http_req_class(mrb);
+  mrb_define_uv_udp_class(mrb);
+#endif
   struct RClass* hokusai_backend = mrb_class_get_under(mrb, hokusai_module, "Backend");
   mrb_define_method(mrb, hokusai_backend, "run", mruby_hokusai_pocket_backend_run, MRB_ARGS_NONE());
 }

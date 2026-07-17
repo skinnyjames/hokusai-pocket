@@ -1139,6 +1139,9 @@ module Hokusai
               # TODO: update rest of block props
             end
           end
+
+          ublock.node.add_styles(utarget.class)
+          ublock.node.add_props_from_block(utarget, context: context)
           ublock.node.meta.children![ast.loop.start, ast.loop.lastlen] = children.reject(&:nil?)
           ast.loop.lastlen = children.reject(&:nil?).size
         end
@@ -1272,7 +1275,7 @@ module Hokusai
 
                   child_block = NodeMounter.new(node, child_block_klass, [stack], previous_providers: providers).mount(context: context, providers: providers)
 
-                  UpdateEntry.new(child_block, block, target).register(context: context, providers: providers)
+                  UpdateEntry.new(child_block, ublock, utarget).register(context: context, providers: providers)
                   meta.children!.insert(index, child_block)
 
                   child_block.send(:before_updated) if child_block.respond_to?(:before_updated)
@@ -1301,7 +1304,7 @@ module Hokusai
                   end
 
                   child_block = NodeMounter.new(node, else_child_block_klass, [stack], previous_providers: providers).mount(context: context, providers: providers)
-                  UpdateEntry.new(child_block, block, utarget).register(context: context, providers: providers)
+                  UpdateEntry.new(child_block, ublock, utarget).register(context: context, providers: providers)
                   meta.children!.insert(index, child_block)
                   child_block.send(:before_updated) if child_block.respond_to?(:before_updated)
                   
@@ -4163,7 +4166,7 @@ module Hokusai::Util
       @parent = parent
       @type = :none         # state for the geometry selection (active/frozen/etc)
       @start_x = 0.0        # the x coordinate for the geometry
-      @stary_y = 0.0        # the y coordinate for the geometry 
+      @start_y = 0.0        # the y coordinate for the geometry 
       @stop_x = 0.0
       @stop_y = 0.0
       @diff = 0.0
@@ -4409,6 +4412,7 @@ module Hokusai::Util
     end
 
     def geom!
+      p ["clear"]
       pos.clear
       pos.cursor_index = nil
 
@@ -5119,8 +5123,6 @@ HP_FLAG_WINDOW_MOUSE_PASSTHROUGH = 16384 # Set to support mouse passthrough, onl
 HP_FLAG_BORDERLESS_WINDOWED_MODE = 32768 # Set to run program in borderless windowed mode
 HP_FLAG_MSAA_4X_HINT = 32                # Set to try enabling MSAA 4X
 HP_FLAG_INTERLACED_HINT = 65536          # Set to try enabling interlaced video format (for V3D)
-
-
 
 module Hokusai
   class Reloader
@@ -5872,7 +5874,7 @@ class Hokusai::Blocks::Scrollbar < Hokusai::Block
   end
 
   def after_updated
-    do_goto(goto) unless goto.nil?
+    do_goto(goto, manual: false) unless goto.nil?
   end
 
   def percent_scrolled
@@ -5881,10 +5883,14 @@ class Hokusai::Blocks::Scrollbar < Hokusai::Block
     scroll_top_height / (height - control_height)
   end
 
-  def do_goto(value)
-    self.scroll_y = value.to_f
+  def do_goto(value, manual: true)
+    unless manual
+      self.scroll_y = (value.to_f + control_height / 2.0)
+    else
+      self.scroll_y = value.to_f
+    end
 
-    emit("scroll", scroll_y, percent: percent_scrolled)
+    emit("scroll", scroll_y, percent: percent_scrolled, manual: manual)
   end
 
   def initialize(**args)
@@ -5915,6 +5921,10 @@ class Hokusai::Blocks::Dynamic < Hokusai::Block
     width, height = compute_size
 
     emit("size_updated", width, height)
+  end
+
+  def on_resize(canvas)
+    compute_size
   end
 
   def on_mounted
@@ -6001,18 +6011,54 @@ class Hokusai::Blocks::Panel < Hokusai::Block
     super
   end
 
+  # def on_resize(canvas)
+  #   @top = nil
+  #   @panel_height = 0.0
+  #   @scroll_y = 0.0
+  #   @scroll_percent = 0.0
+  #   @scroll_goto_y = nil
+  #   @clipped_offset = 0.0
+  #   @clipped_content_height = 0.0
+  # end
+
+  def local_percent_scrolled(y)
+    return 0 if y === 0
+
+    a = y / (panel_height - scroll_control_height)
+  
+    if a < 0.0
+      0.0
+    elsif a > 1.0
+      1.0
+    else
+      a
+    end
+  end
+
   def wheel_handle(event)
+    @wheel = true
     return if clipped_content_height <= panel_height
 
     new_scroll_y = scroll_y + event.scroll * 20
 
     if y = top
+      # percent is 0.0
       if new_scroll_y < y
+        self.scroll_y = y
+        self.scroll_percent = 0.0
         self.scroll_goto_y = y
+      # percent is 1.0
       elsif new_scroll_y - top >= panel_height
-        self.scroll_goto_y = panel_height if scroll_percent != 1.0
+        if scroll_percent != 1.0
+          self.scroll_y = panel_height
+          self.scroll_goto_y = panel_height
+          self.scroll_percent = 1.0
+        end
       else
+        # percent is in between
         self.scroll_goto_y = new_scroll_y
+        self.scroll_y = new_scroll_y
+        self.scroll_percent = local_percent_scrolled(new_scroll_y)
       end
     end
   end
@@ -6044,11 +6090,13 @@ class Hokusai::Blocks::Panel < Hokusai::Block
     clipped_content_height > panel_height
   end
 
-  def scroll_complete(y, percent:)
-    self.scroll_y = y
-    self.scroll_percent = percent
-    self.scroll_goto_y = nil
+  def scroll_complete(y, percent:, manual:)
+    if manual
+      self.scroll_y = y
+      self.scroll_percent = percent
+    end
 
+    self.scroll_goto_y = nil
     # todo handle selection
 
     emit("scroll", y, percent: percent)
@@ -6623,7 +6671,7 @@ module Hokusai::Util
       @parent = parent
       @type = :none         # state for the geometry selection (active/frozen/etc)
       @start_x = 0.0        # the x coordinate for the geometry
-      @stary_y = 0.0        # the y coordinate for the geometry 
+      @start_y = 0.0        # the y coordinate for the geometry 
       @stop_x = 0.0
       @stop_y = 0.0
       @diff = 0.0
@@ -6869,6 +6917,7 @@ module Hokusai::Util
     end
 
     def geom!
+      p ["clear"]
       pos.clear
       pos.cursor_index = nil
 
@@ -7158,7 +7207,7 @@ module Hokusai::Util
       @parent = parent
       @type = :none         # state for the geometry selection (active/frozen/etc)
       @start_x = 0.0        # the x coordinate for the geometry
-      @stary_y = 0.0        # the y coordinate for the geometry 
+      @start_y = 0.0        # the y coordinate for the geometry 
       @stop_x = 0.0
       @stop_y = 0.0
       @diff = 0.0
@@ -7404,6 +7453,7 @@ module Hokusai::Util
     end
 
     def geom!
+      p ["clear"]
       pos.clear
       pos.cursor_index = nil
 
@@ -8085,7 +8135,7 @@ module Hokusai::Util
       @parent = parent
       @type = :none         # state for the geometry selection (active/frozen/etc)
       @start_x = 0.0        # the x coordinate for the geometry
-      @stary_y = 0.0        # the y coordinate for the geometry 
+      @start_y = 0.0        # the y coordinate for the geometry 
       @stop_x = 0.0
       @stop_y = 0.0
       @diff = 0.0
@@ -8331,6 +8381,7 @@ module Hokusai::Util
     end
 
     def geom!
+      p ["clear"]
       pos.clear
       pos.cursor_index = nil
 
@@ -8619,17 +8670,18 @@ class Hokusai::Blocks::Input < Hokusai::Block
       @click="start_selection"
       @hover="update_selection"
       :autoclip="true"
+      @keypress="handle_keypress"
+      @click="update_click_position"
     }
       text {
         :content="model"
         :size="size"
         :padding="padding"
+        :color="text_color"
         :selection_color="text_selection_color"
         :selection_color_to="text_selection_color_to"
         :animate_selection="animate_selection"
         @selected="handle_selection"
-        @keypress="handle_keypress"
-        @click="update_click_position"
       }
       cursor {
         height="0"
@@ -8675,6 +8727,7 @@ class Hokusai::Blocks::Input < Hokusai::Block
   def update_click_position(event)
     selection.geom!
     selection.geom.set_click_pos(event.pos.x, event.pos.y)
+    selection.pos.cursor_index = 0
   end
 
   def update_height(value)
@@ -10997,7 +11050,7 @@ module Hokusai::Util
       @parent = parent
       @type = :none         # state for the geometry selection (active/frozen/etc)
       @start_x = 0.0        # the x coordinate for the geometry
-      @stary_y = 0.0        # the y coordinate for the geometry 
+      @start_y = 0.0        # the y coordinate for the geometry 
       @stop_x = 0.0
       @stop_y = 0.0
       @diff = 0.0
@@ -11243,6 +11296,7 @@ module Hokusai::Util
     end
 
     def geom!
+      p ["clear"]
       pos.clear
       pos.cursor_index = nil
 
@@ -12420,7 +12474,7 @@ MRuby::CrossBuild.new("platform") do |conf|
   conf.gembox "stdlib-io"
   conf.gembox "math"
   conf.gembox "metaprog"
-
+  conf.gem :github => 'iij/mruby-env'
   conf.gem github: "skinnyjames-mruby/mruby-regexp-pcre"
   conf.gem github: "skinnyjames-mruby/mruby-dir-glob", canonical: true
   <%= gem_config %>
@@ -12443,7 +12497,7 @@ MRuby::CrossBuild.new("platform") do |conf|
   conf.linker.command = conf.cc.command
   conf.archiver.command = "\#{conf.host_target}-gcc-ar"
   conf.exts.executable = ".exe"
-
+  conf.gem :github => 'iij/mruby-env'
   conf.gem github: "skinnyjames-mruby/mruby-regexp-pcre"
   conf.gem github: "skinnyjames-mruby/mruby-dir-glob", canonical: true
   <%= gem_config %>
@@ -12459,7 +12513,7 @@ MRuby::CrossBuild.new("platform") do |conf|
   else
     toolchain :gcc
   end
-
+  conf.gem :github => 'iij/mruby-env'
   conf.gem github: "skinnyjames-mruby/mruby-regexp-pcre"
   conf.gem github: "skinnyjames-mruby/mruby-dir-glob", canonical: true
   <%= gem_config %>
@@ -12469,7 +12523,7 @@ end
 EOT
 <% end %>
 
-RUN rake MRUBY_CONFIG=build_config.rb
+RUN unset LD && unset CC && unset CXX && unset AR && rake MRUBY_CONFIG=build_config.rb
 
 # Raylib patch
 COPY <<EOT /app/vendor/raylib/tweaks.patch

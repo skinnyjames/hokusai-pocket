@@ -12,6 +12,10 @@ class Hokusai::Blocks::Dynamic < Hokusai::Block
     emit("size_updated", width, height)
   end
 
+  def on_resize(canvas)
+    compute_size
+  end
+
   def on_mounted
     compute_size
   end

@@ -696,11 +696,13 @@ spec("hokusai-pocket") do |config|
       end
 
       gcc(" -O3 -Wall #{includes(args)} -c ../../#{prefix}/src/mruby-uv/loop.c", chdir: "vendor/hokusai-pocket")
-      
+
       defs = ""
 
       if args[:http]
         gcc("-O3 -Wall  -DNOGDI -DWIN32_LEAN_AND_MEAN -DNOUSER #{includes(args)} -c ../../#{prefix}/src/http/http.c", chdir: "vendor/hokusai-pocket")
+        gcc("-O3 -Wall  -DNOGDI -DWIN32_LEAN_AND_MEAN -DNOUSER #{includes(args)} -c ../../#{prefix}/src/http/patch.c", chdir: "vendor/hokusai-pocket")
+        gcc(" -O3 -Wall -DNOGDI -DWIN32_LEAN_AND_MEAN -DNOUSER #{includes(args)} -c ../../#{prefix}/src/mruby-uv/udp.c", chdir: "vendor/hokusai-pocket")
 
         defs = "-DHP_HTTP"
       end

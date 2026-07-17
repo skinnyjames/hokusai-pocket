@@ -51,7 +51,7 @@ module Hokusai
 
                   child_block = NodeMounter.new(node, child_block_klass, [stack], previous_providers: providers).mount(context: context, providers: providers)
 
-                  UpdateEntry.new(child_block, block, target).register(context: context, providers: providers)
+                  UpdateEntry.new(child_block, ublock, utarget).register(context: context, providers: providers)
                   meta.children!.insert(index, child_block)
 
                   child_block.send(:before_updated) if child_block.respond_to?(:before_updated)
@@ -80,7 +80,7 @@ module Hokusai
                   end
 
                   child_block = NodeMounter.new(node, else_child_block_klass, [stack], previous_providers: providers).mount(context: context, providers: providers)
-                  UpdateEntry.new(child_block, block, utarget).register(context: context, providers: providers)
+                  UpdateEntry.new(child_block, ublock, utarget).register(context: context, providers: providers)
                   meta.children!.insert(index, child_block)
                   child_block.send(:before_updated) if child_block.respond_to?(:before_updated)
                   

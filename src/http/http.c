@@ -4,6 +4,8 @@
 #include <tlsuv/http.h>
 #include <tlsuv/tlsuv.h>
 #include <uv.h>
+#include <stddef.h>
+#include "patch.h"
 #include "http.h"
 #include <pocket.h>
 #include "../mruby-uv/migrate.h"
@@ -28,6 +30,237 @@ typedef struct MRB_HTTPWrapper
   uv_async_t* handle;
   mrb_http_context ctx;
 } mrb_http_wrapper;
+
+typedef struct {
+    mrb_state *mrb;
+    tlsuv_http_srv_t server;
+    mrb_value on_request_proc;
+    uv_async_t async_handle;
+    struct RClass *conn_klass;
+    mrb_bool bound;
+    int closing_handles;
+} mrb_http_srv_wrapper;
+
+typedef struct {
+    mrb_state *omrb;
+    mrb_http_srv_wrapper *server_wrap;
+    tlsuv_http_srv_conn_t *conn;
+    char *method;
+    char *path;
+    char *body;
+    size_t body_len;
+} mrb_http_srv_event;
+
+static void mrb_http_srv_tcp_closed(uv_handle_t *handle) {
+    tlsuv_http_srv_t *srv = (tlsuv_http_srv_t*)handle->data; // set by tlsuv_http_srv_init
+    mrb_http_srv_wrapper *wrapper =
+        (mrb_http_srv_wrapper*)((char*)srv - offsetof(mrb_http_srv_wrapper, server));
+    if (--wrapper->closing_handles == 0) free(wrapper);
+}
+
+static void mrb_http_srv_async_closed(uv_handle_t *handle) {
+    // async_handle.data gets overwritten per-request with the current
+    // event, so we can't use it here -- recover wrapper via its known
+    // offset within the struct instead.
+    mrb_http_srv_wrapper *wrapper =
+        (mrb_http_srv_wrapper*)((char*)handle - offsetof(mrb_http_srv_wrapper, async_handle));
+    if (--wrapper->closing_handles == 0) free(wrapper);
+}
+
+// Garbage collection free function for the Ruby Server object
+static void mrb_http_srv_type_free(mrb_state *mrb, void *payload) {
+    mrb_http_srv_wrapper *wrapper = (mrb_http_srv_wrapper*)payload;
+    if (!wrapper) return;
+
+    wrapper->closing_handles = 0;
+
+    if (wrapper->bound && !uv_is_closing((uv_handle_t*)&wrapper->server.tcp)) {
+        wrapper->closing_handles++;
+        uv_close((uv_handle_t*)&wrapper->server.tcp, mrb_http_srv_tcp_closed);
+    }
+    if (wrapper->bound && wrapper->async_handle.loop && !uv_is_closing((uv_handle_t*)&wrapper->async_handle)) {
+        wrapper->closing_handles++;
+        uv_close((uv_handle_t*)&wrapper->async_handle, mrb_http_srv_async_closed);
+    }
+
+    // If the server was never bound, there are no live libuv handles to
+    // wait on -- safe to free immediately.
+    if (wrapper->closing_handles == 0) free(wrapper);
+}
+
+static struct mrb_data_type mrb_http_srv_type = { "Server", mrb_http_srv_type_free };
+
+static mrb_http_srv_wrapper* mrb_http_srv_get(mrb_state *mrb, mrb_value self) {
+    mrb_http_srv_wrapper *wrapper = (mrb_http_srv_wrapper*)DATA_PTR(self);
+    if (!wrapper) mrb_raise(mrb, E_ARGUMENT_ERROR, "uninitialized HTTP server");
+    return wrapper;
+}
+
+static void hp_server_async_cb(uv_async_t *handle) {
+    mrb_http_srv_event *ev = (mrb_http_srv_event*)handle->data;
+    mrb_state *mrb = ev->omrb;
+
+    // 1. Wrap the connection context so Ruby can call response methods on it later
+    //    (class looked up once at server init and cached on the wrapper, rather
+    //    than re-defined on every single request)
+    mrb_value ruby_conn = mrb_obj_new(mrb, ev->server_wrap->conn_klass, 0, NULL);
+    DATA_PTR(ruby_conn) = ev->conn; // Anchor the raw connection instance point
+
+    // 2. Convert incoming C buffers to native Ruby objects
+    mrb_value r_method = mrb_str_new_cstr(mrb, ev->method);
+    mrb_value r_path = mrb_str_new_cstr(mrb, ev->path);
+    mrb_value r_body;
+    if (ev->body_len <= 0)
+    {
+      r_body = mrb_nil_value();
+    }
+    else
+    {
+       r_body = mrb_str_new(mrb, ev->body, ev->body_len);
+    }
+
+    // 3. Dispatch directly to the block argument registered in your Ruby script
+    mrb_funcall(mrb, ev->server_wrap->on_request_proc, "call", 4, ruby_conn, r_method, r_path, r_body);
+    // Clean transaction allocations
+    free(ev->method);
+    free(ev->path);
+    free(ev->body);
+    free(ev);
+}
+
+// Fired on the background libuv worker loop when parsing finishes
+static void on_server_request_received(tlsuv_http_srv_conn_t *conn, const char *method, const char *path, void *ctx) {
+    mrb_http_srv_wrapper *wrapper = (mrb_http_srv_wrapper*)ctx;
+
+    mrb_http_srv_event *ev = malloc(sizeof(mrb_http_srv_event));
+    ev->omrb = wrapper->mrb;
+    ev->server_wrap = wrapper;
+    ev->conn = conn;
+    ev->method = strdup(method);
+    ev->path = strdup(path);
+
+    size_t blen;
+    const char *bdata = tlsuv_http_srv_get_body(conn, &blen);
+    ev->body = malloc(blen + 1);
+    memcpy(ev->body, bdata, blen);
+    ev->body[blen] = '\0';
+    ev->body_len = blen;
+
+    wrapper->async_handle.data = ev;
+    uv_async_send(&wrapper->async_handle);
+}
+
+/*
+ * Server.new
+ *
+ * Allocates the server and its uv_tcp_t, but does not bind or listen yet.
+ * Call #certificate (optional, for HTTPS) and #on_request before #bind.
+ */
+static mrb_value mrb_http_srv_init(mrb_state *mrb, mrb_value self) {
+    struct RClass* hokusai_module = mrb_module_get(mrb, "Hokusai");
+    mrb_value worker = mrb_funcall(mrb, mrb_obj_value(hokusai_module), "worker", 0, NULL);
+    mrb_uv_loop_wrapper *loopwrapper = mrb_uv_loop_get(mrb, worker);
+    if (!loopwrapper || !loopwrapper->loop) {
+        mrb_raise(mrb, E_RUNTIME_ERROR, "Event loop not initialized");
+    }
+
+    mrb_http_srv_wrapper *wrapper = malloc(sizeof(mrb_http_srv_wrapper));
+    wrapper->mrb = mrb;
+    wrapper->on_request_proc = mrb_nil_value();
+    wrapper->bound = FALSE;
+    wrapper->closing_handles = 0;
+
+    struct RClass *http = mrb_module_get_under(mrb, hokusai_module, "HTTP");
+    wrapper->conn_klass = mrb_define_class_under(mrb, http, "Connection", mrb->object_class);
+
+    tlsuv_http_srv_init(loopwrapper->loop, &wrapper->server);
+
+    mrb_data_init(self, wrapper, &mrb_http_srv_type);
+    return self;
+}
+
+// server.certificate(cert: "path/to.crt", key: "path/to.key") -- optional, for HTTPS
+static mrb_value mrb_http_srv_certificate(mrb_state *mrb, mrb_value self) {
+    mrb_value opts;
+    mrb_get_args(mrb, "H", &opts);
+
+    mrb_http_srv_wrapper *wrapper = mrb_http_srv_get(mrb, self);
+    if (wrapper->bound) mrb_raise(mrb, E_RUNTIME_ERROR, "certificate must be set before bind");
+
+    mrb_value cert_v = mrb_hash_get(mrb, opts, mrb_symbol_value(mrb_intern_lit(mrb, "cert")));
+    mrb_value key_v = mrb_hash_get(mrb, opts, mrb_symbol_value(mrb_intern_lit(mrb, "key")));
+    if (mrb_nil_p(cert_v) || mrb_nil_p(key_v)) {
+        mrb_raise(mrb, E_ARGUMENT_ERROR, "certificate requires :cert and :key paths");
+    }
+
+    char *cert_path = mrb_str_to_cstr(mrb, cert_v);
+    char *key_path = mrb_str_to_cstr(mrb, key_v);
+
+    int rc = tlsuv_http_srv_set_cert(&wrapper->server, cert_path, key_path);
+    if (rc != 0) mrb_raise(mrb, E_RUNTIME_ERROR, "failed to load certificate/key");
+
+    return self;
+}
+
+// server.on_request { |conn, method, path, body| ... }
+static mrb_value mrb_http_srv_on_request(mrb_state *mrb, mrb_value self) {
+    mrb_value block;
+    mrb_get_args(mrb, "&", &block);
+    if (mrb_nil_p(block)) mrb_raise(mrb, E_ARGUMENT_ERROR, "on_request requires a block");
+
+    mrb_http_srv_wrapper *wrapper = mrb_http_srv_get(mrb, self);
+    mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@on_request_proc"), block);
+
+    wrapper->on_request_proc = block;
+
+    // GC root: `block` only exists inside a malloc'd C struct otherwise,
+    // which the collector can't see. Stashing it as an ivar keeps it alive
+    // for as long as the server object itself is reachable. Without this,
+    // on_request_proc is a dangling mrb_value waiting to be collected out
+    // from under hp_server_async_cb's mrb_yield_argv call.
+
+    return mrb_nil_value();
+}
+
+// server.bind(port) -- starts listening; requires #on_request to have been called first
+static mrb_value mrb_http_srv_bind_method(mrb_state *mrb, mrb_value self) {
+    mrb_int port;
+    mrb_get_args(mrb, "i", &port);
+
+    mrb_http_srv_wrapper *wrapper = mrb_http_srv_get(mrb, self);
+    if (wrapper->bound) mrb_raise(mrb, E_RUNTIME_ERROR, "server is already bound");
+    if (mrb_nil_p(wrapper->on_request_proc)) mrb_raise(mrb, E_RUNTIME_ERROR, "call on_request before bind");
+
+    struct RClass* hokusai_module = mrb_module_get(mrb, "Hokusai");
+    mrb_value worker = mrb_funcall(mrb, mrb_obj_value(hokusai_module), "worker", 0, NULL);
+    mrb_uv_loop_wrapper *loopwrapper = mrb_uv_loop_get(mrb, worker);
+
+    int rc = tlsuv_http_srv_bind(&wrapper->server, "0.0.0.0", (int)port);
+    if (rc) mrb_raisef(mrb, E_RUNTIME_ERROR, "tlsuv_http_srv_bind failed: %S", mrb_str_new_cstr(mrb, uv_strerror(rc)));
+
+    uv_async_init(loopwrapper->loop, &wrapper->async_handle, hp_server_async_cb);
+    tlsuv_http_srv_listen(&wrapper->server, on_server_request_received, wrapper);
+
+    wrapper->bound = TRUE;
+    return self;
+}
+
+// conn.respond(status_code, status_message, body_string)
+mrb_value mrb_http_srv_conn_respond(mrb_state *mrb, mrb_value self) {
+    mrb_int status;
+    char *msg;
+    char *body;
+    mrb_int msg_len;
+    mrb_int body_len;
+    mrb_get_args(mrb, "iss", &status, &msg, &msg_len, &body, &body_len);
+
+    tlsuv_http_srv_conn_t *conn = (tlsuv_http_srv_conn_t*)DATA_PTR(self);
+    if (conn) {
+        tlsuv_http_srv_respond(conn, (int)status, msg, body, (size_t)body_len);
+    }
+    return mrb_nil_value();
+}
+
 
 mrb_http_wrapper* mrb_http_req_get(mrb_state* mrb, mrb_value self);
 
@@ -247,14 +480,25 @@ mrb_value mrb_http_req_finish(mrb_state* mrb, mrb_value self)
 void mrb_define_http_req_class(mrb_state* mrb)
 {
   struct RClass* hokusai = mrb_module_get(mrb, "Hokusai");
+  struct RClass *http = mrb_module_get_under(mrb, hokusai, "HTTP");
   struct RClass* request = mrb_define_class_under(mrb, hokusai, "Request", mrb->object_class);
   uv_mutex_init(&am);
   mrb_define_class_method(mrb, request, "init", mrb_http_req_init, MRB_ARGS_REQ(1));
   mrb_define_method(mrb, request, "url", mrb_http_req_url, MRB_ARGS_NONE());
   mrb_define_method(mrb, request, "execute", mrb_http_req_execute, MRB_ARGS_REQ(4));
   mrb_define_method(mrb, request, "get", mrb_http_req_execute_get, MRB_ARGS_REQ(3));
-  MRB_SET_INSTANCE_TT(request, MRB_TT_DATA);
 
+  struct RClass *server = mrb_define_class_under(mrb, http, "Server", mrb->object_class);
+  MRB_SET_INSTANCE_TT(server, MRB_TT_DATA);
+  mrb_define_method(mrb, server, "initialize", mrb_http_srv_init, MRB_ARGS_NONE());
+  mrb_define_method(mrb, server, "certificate", mrb_http_srv_certificate, MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, server, "on_request", mrb_http_srv_on_request, MRB_ARGS_BLOCK());
+  mrb_define_method(mrb, server, "bind", mrb_http_srv_bind_method, MRB_ARGS_REQ(1));
+  struct RClass *conn_klass = mrb_define_class_under(mrb, http, "Connection", mrb->object_class);
+  MRB_SET_INSTANCE_TT(conn_klass, MRB_TT_DATA);
+  mrb_define_method(mrb, conn_klass, "respond", mrb_http_srv_conn_respond, MRB_ARGS_REQ(3));
+
+  MRB_SET_INSTANCE_TT(request, MRB_TT_DATA);
 }
 
 #endif

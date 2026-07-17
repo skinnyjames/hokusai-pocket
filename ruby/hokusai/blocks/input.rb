@@ -7,17 +7,18 @@ class Hokusai::Blocks::Input < Hokusai::Block
       @click="start_selection"
       @hover="update_selection"
       :autoclip="true"
+      @keypress="handle_keypress"
+      @click="update_click_position"
     }
       text {
         :content="model"
         :size="size"
         :padding="padding"
+        :color="text_color"
         :selection_color="text_selection_color"
         :selection_color_to="text_selection_color_to"
         :animate_selection="animate_selection"
         @selected="handle_selection"
-        @keypress="handle_keypress"
-        @click="update_click_position"
       }
       cursor {
         height="0"
@@ -63,6 +64,7 @@ class Hokusai::Blocks::Input < Hokusai::Block
   def update_click_position(event)
     selection.geom!
     selection.geom.set_click_pos(event.pos.x, event.pos.y)
+    selection.pos.cursor_index = 0
   end
 
   def update_height(value)
