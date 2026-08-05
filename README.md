@@ -99,21 +99,10 @@ class Counter < Hokusai::Block
 
   attr_accessor :count, :keys, :modal_open
 
-  def count_positive
-    count > 0
-  end
-
-  def increment(event)
-    self.count += 1
-  end
-
-  def decrement(event)
-    self.count -= 1
-  end
-
-  def count_color
-    count.negative? ? [244, 0, 0] : [0, 0, 244]
-  end
+  def count_positive = count > 0
+  def increment(event) = self.count += 1
+  def decrement(event) = self.count -= 1
+  def count_color = count.negative? ? [244, 0, 0] : [0, 0, 244]
 
   def initialize(**args)
     @count = 0

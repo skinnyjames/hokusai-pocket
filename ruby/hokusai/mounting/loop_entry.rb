@@ -238,6 +238,9 @@ module Hokusai
               # TODO: update rest of block props
             end
           end
+
+          ublock.node.add_styles(utarget.class)
+          ublock.node.add_props_from_block(utarget)
           ublock.node.meta.children![ast.loop.start, ast.loop.lastlen] = children.reject(&:nil?)
           ast.loop.lastlen = children.reject(&:nil?).size
         end

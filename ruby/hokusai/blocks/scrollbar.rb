@@ -77,7 +77,7 @@ class Hokusai::Blocks::Scrollbar < Hokusai::Block
   end
 
   def after_updated
-    do_goto(goto) unless goto.nil?
+    do_goto(goto, manual: false) unless goto.nil?
   end
 
   def percent_scrolled
@@ -86,10 +86,14 @@ class Hokusai::Blocks::Scrollbar < Hokusai::Block
     scroll_top_height / (height - control_height)
   end
 
-  def do_goto(value)
-    self.scroll_y = value.to_f
+  def do_goto(value, manual: true)
+    unless manual
+      self.scroll_y = (value.to_f + control_height / 2.0)
+    else
+      self.scroll_y = value.to_f
+    end
 
-    emit("scroll", scroll_y, percent: percent_scrolled)
+    emit("scroll", scroll_y, percent: percent_scrolled, manual: manual)
   end
 
   def initialize(**args)
