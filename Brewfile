@@ -59,7 +59,7 @@ module BuildHelpers
       "-framework CoreVideo -framework CoreAudio -framework AppKit -framework IOKit -framework Cocoa -framework GLUT -framework OpenGL #{extras}"
     elsif detected_os == "Windows" || mingw?
       # add -mwindows after figuring out why apps don't launch... 
-      "-lgdi32 -lwinmm -lws2_32 -lcomctl32 -lcomdlg32 -lole32 -luuid -ldbghelp -luserenv -liphlpapi -lbcrypt -lcrypt32 -static -lwinpthread"
+      "-lgdi32 -lwinmm -lws2_32 -lcomctl32 -lcomdlg32 -lole32 -luuid -ldbghelp -luserenv -liphlpapi -lbcrypt -lcrypt32 -static -lwinpthread -lsynchronization"
     elsif detected_os == "Linux"
       "-lGL -lm -lpthread -ldl -lrt -lX11"
     else

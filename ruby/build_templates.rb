@@ -343,7 +343,7 @@ spec("hokusai-pocket-app") do
 
 <% if os.eql?("windows") %>
     def libs
-      "-lws2_32 -lgdi32 -lwinmm -lcomctl32 -lcomdlg32 -lole32 -luuid -ldbghelp -liphlpapi -luserenv -lbcrypt -lcrypt32 -static -lwinpthread"
+      "-lws2_32 -lgdi32 -lwinmm -lcomctl32 -lcomdlg32 -lole32 -luuid -ldbghelp -liphlpapi -luserenv -lbcrypt -lcrypt32 -static -lwinpthread  -lsynchronization"
     end
 <% elsif os.eql?("osx") %>
     def libs
