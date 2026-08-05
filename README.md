@@ -1,8 +1,11 @@
 # hokusai pocket
 
+[![Ruby Users Forum](https://img.shields.io/discourse/topics?server=https%3A%2F%2Fwww.rubyforum.org&style=flat&logo=discourse&label=Ruby%20Users%20Forum)](https://www.rubyforum.org/tag/hokusai-pocket)
+
 A project for making portable apps and games using [hokusai](https://hokusai.skinnyjames.net)
 
 Work in progress, expect changes.  ideas and contributions are welcome.
+
 
 # installation
 
@@ -182,6 +185,10 @@ When updating any hokusai code, just run `barista hokusai` to update `libhokusai
 To modify the build process for mruby, raylib, or tree-sitter, adjust the `Brewfile` and rebuild that task.
 
 `barista clean` will remove the `vendor` library.
+
+# community
+
+Join us in the `hokusai-pocket` category on the [Ruby Users Forum](https://www.rubyforum.org/tag/hokusai-pocket).
 
 # testing
 
