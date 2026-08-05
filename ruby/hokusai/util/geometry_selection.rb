@@ -7,7 +7,7 @@ module Hokusai::Util
       @parent = parent
       @type = :none         # state for the geometry selection (active/frozen/etc)
       @start_x = 0.0        # the x coordinate for the geometry
-      @stary_y = 0.0        # the y coordinate for the geometry 
+      @start_y = 0.0        # the y coordinate for the geometry 
       @stop_x = 0.0
       @stop_y = 0.0
       @diff = 0.0

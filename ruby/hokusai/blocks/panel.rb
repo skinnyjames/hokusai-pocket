@@ -27,6 +27,7 @@ class Hokusai::Blocks::Panel < Hokusai::Block
     scrollbar: Hokusai::Blocks::Scrollbar
   )
 
+  # computed :padding, default: [0, 0, 0, 0], convert: Hokusai::Padding
   computed :align, default: "top", convert: proc(&:to_s)
   computed :scroll_goto, default: nil
   computed :scroll_width, default: 14.0, convert: proc(&:to_f)
@@ -57,18 +58,44 @@ class Hokusai::Blocks::Panel < Hokusai::Block
     super
   end
 
+  def local_percent_scrolled(y)
+    return 0 if y === 0
+
+    a = y / (panel_height - scroll_control_height)
+  
+    if a < 0.0
+      0.0
+    elsif a > 1.0
+      1.0
+    else
+      a
+    end
+  end
+
   def wheel_handle(event)
+    @wheel = true
     return if clipped_content_height <= panel_height
 
     new_scroll_y = scroll_y + event.scroll * 20
 
     if y = top
+      # percent is 0.0
       if new_scroll_y < y
+        self.scroll_y = y
+        self.scroll_percent = 0.0
         self.scroll_goto_y = y
+      # percent is 1.0
       elsif new_scroll_y - top >= panel_height
-        self.scroll_goto_y = panel_height if scroll_percent != 1.0
+        if scroll_percent != 1.0
+          self.scroll_y = panel_height
+          self.scroll_goto_y = panel_height
+          self.scroll_percent = 1.0
+        end
       else
+        # percent is in between
         self.scroll_goto_y = new_scroll_y
+        self.scroll_y = new_scroll_y
+        self.scroll_percent = local_percent_scrolled(new_scroll_y)
       end
     end
   end
@@ -100,11 +127,13 @@ class Hokusai::Blocks::Panel < Hokusai::Block
     clipped_content_height > panel_height
   end
 
-  def scroll_complete(y, percent:)
-    self.scroll_y = y
-    self.scroll_percent = percent
-    self.scroll_goto_y = nil
+  def scroll_complete(y, percent:, manual:)
+    if manual
+      self.scroll_y = y
+      self.scroll_percent = percent
+    end
 
+    self.scroll_goto_y = nil
     # todo handle selection
 
     emit("scroll", y, percent: percent)
