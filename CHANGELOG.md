@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.7.2
+
+## Modified
+
+* Fixes bugs with panel scrolling/text placement
+* Updates README.md sample to use endless methods
+* Updates README.md with links to rubyforum discussion
+
 ## 0.7.0
 
 ## Added
