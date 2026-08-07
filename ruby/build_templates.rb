@@ -185,7 +185,7 @@ index a26b8ce6..798d7bd0 100644
  RLAPI void ImageDither(Image *image, int rBpp, int gBpp, int bBpp, int aBpp);                            // Dither image data to 16bpp or lower (Floyd-Steinberg dithering)
 EOT
 
-RUN apt install -y gpg
+RUN apt update -y && apt install -y gpg
 
 # Source - https://stackoverflow.com/a/56690743
 # Posted by Liu Hao Cheng, modified by community. See post 'Timeline' for change history
