@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.3
+
+## Modified
+
+* Fixes bug in publish with embedded docker template
+
 ## 0.7.2
 
 ## Modified
