@@ -1,3 +1,4 @@
+# Public: Renders all children horizontally
 class Hokusai::Blocks::Hblock < Hokusai::Block
   template <<~EOF
     [template]

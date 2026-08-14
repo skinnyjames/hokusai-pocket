@@ -29,7 +29,6 @@ require_relative './hokusai/blocks/scissor_end'
 require_relative './hokusai/blocks/clipped'
 require_relative './hokusai/blocks/cursor'
 require_relative './hokusai/blocks/image'
-require_relative './hokusai/blocks/svg'
 require_relative './hokusai/blocks/toggle'
 require_relative './hokusai/blocks/scrollbar'
 require_relative './hokusai/blocks/dynamic'
@@ -55,20 +54,20 @@ require_relative './hokusai/blocks/dropdown'
 require_relative './patches'
 require_relative './build_templates'
 
-HP_SHADER_UNIFORM_FLOAT = 0      # Shader uniform type: float
-HP_SHADER_UNIFORM_VEC2 = 1       # Shader uniform type: vec2 (2 float)
-HP_SHADER_UNIFORM_VEC3 = 2       # Shader uniform type: vec3 (3 float)
-HP_SHADER_UNIFORM_VEC4 = 3       # Shader uniform type: vec4 (4 float)
-HP_SHADER_UNIFORM_INT = 4        # Shader uniform type: int
-HP_SHADER_UNIFORM_IVEC2 = 5      # Shader uniform type: ivec2 (2 int)
-HP_SHADER_UNIFORM_IVEC3 = 6      # Shader uniform type: ivec3 (3 int)
-HP_SHADER_UNIFORM_IVEC4 = 7      # Shader uniform type: ivec4 (4 int)
-HP_SHADER_UNIFORM_UINT = 8       # Shader uniform type: unsigned int
+HP_SHADER_UNIFORM_FLOAT  = 0     # Shader uniform type: float
+HP_SHADER_UNIFORM_VEC2   = 1     # Shader uniform type: vec2 (2 float)
+HP_SHADER_UNIFORM_VEC3   = 2     # Shader uniform type: vec3 (3 float)
+HP_SHADER_UNIFORM_VEC4   = 3     # Shader uniform type: vec4 (4 float)
+HP_SHADER_UNIFORM_INT    = 4     # Shader uniform type: int
+HP_SHADER_UNIFORM_IVEC2  = 5     # Shader uniform type: ivec2 (2 int)
+HP_SHADER_UNIFORM_IVEC3  = 6     # Shader uniform type: ivec3 (3 int)
+HP_SHADER_UNIFORM_IVEC4  = 7     # Shader uniform type: ivec4 (4 int)
+HP_SHADER_UNIFORM_UINT   = 8     # Shader uniform type: unsigned int
 HP_SHADER_UNIFORM_UIVEC2 = 9     # Shader uniform type: uivec2 (2 unsigned int)
 HP_SHADER_UNIFORM_UIVEC3 = 10    # Shader uniform type: uivec3 (3 unsigned int)
 HP_SHADER_UNIFORM_UIVEC4 = 11    # Shader uniform type: uivec4 (4 unsigned int)
 
-# A backend agnostic library for authoring 
+# A backend agnostic library for authoring
 # desktop applications
 # @author skinnyjames
 module Hokusai
@@ -111,28 +110,37 @@ module Hokusai
     @tmpdir = val
   end
 
-  # Access the font registry
+  # Public: Access the font registry
   #
-  # @return [Hokusai::FontRegistry]
+  # Returns a [Hokusai::FontRegistry](/api/Hokusai/FontRegistry)
   def self.fonts
     @fonts ||= FontRegistry.new
   end
 
+  # Public: Access the texture registry
+  # 
+  # Returns a [Hokusai::TextureRegistry](/api/Hokusai/TextureRegistry)
   def self.textures
     @textures ||= TextureRegistry.new
   end
 
+  # Public: Access the image registry
+  # 
+  # Returns a [Hokusai::ImageRegistry](/api/Hokusai/ImageRegistry)
   def self.images
     @images ||= ImageRegistry.new
   end
 
+  # Public: Access the music registry
+  # 
+  # Returns a [Hokusai::MusicRegistry](/api/Hokusai/MusicRegistry)
   def self.musics
     @musics ||= MusicRegistry.new
   end
 
-  # Close the current window
+  # Public: close the current window
   #
-  # @return [void]
+  # Returns nothing
   def self.close_window
     @on_close_window&.call
   end
@@ -147,16 +155,16 @@ module Hokusai
     @on_restore_window = block
   end
 
-  # Restores the current window
+  # Public: Restores the current window
   #
-  # @return [void]
+  # Returns nothing
   def self.restore_window
     @on_restore_window&.call
   end
 
-  # Minimizes the current window
+  # Public: Minimizes the current window
   #
-  # @return [void]
+  # Returns nothing
   def self.minimize_window
     @on_minimize_window&.call
   end
@@ -166,9 +174,9 @@ module Hokusai
     @on_minimize_window = block
   end
 
-  # Maxmizes the current window
+  # Public: Maxmizes the current window
   #
-  # @return [void]
+  # Returns nothing
   def self.maximize_window
     @on_maximize_window&.call
   end
@@ -186,10 +194,12 @@ module Hokusai
     @on_resize_window&.call(width, height)
   end
 
-  # Sets the window position on the screen
+  # Public: Sets the window position on the screen
   #
-  # @param [Array<Float, Float>]
-  # @return [void]
+  # x - the screen's x coordinate
+  # y - the screen's y coordinate
+  #
+  # Returns nothing
   def self.set_window_position(x, y)
     @on_set_window_position&.call(x, y)
   end
@@ -204,59 +214,96 @@ module Hokusai
     @on_set_mouse_position = block
   end
 
-  # Sets the window position on the screen
-  #
-  # @param [Array<Float, Float>]
-  # @return [void]
+  # Public: Sets the mouse position
+  # 
+  # mouse - a Hokusai::Mouse with the position set.
   def self.set_mouse_position(mouse)
     @on_set_mouse_position&.call(mouse)
   end
 
+  # **Backend** Provides the can_render callback
   def self.on_can_render(&block)
     @on_renderable = block
   end
 
+  # **Backend** Provides the open_file callback
   def self.on_open_file(&block)
     @on_open_file = block
   end
 
+  # Public: Picks a file path to open using native file dialog
+  # 
+  # hash - options for native file dialog
+  #        :filter - A comma delimited string of extensions to filter
+  #
+  # Examples
+  # 
+  #   if path = Hokusai.open_file(filter: "png,jpg,jpeg,gif")
+  #     p File.read(path)
+  #   end
+  #
   def self.open_file(hash = {})
     hash.transform_keys!(&:to_s)
 
     @on_open_file&.call(hash)
   end
 
+  # **Backend** Provides the save_file callback
   def self.on_save_file(&block)
     @on_save_file = block
   end
 
+  # Public: Picks a file path to save using native file dialog
+  #
+  # hash - options for native file dialog
+  #        :filter - A comma delimited string of extensions to filter
+  #
+  # Examples
+  #
+  #   if path = Hokusai.save_file(filter: "txt,md")
+  #     File.open(path, "w") { |io| io << "Hello" }
+  #   end
+  #
+  # Returns nothing
   def self.save_file(hash = {})
     hash.transform_keys!(&:to_s)
 
     @on_save_file&.call(hash)
   end
 
-  # Tells if a canvas is renderable
-  # Useful for pruning unneeded renders
+  # Public: Tells if a canvas is renderable (useful for pruning unneeded renders)
+  # 
+  # canvas - a Hokusai::Canvas
   #
-  # @param [Hokusai::Canvas]
-  # @return [Bool]
+  # Returns a boolean
   def self.can_render(canvas)
     @on_renderable&.call(canvas)
   end
 
+  # **Backend** Provides set mouse cursor callback
   def self.on_set_mouse_cursor(&block)
     @on_set_mouse_cursor = block
   end
 
+  # Public: Sets the mouse cursor from the available types:
+  # 
+  # type - A symbol representing the type.
+  #        can be one of [:default, :arrow, :ibeam, :crosshair, :pointer, :none]
+  #
   def self.set_mouse_cursor(type)
     @on_set_mouse_cursor&.call(type)
   end
 
+  # **Backend** Provides copy callback
   def self.on_copy(&block)
     @on_copy = block
   end
 
+  # Public: Copies text to clipboard
+  #
+  # text - the text to copy (String)
+  #
+  # Returns nothing
   def self.copy(text)
     @on_copy&.call(text)
   end
@@ -286,6 +333,9 @@ module Hokusai
     @on_keyboard_visible&.call
   end
 
+  # Internal: Copies state from one Hokusai::Block to another Hokusai::Block
+  #           Used in hot reloading to preserve state between reloads
+  #           You probably don't need this
   def self.copy_state(src, target)
     stack = [src]
     tstack = [target]
@@ -326,6 +376,8 @@ module Hokusai
     end
   end
 
+  # **Backend** updates the state in a Hokusai::Block 
+  # after running event handlers
   def self.update(block)
     stack = [block]
   

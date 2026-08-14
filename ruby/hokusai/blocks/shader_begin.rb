@@ -1,3 +1,4 @@
+# Public: Starts a shader for this region that affects all descendants.
 class Hokusai::Blocks::ShaderBegin < Hokusai::Block
   template <<~EOF
   [template]

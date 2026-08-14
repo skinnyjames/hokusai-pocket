@@ -1,5 +1,6 @@
 
 module Hokusai::Util
+  # Public: Payload for [Hokusai::Util::WrapStream#on_text](/api/Hokusai/Util/WrapStream.html#on-text-block)
   class Wrapped
     attr_accessor :y
     attr_accessor :text, :x, :width, :height, :extra, :widths, :positions
@@ -30,15 +31,15 @@ module Hokusai::Util
     end
   end
 
-  # A cache that stores the results of WrapStream.
-  # Utiltiy methods are provided to quickly fetch a subset of tokens
-  # Based on a given window's coordinates (canvas)
+  # Public: A cache that stores the results of WrapStream.
+  #         Utiltiy methods are provided to quickly fetch a subset of tokens
+  #         Based on a given window's coordinates (canvas)
   class WrapCache
     attr_accessor :tokens
 
-    # returns range denoting the index of the changed lines
-    # from 2 different strings.
-    # NOTE: the change must be consecutive
+    # Public: returns range denoting the index of the changed lines
+    #         from 2 different strings.
+    #         NOTE: the change must be consecutive
     def self.diff(first, second)
       arr = (0..first.length).to_a
 
@@ -80,6 +81,11 @@ module Hokusai::Util
       @tokens = []
     end
 
+    # Public: Adds a token
+    # 
+    # token - Hokusai::Util::Wrapped 
+    # 
+    # Returns nothing
     def <<(element)
       @tokens << element
     end
@@ -208,16 +214,16 @@ module Hokusai::Util
       wrapped.y >= canvas.y && wrapped.y <= canvas.y + canvas.height
     end
 
-    #  arrows = cursor index
-    #  letters = selected positions
-    #                          
-    #  │     │      │     │     │  
-    #  │  A  │   B  │  C  │  D  │  
-    #  │     │      │     │     │  
-    #  ▼  0  ▼   1  ▼  2  ▼  3  ▼  
-    #                           
-    #  -1    0      1     2     3  
-    #                            
+    # Public: Gets the area coordinates for a selection
+    #         to draw a text selection background.
+    # 
+    # tokens - the result of WrapCache#tokens_for
+    # selector - a [Hokusai::Util::Selection](/api/Hokusai/Util/Selection) object
+    # options - kwargs options
+    #           copy - boolean to copy selected tokens
+    #           padding - a Hokusai::Padding object
+    #           
+    # Returns Hokusai::Util::WrapCachePayload
     def selected_area_for_tokens(tokens, selector, copy: false, padding: Hokusai::Padding.default)
       return if selector.nil? || !selector.selecting?
 
@@ -334,6 +340,11 @@ module Hokusai::Util
       WrapCachePayload.new(copy_buffer, position_buffer, pcursor)
     end
 
+    # Public: Get cached tokens for a given Hokusai::Canvas
+    # 
+    # canvas - a Hokusai::Canvas
+    # 
+    # Return Array(Hokusai::Util::Wrapped)
     def tokens_for(canvas)
       index = bsearch(canvas)
       return [] if index.nil?
@@ -352,16 +363,46 @@ module Hokusai::Util
     end
   end
 
-  # A disposable streaming text wrapper
-  # tokens can be appended onto it, where it they will break on a given width.
-  # Opaque payloads can be passed for each token, which will be provided to callbacks.
-  # This makes it suitable for processing and wrapping markdown/html/tokenized text
+  # Public: A disposable streaming text wrapper
+  #         tokens can be appended onto it, where it they will break on a given width.
+  #         Opaque payloads can be passed for each token, which will be provided to callbacks.
+  #         This makes it suitable for processing and wrapping markdown/html/tokenized text
   #
-  # height of the wrapped text is tracked with `stream#y`
+  # Examples
+  # 
+  #   stream = Hokusai::Util::WrapStream.new(canvas.width, canvas.x, canvas.y) do |string, extra|
+  #     # String is the data being wrapped
+  #     # Extra is the payload provided for that string
+  #     # Callbacks takes a [width, height] as response
+  #     [Hokusai.fonts.get("default").measure(string, size).first, size]
+  #   end
+  #   #
+  #   # subscribe to emitted tokens Hokusai::Util::Wrapped
+  #   stream.on_text do |wrapped|
+  #     draw do
+  #       text(wrapped.text, wrapped.x, wrapped.y) do |command|
+  #         command.color = wrapped.extra[:color]
+  #       end
+  #     end
+  #   end
+  #   # Feed the stream content
+  #   stream.wrap("Hello this red text might be wrapped over the width", { color: Hokusai::Color.new(222,22,22) })
+  #   stream.wrap("This is blue text", { color: Hokusai::Color.new(22,22,222) })
+  #   # flush remaining tokens
+  #   stream.flush
+  #   # stream#y now holds the total height of the wrapped tokens
+  #   stream.y
+  #
   class WrapStream
     attr_accessor :buffer, :x, :y, :origin_y, :current_width, :stack, :widths, :current_position, :positions, :on_text_cb
     attr_reader :width, :origin_x, :on_text_cb
 
+    # Public: constructor for WrapStream
+    # 
+    # width - a float. When text exceeds this width, it will wrap to a new line
+    # origin_x - where the x value starts (default: 0.0)
+    # origin_y - where the y value starts (default: 0.0)
+    # block - a callback to measure a given string.  Callback must return an array containing the width and height of the string
     def initialize(width, origin_x = 0.0, origin_y = 0.0, &measure)
       @width = width            # the width of the container for this wrap
       @measure_cb = measure     # a measure callback that returns the width/height of a given char (takes 2 params: a char and an token payload)
@@ -381,12 +422,14 @@ module Hokusai::Util
 
     NEW_LINE_REGEX = /\n/
 
-    # Appends <text> to the wrap stream.
-    # If the text supplies causes the buffer to grow beyond the supplied width
-    # The buffer will be flushed to the <on_text_cb> callback.
+    # Public: Appends (text) to the wrap stream.
+    #         If the text supplies causes the buffer to grow beyond the supplied width
+    #         The buffer will be flushed to the (on_text_cb) callback.
     #
-    # @param [String] text (text to append to this wrap stream)
-    # @param [Object] extra (an opaque payload that will be passed to callbacks)
+    # text - text to append to this wrap stream
+    # extra - an opaque payload that will be passed to callbacks
+    # 
+    # Returns nothing
     def wrap(text, extra)
       offset = 0
       size = text.size
@@ -504,7 +547,7 @@ module Hokusai::Util
       end
     end
 
-    # Flushes the current buffer/stack.
+    # Public: Flushes the current buffer/stack.
     def flush
       stack.each do |(range, extra)|
         content = buffer[range]
@@ -523,6 +566,11 @@ module Hokusai::Util
       self.x = origin_x
     end
 
+    # Public: A callback that is called whenever the stream is wrapped or flushes
+    # 
+    # block - the provided callback
+    # 
+    # Returns nothing
     def on_text(&block)
       @on_text_cb = block
     end

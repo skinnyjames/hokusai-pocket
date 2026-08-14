@@ -1,9 +1,17 @@
 module Hokusai
-  # Represents a patch to move a loop item
-  # from one location to another
+  # Internal: Represents a patch to move a loop item
+  #           from one location to another
+  #           used in [Diff](/api/Hokusai/Diff)
   class MovePatch
     attr_accessor :from, :to, :value, :delete
 
+    # Internal: MovePatch constructor
+    # 
+    # from: - kwarg index moving from
+    # to: - kwarg index moving to
+    # value: - kwarg value
+    # delete: - should we overwrite to:?
+    # 
     def initialize(from:, to:, value:, delete: false)
       @from = from
       @to = to
@@ -12,11 +20,16 @@ module Hokusai
     end
   end
 
-  # Represents a patch to insert an item
-  # into the loop list
+  # Internal: Represents a patch to insert an item into the loop list
+  #           used in [Diff](/api/Hokusai/Diff)
   class InsertPatch
     attr_accessor :target, :value, :delete
 
+    # Internal: InsertPatch constructor
+    # 
+    # target: - kwarg index to insert at
+    # value: - kwarg value
+    # delete: - should we overwrite the target?
     def initialize(target:, value:, delete: false)
       @target = target
       @value = value
@@ -24,33 +37,46 @@ module Hokusai
     end
   end
 
-  # Represents a patch to update the value
-  # of a loop item at an index
+  # Internal: Represents a patch to update the value of a loop item at an index
+  #           used in [Diff](/api/Hokusai/Diff)
   class UpdatePatch
     attr_accessor :target, :value
 
+    # Internal: constructor
+    # 
+    # target: - index to update
+    # value: - value to update with
     def initialize(target:, value:)
       @target = target
       @value = value
     end
   end
 
-  # Patch to delete a loop list item
+  # Internal: Patch to delete a loop list item
+  #           used in [Diff](/api/Hokusai/Diff)
   class DeletePatch
     attr_accessor :target
 
+    # Internal: constructor
+    # 
+    # target - index to delete
     def initialize(target)
       @target = target
     end
   end
 
-  # A Differ for comparing one set of values to another
-  #
-  # When #patch is called, will yield various patches to
-  # true up the old values with the new values.
+  # Internal: A Differ for comparing one set of values to another
+  #           When #patch is called, will yield various patches to
+  #           true up the old values with the new values.
+  #           see: [MovePatch](/api/Hokusai/MovePatch), [InsertPatch](/api/Hokusai/InsertPatch), [UpdatePatch](/api/Hokusai/UpdatePatch), and [DeletePatch](/api/Hokusai/DeletePatch)
   class Diff
     attr_reader :before, :after, :insertions
 
+    # Internal: constructor
+    # 
+    # before - array of before values
+    # after - array of after values
+    # 
     def initialize(before, after)
       @before = before
       @after = after
@@ -66,6 +92,10 @@ module Hokusai
       memo
     end
 
+    # Internal: yields a sequence of patches to make 
+    #           before the same as after
+    #
+    # Returns nothing
     def patch
       i = 0
       deletions = 0

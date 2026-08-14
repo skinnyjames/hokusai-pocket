@@ -1,5 +1,6 @@
 module Hokusai
   module Mounting
+    # Internal: Represents a Block/template to be mounted
     class MountEntry
       attr_reader :block, :parent, :ast, :target, :index, :ctx
 

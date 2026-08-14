@@ -1,3 +1,4 @@
+# Public: Measures it's children and emits the width and height
 class Hokusai::Blocks::Dynamic < Hokusai::Block
   template <<~EOF
     [template]

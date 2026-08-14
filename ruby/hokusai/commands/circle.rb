@@ -1,8 +1,15 @@
 module Hokusai
+  # Internal: Command to draw a circle.
+  #           Radius starts from [x,y] and moves outward from center
   class Commands::Circle < Commands::Base
     attr_reader :x, :y, :radius, :color, :outline_color,
                 :outline
 
+    # Internal: Circle constructor
+    # 
+    # x - x coordinate
+    # y - y coordinate
+    # radius - circle radius
     def initialize(x, y, radius)
       @x = x
       @y = y
@@ -16,12 +23,19 @@ module Hokusai
       [self.class, x, y, radius, color.hash, outline_color.hash, outline].hash
     end
 
+    # TODO: Give the circle an outline
+    # @param [Float] outline weight
     def outline=(weight)
       @outline = weight
 
       self
     end
 
+    # Public: sets the circle color.
+    # 
+    # value - a Hokusai::Color or Array of Int
+    #
+    # Returns nothing
     def color=(value)
       case value
       when Color
@@ -33,6 +47,8 @@ module Hokusai
       self
     end
 
+    # TODO: Give the circle an outline color
+    # @param [Hokusai::Color | Array(Integer)] a Hokusai::Color or array of rgba values
     def outline_color=(value)
       case value
       when Color

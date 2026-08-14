@@ -1,3 +1,4 @@
+# Public: Stops clipping region
 class Hokusai::Blocks::ScissorEnd < Hokusai::Block
   template <<~EOF
   [template]

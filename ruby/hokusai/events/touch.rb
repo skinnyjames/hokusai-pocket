@@ -1,7 +1,6 @@
-# frozen_string_literal: true
-
 module Hokusai
-  class TouchEvent < Event
+  # Parent class representing a generic touch event
+  class TouchEvent < BaseEvent
     attr_reader :input
 
     def initialize(input, state)
@@ -10,14 +9,19 @@ module Hokusai
       @touch = input.touch
     end
 
+    # Are there any touches?
+    # @return [Bool]
     def down?
       @touch.count > 0
     end
 
+    # Are there <not> any touches?
+    # @return [Bool]
     def up?
       @touch.count <= 0
     end
 
+    # @return [Bool] did a touch stop?
     def released?
       @touch.released?
     end

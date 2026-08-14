@@ -1,5 +1,3 @@
-# frozen_string_literal: true
-
 require_relative "./node_mounter"
 require_relative "./meta"
 
@@ -14,10 +12,12 @@ module Hokusai
     end
   end
 
+  # Internal: Container for the AST, props, events, and children
+  #           available on [Hokusai::Block#node](/api/Hokusai/Block#node)
+  # 
   class Node
     attr_reader :ast, :node, :uuid, :meta, :portal
 
-    # returns node..
     def self.build(klass, parent = nil, &block)
       ast = NodeBuilder.build(klass, &block)
 
@@ -30,14 +30,25 @@ module Hokusai
       new(ast, parent)
     end
 
+    # Internal: Is this node a slot?
+    # 
+    # Returns boolean
     def slot?
       ast.slot?
     end
 
+    # Internal: name of this node
+    # 
+    # Returns String
     def type
       ast.type
     end
 
+    # Internal: Get a event by name (if one exists)
+    # 
+    # name - Name of the event
+    # 
+    # Returns [Hokusai::Ast::Event](/api/Hokusai/Ast/Event) or nil if none exists
     def event(name)
       ast.event(name)
     end
@@ -55,6 +66,7 @@ module Hokusai
       NodeMounter.new(self, klass, previous_providers: providers).mount
     end
 
+    # Internal: Emit event to subscribers
     def emit(name, **args)
       if node = portal
         if event = node.event(name)

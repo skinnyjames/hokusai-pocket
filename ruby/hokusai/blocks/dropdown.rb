@@ -1,3 +1,4 @@
+# Public: Dropdown item for Hokusai::Blocks::Dropdown
 class Hokusai::Blocks::DropdownItem < Hokusai::Block
   style <<~EOF
   [style]
@@ -80,6 +81,9 @@ class Hokusai::Blocks::DropdownItem < Hokusai::Block
     end
   end
 end
+
+# Public: A dropdown menu.  takes the prop :options which is an array of strings
+#         or an array of objects which respond to :value
 class Hokusai::Blocks::Dropdown < Hokusai::Block
   style <<~EOF
   [style]

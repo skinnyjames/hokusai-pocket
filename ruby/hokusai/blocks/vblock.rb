@@ -1,5 +1,6 @@
 module Hokusai
   module Blocks
+    # Public: Renders all children vertically
     class Vblock < Hokusai::Block
       template <<~EOF
         [template]

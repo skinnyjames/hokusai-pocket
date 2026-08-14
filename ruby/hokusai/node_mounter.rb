@@ -3,6 +3,7 @@ require_relative "./mounting/mount_entry"
 require_relative "./mounting/update_entry"
 
 module Hokusai
+  # Internal: Mounts a Hokusai::Block into a Hokusai::Node
   class NodeMounter
     attr_accessor :primary_stack, :secondary_stack
     attr_reader :root

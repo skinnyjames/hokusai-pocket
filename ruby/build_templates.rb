@@ -5,6 +5,8 @@
 # os : <osx|windows|linux>
 # target: <app.rb>
 module Hokusai
+  # Internal: Docker templates that get written to disk by binary
+  #           during cross platform publishing
   def self.docker_template
     <<~HELL
 FROM skinnyjames/mruby-cross-<%= os %> as cross

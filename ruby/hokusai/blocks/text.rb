@@ -1,7 +1,5 @@
-require_relative "../util/wrap_stream"
-require_relative "../util/selection"
-
 module Hokusai::Blocks
+  # Public: A text rendering component
   class Text < Hokusai::Block
     template <<-EOF
     [template]

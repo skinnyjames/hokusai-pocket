@@ -1,5 +1,5 @@
 module Hokusai
-  # An event emitter
+  # Internal: An event emitter
   class Publisher
     attr_reader :listeners
 
@@ -7,20 +7,18 @@ module Hokusai
       @listeners = listeners
     end
 
-    # Adds a listener that subscribes
-    # to events emitted
-    # by this publisher
+    # Internal: Adds a listener that subscribes to events emitted by this publisher
     #
-    # @param [Hokusai::Block] listener
+    # listener - a Hokusai::Block
     def add(listener, extra: {})
       listeners << [listener, extra]
     end
 
-    # emits `event` with `**args`
-    # to all subscribers
-    # @see
-    # @param [String] name the event name
-    # @param [**args] the args to emit
+    # Internal: emits `event` with `**args` to all subscribers
+    #
+    # name - event name
+    # args - splatted arg array
+    # kwargs - any kwargs to send
     def notify(name, *args, **kwargs)
       listeners.each do |(listener, extra)|
         raise Hokusai::Error.new("No target `##{name}` on #{listener.class}") unless name.is_a?(Proc) || listener.respond_to?(name)

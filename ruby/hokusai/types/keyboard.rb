@@ -1,5 +1,3 @@
-# frozen_string_literal: true
-
 module Hokusai
   KEY_CODES = { 
     null: 0, apostrophe: 39, comma: 44, minus: 45, period: 46,
@@ -21,10 +19,16 @@ module Hokusai
     kp_equal: 336, back: 4, menu: 5, volume_up: 24, volume_down: 25
   }
 
+  # Internal: Represents keyboard state
+  #           populated by the MRuby/Raylib backend.
+  #           Should not need to use this directly.
   class Keyboard
     attr_accessor :shift, :control, :super, :alt
     attr_reader :keys, :pressed, :released, :down
 
+    # Public: Is the pressed key printable?
+    # 
+    # Returns boolean
     def printable?
       [
         :space, :tab, :apostrophe, :comma, :minus, :period,
@@ -48,20 +52,38 @@ module Hokusai
       @released = []
       @down = []
 
-      # populate the key states
       KEY_CODES.each do |symbol, code|
         @keys[symbol] = { code: code, symbol: symbol, up: false, down: false, pressed: false, released: false }
       end
     end
 
+    # Internal: The symbol form of the pressed key
+    # 
+    # Examples
+    #  
+    #   keyboard.symbol
+    #   #=> :enter
+    #   
+    # Returns Symbol
     def symbol
       pressed[0]&.[](:symbol)
     end
 
+    # Internal: The integer code form of the pressed key
+    # 
+    # Examples
+    #  
+    #   keyboard.symbol
+    #   #=> 257
+    #   
+    # Returns Symbol
     def code
       pressed[0]&.[](:code)
     end
 
+    # Internal: The char of the presed key
+    # 
+    # Returns String
     def char
       pressed[0]&.[](:char)
     end
