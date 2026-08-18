@@ -1,9 +1,14 @@
 module Hokusai
-  class Commands::Rect < Commands::Base
+  # Internal: Command to render a rectangle
+  class Commands::Rectangle < Commands::Base
     attr_reader :x, :y, :width, :height,
                 :rounding, :color, :outline,
                 :outline_color, :padding, :gradient
 
+    # @param [Float] start x
+    # @param [Float] start y
+    # @param [Float] rect width
+    # @param [Float] rect height
     def initialize(x, y, width, height)
       @x = x.to_f
       @y = y.to_f
@@ -53,9 +58,11 @@ module Hokusai
       @gradient = colors
     end
 
-    # Sets padding for the rectangle
-    # `value` is an array with padding declarations
-    # at [top, right, bottom, left]
+    # Public: Sets padding for the rectangle
+    # 
+    # value - a [Hokusai::Padding](/api/Hokusai/Padding) object
+    # 
+    # Returns self
     def padding=(value)
       case value
       when Padding
@@ -67,14 +74,18 @@ module Hokusai
       self
     end
 
-    # Sets an outline at `weight`
+    # Public: Set outline for rect
+    # 
+    # value - a [Hokusai::Outline](/api/Hokusai/Outline) object
     def outline=(outline)
       @outline = outline
 
       self
     end
 
-    # Sets the outline color to `value`
+    # Public: Set outline color
+    # 
+    # value - a [Hokusai::Color](/api/Hokusai/Color) object
     def outline_color=(value)
       case value
       when Color
@@ -88,9 +99,11 @@ module Hokusai
       self
     end
 
-
-    # Sets the color of the rectangle
-    # from an array of rgba values
+    # Public: Set fill color
+    # 
+    # value - a [Hokusai::Color](/api/Hokusai/Color) object
+    # 
+    # Returns self
     def color=(value)
       case value
       when Color
@@ -102,29 +115,32 @@ module Hokusai
       self
     end
 
-    # Rounding amount for this rect
+    # Public: sets rounding
+    # 
+    # amount - a float value between 0 and 1
+    # 
+    # Returns self
     def round=(amount)
       @rounding = amount
 
       self
     end
 
-    # Returns true if the rectangle has any padding
+    # Public: returns true if the rectangle has any padding
     def padding?
       [padding.t, padding.r, padding.b, padding.l].any? do |p|
         p != 0.0
       end
     end
 
-    # Returns a tuple with the
-    # geometric boundary for this rectangle
+
     def boundary
       [x, y, width, height]
     end
 
-    # Returns a tuple with the
-    # computed geometric **inner** boundary for this rectangle
-    # with outlines subtracted
+    # Public: get the rect dimensions after padding and outline applied
+    # 
+    # Returns Array(Float)
     def background_boundary
       nx = x.dup
       ny = y.dup
@@ -152,14 +168,12 @@ module Hokusai
       [nx, ny, nw, nh]
     end
 
-    # Returns true if this rectangle
-    # has an outline
+    # Public: Does this rect have any outlines?
     def outline?
       outline.present?
     end
 
-    # Returns true if this rectangle's
-    # outline is uniform
+    # Public: Is the rect outline uniform?
     def outline_uniform?
       outline.uniform?
     end

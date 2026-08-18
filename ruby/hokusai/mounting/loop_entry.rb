@@ -2,6 +2,7 @@ require_relative "../diff"
 
 module Hokusai
   module Mounting
+    # Internal: Used to populate context vars from a template loop directive
     class LoopContext
       attr_reader :table, :proxies
       def initialize
@@ -22,6 +23,7 @@ module Hokusai
       end
     end
 
+    # Internal: Represents a looped AST node
     class LoopEntry
       INDEX_KEY = "index".freeze
 

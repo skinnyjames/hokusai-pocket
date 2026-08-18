@@ -1,5 +1,6 @@
 require_relative "./text"
 
+# Public: Input block, needs work
 class Hokusai::Blocks::Input < Hokusai::Block
   template <<~EOF
   [template]

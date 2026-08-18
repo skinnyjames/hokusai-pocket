@@ -1,4 +1,5 @@
 module Hokusai
+  # Internal: Describes a Block with layout coordinates for rendering
   class PainterEntry
     attr_reader :block, :parent, :x, :y, :w, :h
     def initialize(block, x, y, w, h)
@@ -21,6 +22,8 @@ module Hokusai
   ZTARGET_ROOT = "root"
   ZTARGET_PARENT = "parent"
 
+  # Internal: Responsible for iterating through the render tree, event handling, and invoking the draw callbacks
+  #           Used by the C/MRuby backend
   class Painter
     attr_reader :root, :input, :before_render, :after_render,
                 :events
@@ -69,18 +72,13 @@ module Hokusai
       @after_render = block
     end
 
-    # def debug(parent, children)
-    #   @i ||= 0
-      
-    #   pp [
-    #     "#{@i}",
-    #     "parent: #{parent.block.class}##{parent.block.node.portal&.ast&.id} (z: #{parent.block.node.meta.get_prop(:z)})",
-    #     "children: #{children.map {|c| "#{c.block.class}##{c.block.node.portal&.ast&.id} (z: #{c.block.node.meta.get_prop(:z)})"} }"
-    #   ]
-    #   @i += 1
-    # end
-
-    # @return [Array(Commands::Base)] the command list
+    # Internal: Render the block on this painter in (canvas)
+    # 
+    # canvas - a Hokusai::Canvas to render on
+    # resize - boolean telling us if this frame is resized
+    # capture: - kwarg telling us if we should capture events
+    # 
+    # Returns nothing
     def render(canvas, resize = false, capture: true)
       return if root.children.empty?
 

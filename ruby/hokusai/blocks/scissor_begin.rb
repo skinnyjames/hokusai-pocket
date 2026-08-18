@@ -1,3 +1,16 @@
+# Public: Starts a clipping region with everything
+#         inside being clipped to the canvas dimensions
+#         Last child should be [Hokusai::Blocks::ScissorEnd](/api/Hokusai/Blocks/ScissorEnd)
+#         
+# Examples
+# 
+#   template <<-EOF
+#   [template]
+#     scissor_begin
+#       more
+#         components
+#       scissor_end
+#   EOF
 class Hokusai::Blocks::ScissorBegin < Hokusai::Block
   template <<~EOF
   [template]

@@ -1,6 +1,14 @@
-# frozen_string_literal: true
-
 module Hokusai
+  # Public: Represenation of mouse button state
+  #  
+  # Examples
+  # 
+  #   # from input
+  #   input.mouse.left.up # => false
+  #   input.mouse.left.down # => true
+  #   input.mouse.left.clicked # => true
+  #   input.mouse.left.released # => false
+  #   
   class MouseButton
     attr_accessor :up, :down, :clicked, :released
 
@@ -12,9 +20,21 @@ module Hokusai
     end
   end
 
-  class Mouse
-    attr_reader :pos, :delta, :left, :right, :middle, :scroll
-    attr_accessor :scroll_delta
+  # Public: Representation of mouse state
+  class Mouse  
+    # Public: A [Hokusai::Vec2](/api/Hokusai/Vec2) holding the mouse position
+    attr_reader :pos
+
+    # Public: A [Hokusai::Vec2](/api/Hokusai/Vec2) holding the mouse delta
+    attr_reader :delta
+
+    # Public: A float containing the mouse scroll
+    attr_reader :scroll
+
+    # Public: A float containing the mouse scroll delta
+    attr_reader :scroll_delta
+
+    attr_reader :left, :right, :middle
 
     def initialize
       @pos = Vec2.new(0.0, 0.0)

@@ -2,8 +2,7 @@ module Hokusai
   class Commands::Text < Commands::Base
     attr_reader :x, :y, :size, :color,
                 :padding, :wrap, :content,
-                :font, :static, :line_height,
-                :bold, :italic
+                :font, :static, :line_height
 
     def initialize(content, x, y)
       @content = content
@@ -15,21 +14,11 @@ module Hokusai
       @wrap = false
       @font = nil
       @static = true
-      @bold = false
-      @italic = false
       @line_height = 0.0
     end
 
     def hash
       [self.class, content, color.hash, padding.hash, size, font, wrap].hash
-    end
-
-    def bold=(value)
-      @bold = value
-    end
-
-    def italic=(value)
-      @italic = value
     end
 
     def static=(value)
@@ -44,14 +33,20 @@ module Hokusai
       @static = !value
     end
 
+    # Sets the font
+    # @param [Hokusai::Backend::Font] the font to render with
     def font=(value)
       @font = value
     end
 
+    # Set content
+    # @param [String] the content to render
     def content=(value)
       @content = value
     end
 
+    # Sets the font size
+    # @param [Integer] font size
     def size=(height)
       @size = height.to_f
     end

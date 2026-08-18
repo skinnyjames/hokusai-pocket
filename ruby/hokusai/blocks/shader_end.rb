@@ -1,3 +1,4 @@
+# Public: Stops a shader defined by ShaderBegin
 class Hokusai::Blocks::ShaderEnd < Hokusai::Block
   template <<~EOF
   [template]

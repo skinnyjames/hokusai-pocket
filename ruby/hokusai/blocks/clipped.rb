@@ -1,3 +1,4 @@
+# Public: Clip descendants according to clipping region (slotted)
 class Hokusai::Blocks::Clipped < Hokusai::Block
   style <<-EOF
   [style]

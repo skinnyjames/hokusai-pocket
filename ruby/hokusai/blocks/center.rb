@@ -1,3 +1,4 @@
+# Public: Centers immediate descendants (slot)
 class Hokusai::Blocks::Center < Hokusai::Block
   template <<~EOF
   [template]

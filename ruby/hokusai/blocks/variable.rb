@@ -1,3 +1,4 @@
+# Public: evaluates a Hokusai::Block from a string.  Dangerous.
 class Hokusai::Blocks::Variable < Hokusai::Block
   template <<~EOF
   [template]

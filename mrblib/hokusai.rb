@@ -1,8 +1,10 @@
 
 module Hokusai
+  # Public: Error class
   class Error < StandardError; end
 end
 module Hokusai
+  # Public: A class to represent x,y coordinates
   class Vec2
     attr_accessor :x, :y
     def initialize(x, y)
@@ -11,6 +13,7 @@ module Hokusai
     end
   end
   
+  # Public: A class to represent a rectangle
   class Rect
     attr_accessor :x, :y, :width, :height
 
@@ -21,6 +24,11 @@ module Hokusai
       @height = height
     end
 
+    # Public: combines rectangle with another rectangle
+    # 
+    # other - another Hokusai::Rect to add.
+    # 
+    # Returns a new Hokusai::Rect
     def add(other)
       ex = x + width
       ey = y + height
@@ -38,14 +46,29 @@ module Hokusai
       )
     end
 
+    # Public: Does this rectangle intersect with (other)?
+    # 
+    # other - a Hokusai::Rect to compare
+    # 
+    # Returns boolean
     def intersect?(other)
       (x - other.x).abs <= ((width)) && (y - other.y).abs <= ((height))
     end
 
+    # Public: does this rectangle include (y)?
+    # 
+    # y - a y coordinate
+    # 
+    # Returns boolean
     def includes_y?(y)
       y > @y && y <= (@y + @height)
     end
 
+    # Public: does this rectangle include (x)?
+    # 
+    # x - x coordinate
+    # 
+    # Returns boolean
     def includes_x?(x)
       x > @x && x <= (@x + @width)
     end
@@ -70,6 +93,15 @@ end
 module Hokusai
   class Outline 
     attr_reader :top, :left, :right, :bottom
+
+    # Public: Constructor for Hokusai::Outline
+    #
+    # top - top outline width (Float)
+    # right - right outline width (Float)
+    # bottom - bottom outline width (Float)
+    # left - left outline width (Float)
+    #
+    # Returns Hokusai::Outline
     def initialize(top, right, bottom, left)
       @top = top
       @left = left
@@ -77,6 +109,9 @@ module Hokusai
       @bottom = bottom
     end
   
+    # Public: Default outline - zero'ed out.
+    #
+    # Returns Hokusai::Outline
     def self.default
       new(0.0, 0.0, 0.0, 0.0)
     end
@@ -85,6 +120,18 @@ module Hokusai
       [self.class, top, right, bottom, left].hash
     end
 
+    # Public: Converts value to outline
+    #
+    # value - value can be String of comma delimited float values (top, right, bottom, left)
+    #         an Array of float values, a Hokusai::Outline value
+    #         or an Float, which will be applied to uniformly
+    #
+    # Examples
+    #
+    #   Hokuasi::Outline.convert("1.0,0.0,1.0,0.0")
+    #   # Hokusai::Outline(@top = 1.0, @right = 0.0, @bottom = 1.0, @left = 0.0)
+    #
+    # Returns Hokusai::Outline
     def self.convert(value)
       case value
       when String
@@ -102,6 +149,9 @@ module Hokusai
       end
     end
 
+    # Public: Does this outline have any widths above 0?
+    #
+    # Returns boolean
     def present?
       top > 0.0 || right > 0.0 || bottom > 0.0 || left > 0.0
     end
@@ -114,8 +164,18 @@ module Hokusai
   class Boundary < Outline
   end
 
+  # Public: Hokusai::Padding represents padding around a given geometry
   class Padding
     attr_reader :top, :left, :right, :bottom
+
+    # Public: Constructor for Hokusai::Padding
+    #
+    # top - top outline width (Float)
+    # right - right outline width (Float)
+    # bottom - bottom outline width (Float)
+    # left - left outline width (Float)
+    #
+    # Returns Hokusai::Padding
     def initialize(top, right, bottom, left)
       @top = top
       @left = left
@@ -128,14 +188,32 @@ module Hokusai
     alias_method :r, :right
     alias_method :b, :bottom
 
+    # Public: The total width of the padding
+    #
+    # Returns Float
     def width
       right + left
     end
 
+    # Public: The total height of the padding
+    #
+    # Returns Float
     def height
       top + bottom
     end
 
+    # Public: Converts value to padding
+    #
+    # value - value can be String of comma delimited float values (top, right, bottom, left)
+    #         an Array of float values, a Hokusai::Padding value
+    #         or an Integer, which will be applied to uniformly
+    #
+    # Examples
+    #
+    #   Hokuasi::Padding.convert("22,22,22,22")
+    #   # Hokusai::Padding(@top = 22, @right = 22, @bottom = 22, @left = 22)
+    #
+    # Returns Hokusai::Padding
     def self.convert(value)
       case value
       when String
@@ -160,9 +238,21 @@ module Hokusai
     end
   end
 
+  # Public: Hokusai::Canvas represents a drawable region
+  # It provides information between Hokusai::Painter and a Hokusai::Block
   class Canvas
-    attr_accessor :width, :height, :x, :y, :vertical, :reverse, :offset_y
+    # Public: Should the following blocks be vertical?
+    #
+    # value - true if vertical
+    #
+    # Returns Nothing
+    attr_accessor :vertical
+
+    attr_accessor :width, :height, :x, :y, :reverse, :offset_y
     attr_reader :ox, :oy, :owidth, :oheight
+
+    # Internal: Constructor for Hokusai::Canvas
+    # You should not need to use this
     def initialize(width, height, ax = 0.0, ay = 0.0, vertical = true, reverse = false)
       @width = width
       @height = height
@@ -177,6 +267,14 @@ module Hokusai
       @reverse = reverse
     end
 
+    # Public: Resets canvas at [x,y,width, height]
+    #
+    # x - x coordinate
+    # y - y coordinate
+    # width - width of canvas
+    # height - height of canvas
+    #
+    # Returns Nothing
     def reset(x, y, width, height, vertical: true, reverse: false)
       self.x = x
       self.y = y
@@ -187,22 +285,42 @@ module Hokusai
       self.offset_y = 0.0
     end
 
+    # Public: Convert a canvas to a Hokusai::Rect
+    #
+    # Returns Hokusai::Rect
     def to_bounds
       Hokusai::Rect.new(x, y, width, height)
     end
 
+    # Internal: Test if Mouse input is hovering this canvas
+    #
+    # input - a Hokusai::Input
+    #
+    # Returns boolean
     def hovered?(input)
       input.hovered?(self)
     end
 
+    # Public: Are the following children of this Canvas reversed?
+    #
+    # Returns boolean
     def reverse?
       reverse
     end
   end
 
-  # Color = Struct.new(:red, :green, :blue, :alpha) do
+  # Public: Represents an RGBA color
+  # 
+  # Examples
+  #
+  #   Hokusai::Color.new(0,0,0,255)
+  #   # black
+  #
+  #   Hokusai::Color.convert([255,0,0,100])
+  #   # translucent red
   class Color
     attr_accessor :red, :green, :blue, :alpha
+
     def initialize(red, green, blue, alpha = 255)
       @red = red.freeze
       @green = green.freeze
@@ -215,6 +333,17 @@ module Hokusai
     alias_method :g, :green
     alias_method :a, :alpha
 
+    # Public: Converts value to Hokusai::Color
+    #
+    # value - value can be String of comma delimited integer values (red, green, blue, alpha)
+    #         an Array of integer values, or a Hokusai::Color value
+    #
+    # Examples
+    #
+    #   Hokuasi::Color.convert("22,22,22,22")
+    #   # Hokusai::Padding(@red = 22, @green = 22, @blue = 22, @alpha = 22)
+    #
+    # Returns Hokusai::Padding
     def self.convert(value)
       case value
       when String
@@ -229,6 +358,15 @@ module Hokusai
       new(value[0], value[1], value[2], value[3] || 255)
     end
 
+    # Public: Converts to a value where each component is a number between 0 and 1
+    # useful for fragment shaders
+    #
+    # Examples
+    #
+    #   Hokusai::Color.new(255,255,255,255).to_shader_value
+    #   # [1.0,1.0,1.0,1.0]
+    #
+    # Returns Array(Float)
     def to_shader_value
       [(r / 255.0), (g / 255.0), (b / 255.0), (a / 255.0)]
     end
@@ -239,6 +377,7 @@ module Hokusai
   end
 end
 module Hokusai
+  # Internal: tracks drag touch input state
   class Drag
     attr_accessor :pos, :angle
     def initialize
@@ -264,6 +403,7 @@ module Hokusai
     1024 => :released,
   }
 
+  # Internal: Touch management. Populated from MRuby/Raylib layer
   class Touch
     attr_accessor :type, :hold_duration, :drag, :pinch, :down, :up,
                   :pos, :count
@@ -276,6 +416,9 @@ module Hokusai
       @pinch = Pinch.new
     end
 
+    # Internal: Not touching?
+    # 
+    # Returns boolean
     def released?
       @type == :released || @type == :none
     end
@@ -292,9 +435,17 @@ module Hokusai
   end
 end
 
-# frozen_string_literal: true
-
 module Hokusai
+  # Public: Represenation of mouse button state
+  #  
+  # Examples
+  # 
+  #   # from input
+  #   input.mouse.left.up # => false
+  #   input.mouse.left.down # => true
+  #   input.mouse.left.clicked # => true
+  #   input.mouse.left.released # => false
+  #   
   class MouseButton
     attr_accessor :up, :down, :clicked, :released
 
@@ -306,9 +457,21 @@ module Hokusai
     end
   end
 
-  class Mouse
-    attr_reader :pos, :delta, :left, :right, :middle, :scroll
-    attr_accessor :scroll_delta
+  # Public: Representation of mouse state
+  class Mouse  
+    # Public: A [Hokusai::Vec2](/api/Hokusai/Vec2) holding the mouse position
+    attr_reader :pos
+
+    # Public: A [Hokusai::Vec2](/api/Hokusai/Vec2) holding the mouse delta
+    attr_reader :delta
+
+    # Public: A float containing the mouse scroll
+    attr_reader :scroll
+
+    # Public: A float containing the mouse scroll delta
+    attr_reader :scroll_delta
+
+    attr_reader :left, :right, :middle
 
     def initialize
       @pos = Vec2.new(0.0, 0.0)
@@ -328,8 +491,6 @@ module Hokusai
     end
   end
 end
-
-# frozen_string_literal: true
 
 module Hokusai
   KEY_CODES = { 
@@ -352,10 +513,16 @@ module Hokusai
     kp_equal: 336, back: 4, menu: 5, volume_up: 24, volume_down: 25
   }
 
+  # Internal: Represents keyboard state
+  #           populated by the MRuby/Raylib backend.
+  #           Should not need to use this directly.
   class Keyboard
     attr_accessor :shift, :control, :super, :alt
     attr_reader :keys, :pressed, :released, :down
 
+    # Public: Is the pressed key printable?
+    # 
+    # Returns boolean
     def printable?
       [
         :space, :tab, :apostrophe, :comma, :minus, :period,
@@ -379,20 +546,38 @@ module Hokusai
       @released = []
       @down = []
 
-      # populate the key states
       KEY_CODES.each do |symbol, code|
         @keys[symbol] = { code: code, symbol: symbol, up: false, down: false, pressed: false, released: false }
       end
     end
 
+    # Internal: The symbol form of the pressed key
+    # 
+    # Examples
+    #  
+    #   keyboard.symbol
+    #   #=> :enter
+    #   
+    # Returns Symbol
     def symbol
       pressed[0]&.[](:symbol)
     end
 
+    # Internal: The integer code form of the pressed key
+    # 
+    # Examples
+    #  
+    #   keyboard.symbol
+    #   #=> 257
+    #   
+    # Returns Symbol
     def code
       pressed[0]&.[](:code)
     end
 
+    # Internal: The char of the presed key
+    # 
+    # Returns String
     def char
       pressed[0]&.[](:char)
     end
@@ -527,6 +712,7 @@ end
 
 
 module Hokusai
+  # Internal: Manages external input.  Populated from MRuby/Raylib backend
   class Input
     attr_accessor :keyboard_override
     attr_reader :raw, :touch
@@ -540,20 +726,32 @@ module Hokusai
       @keyboard_override = false
     end
 
+    # Internal: Collect touch input
     def support_touch!
       @touch ||= Touch.new
 
       self
     end
 
+    # Internal: Keyboard input
+    # 
+    # Returns [Hokusai::Keyboard](/api/Hokusai/Keyboard)
     def keyboard
       @keyboard ||= Keyboard.new
     end
 
+    # Internal: Mouse input
+    # 
+    # Returns [Hokusai::Mouse](/api/Hokusai/Mouse)
     def mouse
       @mouse ||= Mouse.new
     end
 
+    # Internal: check if mouse is over (canvas)
+    # 
+    # canvas - a Hokusai::Canvas
+    # 
+    # Returns boolean
     def hovered?(canvas)
       pos = mouse.pos
       pos.x >= canvas.x && pos.x <= canvas.x + canvas.width && pos.y >= canvas.y && pos.y <= canvas.y + canvas.height
@@ -562,7 +760,9 @@ module Hokusai
 end
 
 module Hokusai
+  # Public: HTTP module used in [Hokusai::Block](/api/Hokusai/Block.html#fetch-url-opts-path-block)
   module HTTP
+    # Public: Represents http response
     class ResponseBody
       attr_reader :finished, :tmp
       attr_accessor :value, :buffer
@@ -574,6 +774,11 @@ module Hokusai
         @finished = false
       end
 
+      # Public: buffered read callback to pipe response data
+      # 
+      # block - the callback
+      # 
+      # Returns nothing
       def on_read(&block)
         io = File.open(@tmp, "r")
         io.each do |group|
@@ -583,20 +788,30 @@ module Hokusai
         io.close
       end
       
+      # Internal: Writes content to this response's io
+      # 
+      # content - a string
       def write(content)
         @io ||= File.open(@tmp, "w")
         @io << content
       end
 
+      # Internal: closes the io
       def finish
         @finished = true
         @io.close
       end
 
+      # Public: Get the response body as a ruby object
+      # 
+      # Returns Object
       def json
         JSON.parse(all)
       end
 
+      # Public: Get response body as a String
+      # 
+      # Returns String
       def all
         tmp = File.read(@tmp)
 
@@ -622,7 +837,61 @@ module Hokusai
 end
 
 module Hokusai
+  # Internal: Represents a template AST.  Can be made from a string template or
+  #         using the [Hokusai::NodeBuilder](/api/Hokusai/NodeBuilder) DSL.
+  #         
   class Ast
+    # Internal: Represents a loop node.  Can be made from a string template or 
+    #         using the [Hokusai::NodeBuilder](/api/Hokusai/NodeBuilder) DSL.
+    #         You need to provide a unique key for the looped ast node
+    #         Warning: Loops cannot currently be top level, nest them in another block - see examples.
+    # 
+    # Examples
+    #   
+    #   # Make loop from template
+    #   #
+    #   class Something < Hokusai::Block
+    #     template <<-EOF
+    #     [template]
+    #     vblock
+    #       [for="item in items"]
+    #         text { :key="make_key(item, index)" :content="item" }
+    #     EOF
+    #     #
+    #     # In string templates, the magic "index" variable is available
+    #     # to pass to dynamic prop functions
+    #     def make_key(item, index)
+    #       "key-#{item}-#{index}"
+    #     end
+    #     #
+    #     def items
+    #       %w[foo bar baz]
+    #     end
+    #   end
+    #
+    #   # Make loop from the NodeBuilder DSL
+    #   #
+    #   class Something < Hokusai::Block
+    #     template do
+    #       child(Hokusai::Blocks::Vblock) do
+    #         each_child(Hokusai::Blocks::Text, :items) do |item|
+    #           prop :key do
+    #             "key-#{item.value}"
+    #           end
+    #           #
+    #           # item is a Hokusai::ProxyValue
+    #           #
+    #           prop :content do
+    #             item.value
+    #           end
+    #         end
+    #       end
+    #     end
+    #     #
+    #     def items
+    #       %w[foo bar baz]
+    #     end
+    #   end
     class Loop
       attr_accessor :var, :method, :proxy, :start, :lastlen
       def initialize(var, method)
@@ -634,28 +903,77 @@ module Hokusai
       end
     end
 
+    # Internal: Represents an AST event or dynamic prop value
+    #          
+    # Examples
+    #
+    #   node { @click="func" }
+    #   
+    #   # Computed props can take loop args
+    #   node { :prop="func(arg, index)" }
     class Func
       attr_accessor :method, :args
+
+      # Internal: Constructor for Func
+      # 
+      # method - the name of the func or a proc that the func evaluates to (String | Proc)
+      # args - an array of argument names (String) for the func
       def initialize(method, args)
         @method = method
         @args = args
       end
 
+      # Internal: Is the func made with Hokusai::NodeBuilder?
+      # 
+      # Returns boolean
       def proc?
         @method.is_a?(Proc)
       end
     end
 
+    # Internal: Represents an AST event
+    #          
+    # Examples
+    #   
+    #   # string template usage
+    #   node { @event="func" }
+    # 
+    #   # builder DSL usage
+    #   on :event do |event|
+    #     #...
+    #   end
     class Event
       attr_accessor :name, :value
+
+      # Internal: Constructor for the Func
+      # 
+      # name - the name of the event (String)
+      # value - the func value for the event (Hokusai::Func)
       def initialize(name, value)
         @name = name
         @value = value
       end
     end
 
+    # Internal: Represents an AST prop
+    #          
+    # Examples
+    #
+    #   # string template usage
+    #   node { :prop="func" }
+    #   
+    #   # builder DSL usage
+    #   prop :prop do
+    #     "some-value"
+    #   end
     class Prop
       attr_accessor :name, :value, :computed, :built
+
+      # Internal: Constructor for the Func
+      # 
+      # name - the name of the event (String)
+      # value - the func value for the event (Hokusai::Func)
+      # computed - is this prop computed? (boolean)
       def initialize(computed, name, value, built: false)
         @name = name
         @value = value
@@ -663,6 +981,9 @@ module Hokusai
         @built = built
       end
 
+      # Internal: Is the prop computed?
+      # 
+      # Returns boolean
       def computed?
         @computed
       end
@@ -691,6 +1012,12 @@ module Hokusai
       @else_active = false
     end
 
+    # Internal: dumps a string representation of the ast
+    # 
+    # options - kwargs for modifying the dumped representation (**options)
+    #           :show_props - show props and events in the dump (default false)
+    #
+    # Returns a string with the dumped ast
     def dump(level = 0, show_props: false)
       io = ""
       io << " if " if has_if_condition?
@@ -724,52 +1051,89 @@ module Hokusai
       self.else_active = false
     end
 
+    # Internal: Does this ast have an else condition?
+    # 
+    # Returns boolean
     def has_else_condition?
       !else_ast.nil?
     end
 
+    # Internal: Is the else condition on this ast currently active?
+    # 
+    # Returns boolean
     def else_condition_active?
       !else_ast.nil? && else_active
     end
   
+    # Internal: Does this ast have an if condition?
+    # 
+    # Returns boolean
     def has_if_condition?
       !self.if.nil?
     end
 
+    # Internal: Does this ast have a loop?
+    # 
+    # Returns boolean
     def loop?
       !self.loop.nil?
     end
 
+    # Internal: Is this ast a slot?
+    # 
+    # Returns boolean
     def slot?
       type == "slot"
     end
 
+    # Internal: Is this ast a virtual node?
+    # 
+    # Returns boolean
     def virtual?
       type == "virtual"
     end
 
+    # Internal: Is this ast made with Hokusai::NodeBuilder?
+    # 
+    # Returns boolean
     def dynamic?
       type.is_a?(Class)
     end
 
+    # Internal: Get a prop by name (if one exists)
+    # 
+    # name - Name of the prop (String)
+    # 
+    # Returns [Hokusai::Ast::Prop](/api/Hokusai/Ast/Prop) or nil if none exists
     def prop(name)
       props[name]
     end
 
+    # Internal: Get a event by name (if one exists)
+    # 
+    # name - Name of the event
+    # 
+    # Returns [Hokusai::Ast::Event](/api/Hokusai/Ast/Event) or nil if none exists
     def event(name)
       events[name]
     end
   end
 end
 
-# frozen_string_literal: true
-
 module Hokusai
-  # Represents a patch to move a loop item
-  # from one location to another
+  # Internal: Represents a patch to move a loop item
+  #           from one location to another
+  #           used in [Diff](/api/Hokusai/Diff)
   class MovePatch
     attr_accessor :from, :to, :value, :delete
 
+    # Internal: MovePatch constructor
+    # 
+    # from: - kwarg index moving from
+    # to: - kwarg index moving to
+    # value: - kwarg value
+    # delete: - should we overwrite to:?
+    # 
     def initialize(from:, to:, value:, delete: false)
       @from = from
       @to = to
@@ -778,11 +1142,16 @@ module Hokusai
     end
   end
 
-  # Represents a patch to insert an item
-  # into the loop list
+  # Internal: Represents a patch to insert an item into the loop list
+  #           used in [Diff](/api/Hokusai/Diff)
   class InsertPatch
     attr_accessor :target, :value, :delete
 
+    # Internal: InsertPatch constructor
+    # 
+    # target: - kwarg index to insert at
+    # value: - kwarg value
+    # delete: - should we overwrite the target?
     def initialize(target:, value:, delete: false)
       @target = target
       @value = value
@@ -790,33 +1159,46 @@ module Hokusai
     end
   end
 
-  # Represents a patch to update the value
-  # of a loop item at an index
+  # Internal: Represents a patch to update the value of a loop item at an index
+  #           used in [Diff](/api/Hokusai/Diff)
   class UpdatePatch
     attr_accessor :target, :value
 
+    # Internal: constructor
+    # 
+    # target: - index to update
+    # value: - value to update with
     def initialize(target:, value:)
       @target = target
       @value = value
     end
   end
 
-  # Patch to delete a loop list item
+  # Internal: Patch to delete a loop list item
+  #           used in [Diff](/api/Hokusai/Diff)
   class DeletePatch
     attr_accessor :target
 
+    # Internal: constructor
+    # 
+    # target - index to delete
     def initialize(target)
       @target = target
     end
   end
 
-  # A Differ for comparing one set of values to another
-  #
-  # When #patch is called, will yield various patches to
-  # true up the old values with the new values.
+  # Internal: A Differ for comparing one set of values to another
+  #           When #patch is called, will yield various patches to
+  #           true up the old values with the new values.
+  #           see: [MovePatch](/api/Hokusai/MovePatch), [InsertPatch](/api/Hokusai/InsertPatch), [UpdatePatch](/api/Hokusai/UpdatePatch), and [DeletePatch](/api/Hokusai/DeletePatch)
   class Diff
     attr_reader :before, :after, :insertions
 
+    # Internal: constructor
+    # 
+    # before - array of before values
+    # after - array of after values
+    # 
     def initialize(before, after)
       @before = before
       @after = after
@@ -832,6 +1214,10 @@ module Hokusai
       memo
     end
 
+    # Internal: yields a sequence of patches to make 
+    #           before the same as after
+    #
+    # Returns nothing
     def patch
       i = 0
       deletions = 0
@@ -903,6 +1289,7 @@ end
 
 module Hokusai
   module Mounting
+    # Internal: Used to populate context vars from a template loop directive
     class LoopContext
       attr_reader :table, :proxies
       def initialize
@@ -923,6 +1310,7 @@ module Hokusai
       end
     end
 
+    # Internal: Represents a looped AST node
     class LoopEntry
       INDEX_KEY = "index".freeze
 
@@ -1151,6 +1539,7 @@ module Hokusai
 end
 module Hokusai
   module Mounting
+    # Internal: Represents a Block/template to be mounted
     class MountEntry
       attr_reader :block, :parent, :ast, :target, :index, :ctx
 
@@ -1223,6 +1612,7 @@ module Hokusai
 end
 module Hokusai
   module Mounting
+    # Internal: Holds update logic for a block/ast
     class UpdateEntry
       attr_reader :block, :parent, :target
 
@@ -1325,6 +1715,7 @@ module Hokusai
 end
 
 module Hokusai
+  # Internal: Mounts a Hokusai::Block into a Hokusai::Node
   class NodeMounter
     attr_accessor :primary_stack, :secondary_stack
     attr_reader :root
@@ -1431,7 +1822,7 @@ module Hokusai
   end
 end
 module Hokusai
-  # An event emitter
+  # Internal: An event emitter
   class Publisher
     attr_reader :listeners
 
@@ -1439,20 +1830,18 @@ module Hokusai
       @listeners = listeners
     end
 
-    # Adds a listener that subscribes
-    # to events emitted
-    # by this publisher
+    # Internal: Adds a listener that subscribes to events emitted by this publisher
     #
-    # @param [Hokusai::Block] listener
+    # listener - a Hokusai::Block
     def add(listener, extra: {})
       listeners << [listener, extra]
     end
 
-    # emits `event` with `**args`
-    # to all subscribers
-    # @see
-    # @param [String] name the event name
-    # @param [**args] the args to emit
+    # Internal: emits `event` with `**args` to all subscribers
+    #
+    # name - event name
+    # args - splatted arg array
+    # kwargs - any kwargs to send
     def notify(name, *args, **kwargs)
       listeners.each do |(listener, extra)|
         raise Hokusai::Error.new("No target `##{name}` on #{listener.class}") unless name.is_a?(Proc) || listener.respond_to?(name)
@@ -1473,10 +1862,13 @@ module Hokusai
 end
 
 module Hokusai
+  # Public: coordinates block children, including updates and event emitting
+  # 
   class Meta
     attr_reader :focused, :parent, :target, :updater,
                 :props, :publisher
 
+    # Internal: a Hokusai::Commands cache
     def commands
       @commands ||= Commands.new
     end
@@ -1491,6 +1883,9 @@ module Hokusai
       @children = nil
     end
 
+    # Internal: How many descedants does this node have?
+    # 
+    # returns Integer
     def node_count
       count = children?&.size || 0
 
@@ -1501,12 +1896,22 @@ module Hokusai
       count
     end
 
+    # Internal: Gets a child by index
+    # 
+    # index - the index of the child block (Integer)
+    # 
+    # Returns Hokusai::Block or nil
     def get_child?(index)
       return nil if @children.nil?
 
       get_child(index)
     end
 
+    # Internal: Sets children
+    # 
+    # values - array of Hokusai::Block
+    # 
+    # Returns nothing
     def children=(values)
       @children = values
     end
@@ -1517,44 +1922,76 @@ module Hokusai
       @children
     end
 
+    # Internal: Append child
+    # 
+    # child - a Hokusai::Block
     def <<(child)
       children! << child
     end
-
+    
+    # Internal: Gets a child by index.  Creates an empty array if no children found.
+    # 
+    # index - the index of the child block (Integer)
+    # 
+    # Returns Hokusai::Block
     def get_child(index)
       children![index]
     end
 
+    # Public: Set a child by index. Creates an empty array if no children found.
+    # 
+    # index - the index of child block (Integer)
+    # value - a Hokusai::Block
+    # 
+    # Returns nothing
     def set_child(index, value)
       children![index] = value
     end
 
+
+    # Internal: Returns children or empty array
     def children!
       @children ||= []
     end
 
+    # Internal: Returns props or empty hash
     def props!
       @props ||= {}
     end
 
+    # Public: Get a prop value by it's name
+    # 
+    # name - name of prop (Symbol)
+    # 
+    # Returns Object or Nil if no props found
     def get_prop?(name)
       return nil if @props.nil?
 
       get_prop(name)
     end
 
+    # Public: Set a prop value
+    # 
+    # name - name of prop (Symbol)
+    # value - value to set prop to 
     def set_prop(name, value)
       @props ||= {}
 
       @props[name] = value
     end
 
+    # Public: Get a prop value by it's name
+    # 
+    # name - name of prop (Symbol)
+    # 
+    # Returns Object or nil if prop not found
     def get_prop(name)
       @props ||= {}
 
       @props[name]
     end
 
+    # Public: Set this node and chlidren to focused
     def focus
       @focused = true
 
@@ -1563,6 +2000,7 @@ module Hokusai
       end
     end
 
+    # Public: Unfocus this node and children
     def blur
       @focused = false
 
@@ -1571,11 +2009,18 @@ module Hokusai
       end
     end
 
+    # Internal: Set on update callback.  Used by [Hokusai::NodeMounter](/api/Hokusai/NodeMounter) and the like
+    # 
+    # target - a Hokusai::Block that this node should emit events to
+    # block - an updater callback
     def on_update(target, &block)
       @target = target
       @updater = block
     end
 
+    # Internal: Updates the props on (value), calling lifecycle callbacks if they exist.
+    # 
+    # value - a Hokusai::Block
     def update(block)
       if target_block = target
         if updater_block = updater
@@ -1589,6 +2034,7 @@ module Hokusai
       end
     end
 
+    
     def has_ast?(ast, index, elsy = false)
       if elsy
         if portal = children![index]&.node&.portal
@@ -1603,6 +2049,11 @@ module Hokusai
       false
     end
 
+    # Internal: Delete a child by index, calling lifecycle callbacks if they exist.
+    # 
+    # index - the index of the child
+    # 
+    # Returns nothing
     def child_delete(index)
       if child = children![index]
         child.before_destroy if child.respond_to?(:before_destroy)
@@ -1625,10 +2076,12 @@ module Hokusai
     end
   end
 
+  # Internal: Container for the AST, props, events, and children
+  #           available on [Hokusai::Block#node](/api/Hokusai/Block#node)
+  # 
   class Node
     attr_reader :ast, :node, :uuid, :meta, :portal
 
-    # returns node..
     def self.build(klass, parent = nil, &block)
       ast = NodeBuilder.build(klass, &block)
 
@@ -1641,14 +2094,25 @@ module Hokusai
       new(ast, parent)
     end
 
+    # Internal: Is this node a slot?
+    # 
+    # Returns boolean
     def slot?
       ast.slot?
     end
 
+    # Internal: name of this node
+    # 
+    # Returns String
     def type
       ast.type
     end
 
+    # Internal: Get a event by name (if one exists)
+    # 
+    # name - Name of the event
+    # 
+    # Returns [Hokusai::Ast::Event](/api/Hokusai/Ast/Event) or nil if none exists
     def event(name)
       ast.event(name)
     end
@@ -1666,6 +2130,7 @@ module Hokusai
       NodeMounter.new(self, klass, previous_providers: providers).mount
     end
 
+    # Internal: Emit event to subscribers
     def emit(name, **args)
       if node = portal
         if event = node.event(name)
@@ -1745,6 +2210,7 @@ module Hokusai
   end
 end
 module Hokusai
+  # Internal: value used in loop directive callbacks
   class ProxyValue
     attr_accessor :value
     def initialize(value)
@@ -1752,8 +2218,12 @@ module Hokusai
     end
   end
 
+  # Public: Template DSL used in [Hokusai::Block.template](/api/Hokusai/Block.html#template-template-block)
   class NodeBuilder
-    # returns mounted block
+    # Public: Builds an AST using a DSL
+    # 
+    # name - a Hokusai::Block.class
+    # block - a DSL callback to build this AST
     def self.build(name, loopvar = nil, &block)
       ast = Ast.new
       ast.type = name
@@ -1778,12 +2248,29 @@ module Hokusai
       ast.id = value
     end
 
+    # Public: Merge style defintions into this template
+    # 
+    # names - a splatted array of style names (*names)
+    # 
+    # Returns nothing
     def merge_styles(*names)
       names.each do |name|
         ast.style_list << name
       end
     end
 
+    # Public: Declares a static prop
+    # 
+    # name - the prop key (Symbol)
+    # value - a String containing the static prop value
+    # 
+    # Examples:
+    #  
+    #   static :size, "10"
+    #   
+    #   static :content, "'string'"
+    #   
+    # Returns nothing
     def static(name, value)
       raise Hokusai::Error.new("Static prop needs a string value") unless value.is_a?(String)
 
@@ -1791,6 +2278,14 @@ module Hokusai
       ast.props[name.to_s] = Ast::Prop.new(true, name, func)
     end
 
+    # Public: declare a prop value.
+    #         evaluates in the context of the Hokusai::Block
+    # 
+    # name - the prop name (Symbol)
+    # value - a prop value (required if &block is nil)
+    # block - a callback that returns the prop value
+    # 
+    # Returns nothing
     def prop(name, value = nil, &block)
       raise Hokusai::Error.new("Prop needs a value (symbol or block)") if block.nil? && value.nil?
       
@@ -1800,6 +2295,14 @@ module Hokusai
       ast.props[name.to_s] = Ast::Prop.new(true, name, func)
     end
 
+    # Public: conditionally render this node if the provided method evaluates to true
+    # 
+    # method - name of a method on the calling Hokusai::Block
+    #          (optional if passing block)
+    # block - callback that should evaluate to a boolean
+    #         (optional if passing method)
+    #         
+    # Returns nothing
     def show_if(method = nil, &block)
       raise Hokusai::Error.new("Need a method or block for show_if") if method.nil? && block.nil?
 
@@ -1812,7 +2315,37 @@ module Hokusai
       ast.if = cond
     end
 
-    # define an loop directive
+    # Public: defines a loop directive
+    # 
+    # klass - the Hokusai::Block to use
+    # method - a method name (Symbol) that returns an Enumerable
+    # block - callback for building this AST node
+    #  
+    # Examples
+    # 
+    #   class Something < Hokusai::Block
+    #     template do
+    #       child(Hokusai::Blocks::Vblock) do
+    #         each_child(Hokusai::Blocks::Text, :items) do |item|
+    #           prop :key do
+    #             "key-#{item.value}"
+    #           end
+    #           #
+    #           # item is a Hokusai::ProxyValue
+    #           #
+    #           prop :content do
+    #             item.value
+    #           end
+    #         end
+    #       end
+    #     end
+    #     #
+    #     def items
+    #       %w[foo bar baz]
+    #     end
+    #   end
+    #
+    # Returns nothing
     def each_child(klass, method, &block)
       raise Hokusai::Error.new("each cannot be called at the top level currently.") unless ast.dynamic?
 
@@ -1835,13 +2368,39 @@ module Hokusai
       ast.children << child
     end
 
+    # Public: Event handler subscription
+    # 
+    # event_name - name of event (Symbol | String)
+    # block - callback that is passed the event parameters as block params
+    # 
+    # Examples
+    # 
+    #   on :click do |event|
+    #     puts event.pos.x # clicked x coordinate
+    #   end
+    #
+    # Returns nothing
     def on(event_name, &block)
       func = Ast::Func.new(block, [])
       ast.events[event_name.to_s] = Ast::Event.new(event_name, func)
     end
 
-    # create a new child and add it 
-    # to the children of this node
+    # Public: declare a child block
+    # 
+    # klass - a Hokusai::Block
+    # block - a callback to build this AST node
+    #
+    # Examples
+    # 
+    #   template do
+    #     child(Hokusai::Blocks::Vblock) do
+    #       child(Hokusai::Blocks::Text) do
+    #         #...
+    #       end
+    #     end
+    #   end 
+    #
+    # Returns nothing
     def child(klass, &block)
       child_ast = NodeBuilder.build(klass, &block)
       child_ast.siblingindex = @counter
@@ -1853,7 +2412,7 @@ module Hokusai
   end
 end
 module Hokusai
-  # An event emitter
+  # Internal: An event emitter
   class Publisher
     attr_reader :listeners
 
@@ -1861,20 +2420,18 @@ module Hokusai
       @listeners = listeners
     end
 
-    # Adds a listener that subscribes
-    # to events emitted
-    # by this publisher
+    # Internal: Adds a listener that subscribes to events emitted by this publisher
     #
-    # @param [Hokusai::Block] listener
+    # listener - a Hokusai::Block
     def add(listener, extra: {})
       listeners << [listener, extra]
     end
 
-    # emits `event` with `**args`
-    # to all subscribers
-    # @see
-    # @param [String] name the event name
-    # @param [**args] the args to emit
+    # Internal: emits `event` with `**args` to all subscribers
+    #
+    # name - event name
+    # args - splatted arg array
+    # kwargs - any kwargs to send
     def notify(name, *args, **kwargs)
       listeners.each do |(listener, extra)|
         raise Hokusai::Error.new("No target `##{name}` on #{listener.class}") unless name.is_a?(Proc) || listener.respond_to?(name)
@@ -1895,17 +2452,102 @@ module Hokusai
 end
 
 module Hokusai
+  # Public: Namespace for components provided by this library
   module Blocks; end
-  # A UI Component
+  # Public: A reactive UI component.
+  #         Building block of an application. 
+  #         Subclasses can be run with [Hokusai::Backend.run](/api/Hokusai/Backend#run)
+  #         Blocks can be composed into other blocks templates
+  # 
+  # Examples
+  #  
+  #    class Counter < Hokusai::Block
+  #      # create styles to use in templates
+  #      style <<~EOF
+  #      [style]
+  #      additionStyles {
+  #        background: rgb(214, 49, 24);
+  #        cursor: "pointer";
+  #      }
+  #      additionLabel {
+  #        size: 40;
+  #        color: rgb(255,255,255);
+  #      }
+  #      subtractStyles {
+  #        background: rgb(0, 85, 170);
+  #        cursor: "pointer";
+  #      }
+  #      subtractLabel {
+  #        size: 40;
+  #        color: rgb(255, 255, 255);
+  #      }
+  #      EOF
+  #      # define a template composed of other Hokusai::Block
+  #      template <<-EOF
+  #      [template]
+  #        hblock { background="255,255,255" }
+  #          label#count {
+  #            :content="count.to_s"
+  #            size="190" 
+  #            :color="count_color"
+  #          }
+  #        hblock
+  #          vblock#add { ...additionStyles @click="increment"}
+  #            label { 
+  #              content="Add"
+  #              ...additionLabel 
+  #            }
+  #          vblock#subtract { ...subtractStyles @click="decrement" }
+  #            label { 
+  #              content="Subtract"
+  #              ...subtractLabel 
+  #            }
+  #      EOF
+  #      # map template names to Hokusai::Block
+  #      uses(
+  #        vblock: Hokusai::Blocks::Vblock,
+  #        hblock: Hokusai::Blocks::Hblock,
+  #        label: Hokusai::Blocks::Text,
+  #      )
+  #      #
+  #      attr_accessor :count
+  #      #
+  #      def count_positive = count > 0
+  #      def increment(event) = self.count += 1
+  #      def decrement(event) = self.count -= 1
+  #      def count_color = count.negative? ? [244, 0, 0] : [0, 0, 244]
+  #      #
+  #      def initialize(**args)
+  #        @count = 0
+  #        #
+  #        super
+  #      end
+  #    end
   #
-  # Blocks are reusable and can be mounted in other blocks via templates
-  #
-  # Blocks have `props`` and emit `events`
   class Block
+    # Public: The node for this block
+    # 
+    # Returns [Hokusai::Node](/api/Hokusai/Node)
     attr_reader :node
+
+    # Internal: The event publisher for this block
+    # 
+    # Returns [Hokusai::Publisher](/api/Hokusai/Publisher)
     attr_reader :publisher
+
+    # Internal: Specified provisions for this block
     attr_reader :provides
 
+    # Public: Provide a value to be injected into any of this block's descendants
+    # 
+    # name - a name that descandants can use to inject this provision (Symbol)
+    # value - a name that maps to a method on this block (Symbol)
+    # 
+    # Examples
+    # 
+    #   provide :value, :method
+    # 
+    # Returns nothing
     def self.provide(name, value = nil, &block)
       if block_given?
         provides[name] = block
@@ -1914,18 +2556,44 @@ module Hokusai
       end
     end
 
+    # Internal: Class level provisions
     def self.provides
       @provides ||= {}
     end
 
+    # Internal: Class level injections
     def self.injectables
       @injectables ||= []
     end
 
-    # Sets the template for this block
-    # or build with NodeBuilder DSL
+    # Public: Sets the template for this block
+    #         Using a template string or the NodeBuilder DSL
     #
-    # @param [String] template to set
+    # template - String template (optional if block provided)
+    # block - DSL callback (optional if template provided)
+    # 
+    # Examples
+    # 
+    #   template <<-EOF
+    #   [template]
+    #     vblock
+    #       text { content="Hello" size="10" }
+    #   EOF
+    #   
+    #   template do
+    #     child(Hokusai::Blocks::Vblock) do
+    #       child(Hokusai::Blocks::Text) do
+    #         prop :content do
+    #           "Hello"
+    #         end
+    #         prop :size do
+    #           10
+    #         end
+    #       end
+    #     end
+    #   end
+    #   
+    # Returns nothing
     def self.template(template = nil, &block)
       raise Hokusai::Error.new("Need a template or block") if template.nil? && block.nil?
 
@@ -1937,10 +2605,37 @@ module Hokusai
       end
     end
 
+    # Internal: a NodeBuilder callback
+    # 
+    # Returns Proc or nil
     def self.build_template
       @build_template
     end
 
+    # Public: Define a style template for this block.
+    # 
+    # template - a style template string or Hokusai::Style
+    # 
+    # Examples
+    # 
+    #   # Styles are named and map to props
+    #   # on nodes/blocks
+    #   #
+    #   # Defined styles can also be written as "evented" for basic events.
+    #   style <<-EOF
+    #   [style]
+    #     styleName {
+    #       color: rgb(22,22,22);
+    #       some_prop: 10.0;
+    #       content: "Hello World";
+    #       size: 14
+    #       a_boolean: false
+    #     }
+    #     styleName@hover {
+    #       color: rgb(222,22,22);
+    #     }
+    #   EOF
+    # Returns nothing
     def self.style(template)
       case template
       when String
@@ -1950,17 +2645,18 @@ module Hokusai
       end
     end
 
-    # Sets the template for this block
-    # Uses a file
+    # Deprecated: Sets the template for this block using a file
     #
-    # @param [String] the filename to use
+    # path - a file path that contains a template
+    # 
+    # Returns nothing
     def self.template_from_file(path)
       @template = File.read(path)
     end
 
-    # Fetches the template for this block
+    # Internal: Fetches the template for this block
     #
-    # @return [String] the template
+    # @returns the template (Proc or String)
     def self.template_get
       @template || (raise Hokusai::Error.new("Must define template for #{self}"))
     end
@@ -1969,8 +2665,21 @@ module Hokusai
       @styles || {}
     end
 
-    # Defines blocks that this block uses in it's template
-    # Keys map to template node names, values map to a `Hokusai::Block`
+    # Public: Defines blocks that this block uses in it's template. Must be defined if using a string template.
+    #         Keys (Symbol) map to template node names, values map to a [Hokusai::Block](/api/Hokusai/Block).
+    #         
+    # kwargs - the key/value kwargs mapping
+    #             :key - Symbol that maps to node
+    #             :value - a Hokusai::Block.class
+    #           
+    # Examples
+    #  
+    #     uses(
+    #       vblock: Hokusai::Blocks::Vblock,
+    #       text: Hokusai::Blocks::Text
+    #     )
+    #     
+    # Returns nothing
     def self.uses(**args)
       args.each do |key, value|
         raise Hokusai::Error.new("#{key} value must be a Block, got #{value}") unless value.is_a?(Block.class)
@@ -1987,6 +2696,21 @@ module Hokusai
       end
     end
 
+    # Public: Define a optional computed property with a default value
+    # 
+    # name - the name of the prop (Symbol)
+    # kwargs - computed prop options
+    #             :default - a default value if the prop is not provided (can be nil)
+    #             :convert - a proc to convert a string to this type, or an object that responds_to #convert.  
+    #                        eg [Hokusai::Outline.convert](/api/Hokusai/Outline#convert)
+    #                        
+    # Examples
+    # 
+    #   computed :radius, default: 10.0, convert: proc(&:to_f)
+    #   
+    #   computed :color, default: [22,22,22], convert: Hokusai::Color
+    #   
+    # Returns nothing
     def self.computed(name, **args)
       define_method(name) do
         prop = node.meta.get_prop(name.to_sym)#props[name.to_sym]
@@ -2014,12 +2738,34 @@ module Hokusai
       end
     end
 
+    # Public: Computed prop that is mandatory for this component
+    # 
+    # name - the name of the prop (Symbol)
+    # 
+    # Examples
+    # 
+    #   computed! :required_prop
+    #   
+    # Returns nothing
+    # Raises Hokusai::Error if not provided
     def self.computed!(name)
       define_method(name.to_sym) do
         return node.meta.get_prop(name.to_sym) || (raise Hokusai::Error.new("Missing prop: #{name} on #{self.class}"))
       end
     end
 
+    # Public: Inject a provision defined by an ancestor
+    # 
+    # name - the name of the provision (Symbol)
+    # aliased - an alias/scoped name to use for this block (default name)
+    # 
+    # Examples
+    # 
+    #   inject :panel_offset
+    #   
+    #   inject :panel_offset, :local_offset
+    #   
+    # Returns nothing
     def self.inject(name, aliased = name)
       injectables << name
 
@@ -2028,6 +2774,7 @@ module Hokusai
       end
     end
 
+    # Public: Same as .inject but throws error if not provided
     def self.inject!(name, aliased)
       injectables << name
 
@@ -2040,7 +2787,9 @@ module Hokusai
       end
     end
 
-    # return [Hokusai::Node]
+    # Internal: Compile a string template or NodeBuilder proc
+    # 
+    # Returns [Hokusai::Node](/api/Hokusai/Node)
     def self.compile(name = "root", parent_node = nil)
       if build_template
         Node.build(name, parent_node, &build_template)
@@ -2049,11 +2798,37 @@ module Hokusai
       end
     end
 
-    # return [Hokusai::Block]
+    # Public: Compile the template, register pub/sub and mount this block and it's children
+    # 
+    # name - a name for the ast node (default "root")
+    # parent_node - a parent node that this block belongs to [Hokusai::Node](/api/Hokusai/Node)
+    # options - hash of providers for this block (default: {})
+    # 
+    # Examples
+    #   
+    #   App.mount
+    #   # returns #<App>
+    # 
+    # Returns Hokusai::Block
     def self.mount(name = "root", parent_node = nil, providers: {})
       compile(name, parent_node).mount(self, providers: providers)
     end
 
+    # Public: Constructor for Hokusai::Block.  Can be overriden but must call `super`
+    # 
+    # args - kwargs for the construtor
+    #         :node - a Hokusai::Node
+    #         :providers - a hash of providers
+    #         
+    # Examples
+    # 
+    #   class App < Hokusai::Block
+    #     #....
+    #     def initialize(**args)
+    #       @local_state = "hello"
+    #       super
+    #     end
+    #   end
     def initialize(**args)
       raise Hokusai::Error.new("Must supply node argument to #{self.class}.new") unless args[:node]
 
@@ -2067,6 +2842,7 @@ module Hokusai
       end
     end
 
+    # Public: a hash of provisions declared by this block
     def providers
       self.class.provides.map do |k, v|
         if v.is_a?(Symbol)
@@ -2079,18 +2855,32 @@ module Hokusai
       end.to_h
     end
 
+    # Public: Returns an array of children (Array(Hokusai::Block)) or nil
     def children?
       node.meta.children?
     end
 
+    # Public: Returns an array of children (Array(Hokusai::Block)) or []
     def children
       node.meta.children!
     end
 
+    # Internal: Updates the block from publisher
     def update
       node.meta.update(self)
     end
 
+    # Public: Emits a custom event
+    # 
+    # name - name of the event (String)
+    # args - a variable length splatted array of *args to pass to the subscriber
+    # kwargs - any keyword args to pass to the subscriber
+    # 
+    # Examples
+    #  
+    #   emit("color_picked", Hokusai::Color.new(22,22,22))
+    #   
+    # Returns nothing
     def emit(name, *args, **kwargs)
       if portal = node.portal
         if event = portal.event(name.to_s)
@@ -2099,6 +2889,23 @@ module Hokusai
       end
     end
 
+
+    # Public: Opens the drawing API
+    # 
+    # block - a callback that is evaluated in the context of this instance
+    # 
+    # Examples
+    #
+    #   draw do
+    #     # draw a green square
+    #     rect(0.0, 0.0, 100.0, 100.0) do |command|
+    #       command.color = Hokusai::Color.new(0, 0, 255)
+    #     end
+    #     # draw a circle with default properties
+    #     circle(50.0, 50.0, 20.0) {}
+    #   end
+    # 
+    # Returns nothing
     def draw(&block)
       instance_eval(&block)
     end
@@ -2111,10 +2918,35 @@ module Hokusai
       super
     end
 
+    # Public: Same as draw but yields a [Hokusai::Commands](/api/Hokusai/Commands) as the callback parameter
     def draw_with
       yield node.meta.commands
     end
 
+    # Public: makes an HTTP request on the libuv loop.  
+    #         Note the response will be written to a temporary file
+    # 
+    # url - the url to request
+    # opts - a hash of options
+    #          :method - the HTTP method (GET, POST, etc)
+    #          :headers - a hash of HTTP headers (ex: { 'Content-Type' => 'application/json' })
+    #          :body - an optional body to send (String)
+    # path: - a kwarg for the URI path
+    # block - a callback that yields an HTTP response
+    # 
+    # Examples
+    # 
+    #   fetch("https://https://jsonplaceholder.typicode.com/todos/1", { method: "GET" }) do |res|
+    #     # get the response code
+    #     p res.code
+    #     # get a JSON response as a ruby object
+    #     p res.json
+    #     # OR
+    #     # get a response as a raw string
+    #     p res.all
+    #   end
+    #   
+    # Returns nothing
     def fetch(url, opts, path: "/", &block)
       instance_eval do
         req = Hokusai::Request.init(self, url)
@@ -2122,17 +2954,34 @@ module Hokusai
       end
     end
 
+    # Internal: Execute the list of draw commands saved by the drawing API
     def execute_draw
       node.meta.commands.execute
       node.meta.commands.clear!
     end
 
+    # Public: Render method.  Can be overriden but must yield the canvas parameter
+    #                         in order to render this blocks template
+    #
+    # canvas - a [Hokusai::Canvas](/api/Hokusai/Canvas) with the suggested layout dimensions
+    #
+    # Returns nothing
     def render(canvas)
       yield(canvas)
     end
 
+    # Public: Called when window is resized.  Override to change state in response to window resize
+    # 
+    # canvas - a [Hokusai::Canvas](/api/Hokusai/Canvas) with the new dimensions
+    # 
+    # Returns nothing
     def on_resize(canvas); end
 
+    # Public: Dumps a String version of this block
+    # 
+    # show_props: - a kwarg for including props and events in the dump
+    # 
+    # Returns String
     def dump(level = 1, show_props: false)
       io = ""
       io << "#{self.class}"
@@ -2172,14 +3021,22 @@ module Hokusai
 end
 
 
-# frozen_string_literal: true
-
 class Hokusai::Commands
+  # Internal: Base Command used by Hokusai::Commands to generate an ordered list of commands
+  #           for the C/Raylib backend
   class Base
+    # Internal: set drawing callback
+    # 
+    # block - drawing callback proc
+    # 
+    # Returns nothing
     def self.on_draw(&block)
       @draw = block
     end
 
+    # Internal: get drawing callback
+    # 
+    # Returns Proc
     def self.draw
       @draw
     end
@@ -2195,10 +3052,17 @@ class Hokusai::Commands
   end
 end
 module Hokusai
+  # Internal: Command to draw a circle.
+  #           Radius starts from [x,y] and moves outward from center
   class Commands::Circle < Commands::Base
     attr_reader :x, :y, :radius, :color, :outline_color,
                 :outline
 
+    # Internal: Circle constructor
+    # 
+    # x - x coordinate
+    # y - y coordinate
+    # radius - circle radius
     def initialize(x, y, radius)
       @x = x
       @y = y
@@ -2212,12 +3076,19 @@ module Hokusai
       [self.class, x, y, radius, color.hash, outline_color.hash, outline].hash
     end
 
+    # TODO: Give the circle an outline
+    # @param [Float] outline weight
     def outline=(weight)
       @outline = weight
 
       self
     end
 
+    # Public: sets the circle color.
+    # 
+    # value - a Hokusai::Color or Array of Int
+    #
+    # Returns nothing
     def color=(value)
       case value
       when Color
@@ -2229,6 +3100,8 @@ module Hokusai
       self
     end
 
+    # TODO: Give the circle an outline color
+    # @param [Hokusai::Color | Array(Integer)] a Hokusai::Color or array of rgba values
     def outline_color=(value)
       case value
       when Color
@@ -2243,9 +3116,17 @@ module Hokusai
 end
 
 module Hokusai
+  # Internal: Command to render an Hokusai::Image
   class Commands::Image < Commands::Base
     attr_reader :x, :y, :width, :height, :image, :slice
 
+    # Internal: constructor
+    # 
+    # image - a Hokusai::Image
+    # x - x coordinate
+    # y - y coordinate
+    # width - width (float)
+    # height - height (float)
     def initialize(image, x, y, width, height)
       @image = image
       @x = x
@@ -2255,6 +3136,12 @@ module Hokusai
       @slice = nil
     end
 
+    # Public: Specify a slice of the image to render
+    #         Useful for spritesheets
+    #         
+    # rect - a [Hokusai::Rect](/api/Hokusai/Rect) which denotes where to pick from the image
+    # 
+    # Returns nothing
     def slice=(rect)
       raise Hokusai::Error.new("Argument must be a Hokusai::Rect") unless rect.is_a? Hokusai::Rect
 
@@ -2269,38 +3156,19 @@ module Hokusai
       [width, height].hash
     end
   end
-
-  class Commands::SVG < Commands::Base
-    attr_reader :x, :y, :width, :height, :source, :color
-
-    def initialize(image, x, y, width, height)
-      @image = image
-      @x = x
-      @y = y
-      @width = width
-      @height = height
-      @color = Color.new(255, 255, 255, 255)
-    end
-
-    def color=(value)
-      case value
-      when Color
-        @color = value
-      when Array
-        @color = Color.new(value[0], value[1], value[2], value[3] || 255)
-      end
-
-      self
-    end
-  end
 end
 
 module Hokusai
-  class Commands::Rect < Commands::Base
+  # Internal: Command to render a rectangle
+  class Commands::Rectangle < Commands::Base
     attr_reader :x, :y, :width, :height,
                 :rounding, :color, :outline,
                 :outline_color, :padding, :gradient
 
+    # @param [Float] start x
+    # @param [Float] start y
+    # @param [Float] rect width
+    # @param [Float] rect height
     def initialize(x, y, width, height)
       @x = x.to_f
       @y = y.to_f
@@ -2350,9 +3218,11 @@ module Hokusai
       @gradient = colors
     end
 
-    # Sets padding for the rectangle
-    # `value` is an array with padding declarations
-    # at [top, right, bottom, left]
+    # Public: Sets padding for the rectangle
+    # 
+    # value - a [Hokusai::Padding](/api/Hokusai/Padding) object
+    # 
+    # Returns self
     def padding=(value)
       case value
       when Padding
@@ -2364,14 +3234,18 @@ module Hokusai
       self
     end
 
-    # Sets an outline at `weight`
+    # Public: Set outline for rect
+    # 
+    # value - a [Hokusai::Outline](/api/Hokusai/Outline) object
     def outline=(outline)
       @outline = outline
 
       self
     end
 
-    # Sets the outline color to `value`
+    # Public: Set outline color
+    # 
+    # value - a [Hokusai::Color](/api/Hokusai/Color) object
     def outline_color=(value)
       case value
       when Color
@@ -2385,9 +3259,11 @@ module Hokusai
       self
     end
 
-
-    # Sets the color of the rectangle
-    # from an array of rgba values
+    # Public: Set fill color
+    # 
+    # value - a [Hokusai::Color](/api/Hokusai/Color) object
+    # 
+    # Returns self
     def color=(value)
       case value
       when Color
@@ -2399,29 +3275,32 @@ module Hokusai
       self
     end
 
-    # Rounding amount for this rect
+    # Public: sets rounding
+    # 
+    # amount - a float value between 0 and 1
+    # 
+    # Returns self
     def round=(amount)
       @rounding = amount
 
       self
     end
 
-    # Returns true if the rectangle has any padding
+    # Public: returns true if the rectangle has any padding
     def padding?
       [padding.t, padding.r, padding.b, padding.l].any? do |p|
         p != 0.0
       end
     end
 
-    # Returns a tuple with the
-    # geometric boundary for this rectangle
+
     def boundary
       [x, y, width, height]
     end
 
-    # Returns a tuple with the
-    # computed geometric **inner** boundary for this rectangle
-    # with outlines subtracted
+    # Public: get the rect dimensions after padding and outline applied
+    # 
+    # Returns Array(Float)
     def background_boundary
       nx = x.dup
       ny = y.dup
@@ -2449,23 +3328,29 @@ module Hokusai
       [nx, ny, nw, nh]
     end
 
-    # Returns true if this rectangle
-    # has an outline
+    # Public: Does this rect have any outlines?
     def outline?
       outline.present?
     end
 
-    # Returns true if this rectangle's
-    # outline is uniform
+    # Public: Is the rect outline uniform?
     def outline_uniform?
       outline.uniform?
     end
   end
 end
 module Hokusai
+  # Starts a Scissor filter
+  # Every command inside this filter
+  # will apply the pruning area
+  # This is useful for panels and scrollable areas
   class Commands::ScissorBegin < Commands::Base
     attr_reader :x, :y, :width, :height
 
+    # @param [Float] start x
+    # @param [Float] start y
+    # @param [Float] scissor width
+    # @param [Float] scissor height
     def initialize(x, y, width, height)
       @x = x
       @y = y
@@ -2488,8 +3373,7 @@ module Hokusai
   class Commands::Text < Commands::Base
     attr_reader :x, :y, :size, :color,
                 :padding, :wrap, :content,
-                :font, :static, :line_height,
-                :bold, :italic
+                :font, :static, :line_height
 
     def initialize(content, x, y)
       @content = content
@@ -2501,21 +3385,11 @@ module Hokusai
       @wrap = false
       @font = nil
       @static = true
-      @bold = false
-      @italic = false
       @line_height = 0.0
     end
 
     def hash
       [self.class, content, color.hash, padding.hash, size, font, wrap].hash
-    end
-
-    def bold=(value)
-      @bold = value
-    end
-
-    def italic=(value)
-      @italic = value
     end
 
     def static=(value)
@@ -2530,14 +3404,20 @@ module Hokusai
       @static = !value
     end
 
+    # Sets the font
+    # @param [Hokusai::Backend::Font] the font to render with
     def font=(value)
       @font = value
     end
 
+    # Set content
+    # @param [String] the content to render
     def content=(value)
       @content = value
     end
 
+    # Sets the font size
+    # @param [Integer] font size
     def size=(height)
       @size = height.to_f
     end
@@ -2577,6 +3457,9 @@ module Hokusai
   end
 end
 module Hokusai
+  # Starts a Shader filter
+  # Every command inside this filter
+  # will be applied with this shader
   class Commands::ShaderBegin < Commands::Base
     attr_reader :vertex_shader, :fragment_shader, :uniforms
 
@@ -2587,18 +3470,32 @@ module Hokusai
       @textures = {}
     end
 
+    # Set a Raylib style vertex shader
+    # @param [String] vertex shader string
     def vertex_shader=(content)
       @vertex_shader = content
     end
 
+    # Set a Raylib style vertex shader
+    # @param [String] vertex shader string
     def fragment_shader=(content)
       @fragment_shader = content
     end
 
+    # Set Uniforms to be used in the shaders
+    # @param [Hash] a key value hash where 
+    #   the key is a String with the uniform name
+    #   the value is an array of [value, type]
+    # Example:
+    # command.uniforms = { "time" => [0.22, HP_SHADER_UNIFORM_FLOAT], "rgba" => [[0,0,0,244], HP_SHADER_UNIFORM_IVEC4]}
     def uniforms=(values)
       @uniforms = values
     end
 
+    # Provide the shader with Hokusai::Textures
+    # @param [Hash] a hash where
+    #   the key is a String with the texture name
+    #   the value is a Hokusai::Texture
     def textures=(values)
       @textures = values
     end
@@ -2616,6 +3513,7 @@ module Hokusai
     end
   end
 
+  # Stops a shader filter
   class Commands::ShaderEnd < Commands::Base
     def hash
       [self.class].hash
@@ -2623,6 +3521,7 @@ module Hokusai
   end
 end
 module Hokusai
+  # Internal: Command to draw a Hokusai::Texture
   class Commands::Texture < Commands::Base
     attr_reader :texture, :x, :y
     attr_accessor :width, :height, :flip, :repeat, :rotation
@@ -2642,21 +3541,18 @@ module Hokusai
       [self.class, width, height].hash
     end
   end
-
-  class Commands::TextureBegin < Commands::Base
-    attr_reader :texture
-
-    def initialize(texture)
-      @texture = texture
-    end
-  end
-
-  class Commands::TextureEnd < Commands::Base; end
 end
 module Hokusai
+  # Internal: Starts a Rotation filter
+  #           Every command inside this filter will be applied with the rotation
   class Commands::RotationBegin < Commands::Base
     attr_reader :x, :y, :degrees
 
+    # Internal: constructor 
+    # 
+    # x - x rotation coord
+    # y - y rotation coord
+    # deg - degress to rotate
     def initialize(x, y, deg)
       @x = x
       @y = y
@@ -2675,9 +3571,14 @@ module Hokusai
   end
 end
 module Hokusai
+  # Starts a Scale filter
+  # Every command inside this filter
+  # will be scaled to [x,y]
   class Commands::ScaleBegin < Commands::Base
     attr_reader :x, :y
 
+    # @param [Float] width of scale
+    # @param [Float] height of scale
     def initialize(x, y = x)
       @x = x
       @y = y
@@ -2695,6 +3596,8 @@ module Hokusai
   end
 end
 module Hokusai
+  # Command to perform a 2D Translation on
+  # commands inside this filter
   class Commands::TranslationBegin < Commands::Base
     attr_reader :x, :y
 
@@ -2708,6 +3611,7 @@ module Hokusai
     end
   end
 
+  # End the 2D Translation
   class Commands::TranslationEnd < Commands::Base;
     def hash
       [self.class].hash
@@ -2715,11 +3619,13 @@ module Hokusai
   end
 end
 module Hokusai
+  # Internal: Starts a BlendMode filter where every command inside this filter
+  #           will be applied with the selected blend mode
   class Commands::BlendModeBegin < Commands::Base
     attr_reader :type
 
-    # possible types
-    # :alpha, :multiply, :additive, :colors
+    # Internal: constructor
+    #   type - one of the values [:alpha, :multiply, :additive, :colors]
     def initialize(type)
       @type = type
     end
@@ -2729,6 +3635,7 @@ module Hokusai
     end
   end
 
+  # Internal: Stops a BlendMode filter
   class Commands::BlendModeEnd < Commands::Base;
     def hash
       [self.class].hash
@@ -2737,12 +3644,9 @@ module Hokusai
 end
 
 module Hokusai
-  # A proxy class for invoking various UI commands
-  #
-  # Invocations of commands are immediately sent to the backend
-  # for drawing
-  #
-  # Used as part of the drawing api for Hokusai::Block
+  # Public: A proxy class for invoking various UI commands
+  #          Invocations of commands are immediately sent to the backend for drawing
+  #          Used as part of the drawing api for Hokusai::Block
   class Commands
     attr_reader :queue
 
@@ -2754,25 +3658,26 @@ module Hokusai
       @queue.hash
     end
 
-    # Draw a rectangle
+    # Public: Draw a rectangle.  Yields a [Commands::Rectangle](/api/Hokusai/Commands/Rectangle)
     #
-    # @param [Float] the x coordinate
-    # @param [Float] the y coordinate
-    # @param [Float] the width of the rectangle
-    # @param [Float] height of the rectangle
+    # x - the x coordinate
+    # y - the y coordinate
+    # width - the width of the rectangle
+    # height - height of the rectangle
+    # 
     def rect(x, y, w, h)
-      command = Commands::Rect.new(x, y, w, h)
+      command = Commands::Rectangle.new(x, y, w, h)
 
       yield(command)
 
       queue << command
     end
 
-    # Draw a circle
+    # Public: Draw a circle.  Yields a [Commands::Circle](/api/Hokusai/Commands/Circle)
     #
-    # @param [Float] x coordinate
-    # @param [Float] y coordinate
-    # @param [Float] radius of the circle
+    # x - x coordinate (Float)
+    # y - y coordinate (Float)
+    # radius - radius of the circle (Float)
     def circle(x, y, radius)
       command = Commands::Circle.new(x, y, radius)
 
@@ -2781,23 +3686,13 @@ module Hokusai
       queue << command
     end
 
-    # Draws an SVG
-    #
-    # @param [String] location of the svg
-    # @param [Float] x coord
-    # @param [Float] y coord
-    # @param [Float] width of the svg
-    # @param [Float] height of the svg
-    def svg(source, x, y, w, h)
-      command = Commands::SVG.new(source, x, y, w, h)
-
-      yield(command)
-
-      queue << command
-    end
-
-    # Invokes an image command
-    # from a filename, at position {x,y} with `w`x`h` dimensions
+    # Public: Draws an image.  Yields a [Commands::Image](/api/Hokusai/Commands/Image)
+    # 
+    # image - a Hokusai::Image
+    # x - x coordinate (Float)
+    # y - y coordinate (Float)
+    # width - width (Float)
+    # height - height (Float)
     def image(source, x, y, w, h)
       command = Commands::Image.new(source, x, y, w, h)
 
@@ -2806,25 +3701,34 @@ module Hokusai
       queue << command
     end
 
-    # Invokes a scissor begin command
-    # at position {x,y} with `w`x`h` dimensions
+    # Public: Starts a scissor region
+    # 
+    # x - x coordinate (Float)
+    # y - y coordinate (Float)
+    # width - width (Float)
+    # height - height (Float)
     def scissor_begin(x, y, w, h)
       queue << Commands::ScissorBegin.new(x, y, w, h)
     end
 
-    # Invokes a scissor stop command
+    # Public: ends scissor region
     def scissor_end
       queue << Commands::ScissorEnd.new
     end
 
+    # Public: starts blend mode 
+    # 
+    # type - one of the values [:alpha, :multiply, :additive, :colors]
     def blend_mode_begin(type)
       queue << Commands::BlendModeBegin.new(type)
     end
 
+    # Public: ends blend mode
     def blend_mode_end
       queue << Commands::BlendModeEnd.new
     end
 
+    # Public: starts a GLSL shader.  Yields a [Commands::ShaderBegin](/api/Hokusai/Commands/ShaderBegin)
     def shader_begin
       command = Commands::ShaderBegin.new
 
@@ -2833,42 +3737,52 @@ module Hokusai
       queue << command
     end
 
+    # Public: ends a shader
     def shader_end
       queue << Commands::ShaderEnd.new
     end
 
+    # Public: starts a rotation
+    # 
+    # x - x coordinate (Float)
+    # y - y coordinate (Float)
+    # deg - degress to rotate (Integer)
     def rotation_begin(x, y, deg)
       queue << Commands::RotationBegin.new(x, y, deg)
     end
 
+    # Public: ends a rotation
     def rotation_end
       queue << Commands::RotationEnd.new
     end
 
+    # Public: starts a scale command
     def scale_begin(*args)
       queue << Commands::ScaleBegin.new(*args)
     end
 
+    # Public: ends scaling
     def scale_end
       queue << Commands::ScaleEnd.new
     end
 
+    # Public: Starts a 2D translation
+    # x - x coordinate (Float)
+    # y - y coordinate (Float)
     def translation_begin(x, y)
       queue << Commands::TranslationBegin.new(x, y)
     end
 
+    # Public: Ends a 2D translation
     def translation_end
       queue << Commands::TranslationEnd.new
     end
 
-    # def texture_begin(texture, x, y)
-    #   commands << Commands::TextureBegin.new(texture, x, y)
-    # end
-
-    # def texture_end
-    #   commands << Commands::TextureEnd.new
-    # end
-
+    # Public: Draws a texture
+    # 
+    # texture - A Hokusai::Texture
+    # x - x coordinate (Float)
+    # y - y coordinate (Float)
     def texture(texture, x, y)
       command = Commands::Texture.new(texture, x, y)
 
@@ -2877,11 +3791,11 @@ module Hokusai
       queue << command
     end
 
-    # Draws text
+    # Public: Draws text.  Yields a [Commands::Text](/api/Hokusai/Commands/Text)
     #
-    # @param [String] the text content
-    # @param [Float] x coord
-    # @param [Float] y coord
+    # content - the text content
+    # x - x coord (Float)
+    # y - y coord (Float)
     def text(content, x, y)
       command = Commands::Text.new(content, x, y)
       yield command
@@ -2899,24 +3813,38 @@ module Hokusai
   end
 end
 module Hokusai
+  # Public: A global registry for storing Hokusai::Music
   class MusicRegistry
     def initialize
       @musics = {}
     end
 
+    # Public: Registers a Hokusai::Music on (name)
+    # 
+    # name - key to reference this music (String)
+    # music - a Hokusai::Music instance
     def register(name, music)
       @musics[name] = music
     end
 
+    # Public: fetches a music by name
+    # 
+    # name - key that references a Hokusai::Music
+    # 
+    # Returns Hokusai::Music
     def get(name)
       @musics[name]
     end
 
+    # Public: delete a music by name
+    # 
+    # name - key that references a Hokusai::Music
     def delete(name)
       @musics.delete(name)
     end
   end
 
+  # Public: A global registry for storing Hokusai::Texture
   class TextureRegistry
     attr_reader :textures
 
@@ -2924,48 +3852,96 @@ module Hokusai
       @textures = {}
     end
 
+    # Public: create a new texture and add it to the registry
+    # 
+    # name - key for texture (String)
+    # width - width (Float)
+    # height - height (Float)
+    # 
+    # Returns Hokusai::Texture
     def create(name, width, height)
       @textures[name] ||= Hokusai::Texture.init(width, height)
       @textures[name]
     end
 
+    # Public: Registers a texture
+    # 
+    # name - key for texture (String)
+    # texture - a Hokusai::Texture
+    # 
+    # Returns nothing
     def register(name, texture)
       @textures[name] = texture
     end
 
+    # Public: Fetches a texture from the registry
+    # 
+    # name - key for texture (String)
+    # 
+    # Returns Hokusai::Texture
     def get(name)
       @textures[name]
     end
 
+    # Public: Delete a texture from the registry
+    # 
+    # name - key for texture (String)
+    # 
+    # Returns nothing
     def delete(name)
       @textures.delete(name)
     end
   end
 
+  # Public: A global registry for storing Hokusai::Image
   class ImageRegistry
     def initialize
       @images = {}
     end
 
+    # Public: create a new image and add it to the registry
+    # 
+    # name - key for image (String)
+    # width - width (Float)
+    # height - height (Float)
+    # transparent - make the image transparent (default: false)
+    # 
+    # Returns Hokusai::Image
     def create(name, width, height, transparent = false)
       @images[name] ||= Hokusai::Image.init(width, height, transparent)
       @images[name]
     end
 
+    # Public: Registers an image
+    # 
+    # name - key for image (String)
+    # image - a Hokusai::Image
+    # 
+    # Returns nothing
     def register(name, image)
       @images[name] = image
     end
 
+    # Public: Fetches an image from the registry
+    # 
+    # name - key for image (String)
+    # 
+    # Returns Hokusai::Image
     def get(name)
       @images[name]
     end
 
+    # Public: Delete a image from the registry
+    # 
+    # name - key for image (String)
+    # 
+    # Returns nothing
     def delete(name)
       @images.delete(name)
     end
   end
 
-  # Keeps track of any loaded fonts
+  # Public: A global registry for storing Hokusai::Backend::Font
   class FontRegistry
     attr_reader :fonts, :active_font
 
@@ -2974,59 +3950,62 @@ module Hokusai
       @active_font = nil
     end
 
-    # Registers a font
+    # Public: Registers a font
     #
-    # @param [String] the name of the font
-    # @param [Hokusai::Font] a font
+    # name - font name
+    # font - a Hokusai::Backend::Font
     def register(name, font)
       raise Hokusai::Error.new("Font #{name} already registered") if fonts[name]
 
       fonts[name] = font
     end
 
-    # Returns the active font's name
+    # Public: Returns the active font's name
     #
-    # @return [String]
+    # Returns String
     def active_font_name
       raise Hokusai::Error.new("No active font") if active_font.nil?
 
       active_font
     end
 
-    # Activates a font by name
+    # Public: Activates a font by name
     #
-    # @param [String] the name of the registered font
+    # name - the font name
+    # 
     def activate(name)
       raise Hokusai::Error.new("Font #{name} is not registered") unless fonts[name]
 
       @active_font = name
     end
 
-    # Fetches a font
+    # Public: Fetches a font
     #
-    # @param [String] the name of the registered font
-    # @return [Hokusai::Font]
+    # name - the name of the registered font
+    # 
+    # Returns Hokusai::Backend::Font or nil
     def get(name)
       fonts[name]
     end
 
-    # Fetches the active font
+    # Public: Fetches the active font
     #
-    # @return [Hokusai::Font]
+    # Returns a Hokusai::Backend::Font or nil
     def active
       fonts[active_font]
     end
   end
 end
-# frozen_string_literal: true
-
 module Hokusai
-  # A Basic UI Event
-  class Event
+  # Internal: A UI input event used in [Hokusai::Painter](/api/Hokusai/Painter)
+  class BaseEvent
     attr_reader :captures
     attr_accessor :stopped
 
-    # Sets the name of this event kind
+    # Internal: Sets the name of this event kind
+    #  
+    # name - event name (String)
+    # 
     def self.name(name)
       @name = name
     end
@@ -3035,29 +4014,40 @@ module Hokusai
       self.class.instance_variable_get("@name")
     end
 
+    # Internal: adds evented styles to this block
+    # 
+    # value - a Hokusai::Block 
+    #
     def add_evented_styles(block)
       if target = block.node.meta.target
         block.node.add_evented_styles(target.class, name)
       end
     end
 
+    # Internal: capture a block
+    # 
+    # value - a Hokusai::Block
     def add_capture(block)
       captures << block
     end
 
-    # Has the event stopped propagation?
-    # @return [Bool]
+    # Internal: Has the event stopped propagation?
+    # 
+    # Returns boolean
     def stopped
       @stopped ||= false
     end
 
-    # Stop propagation on this event
-    # @return [Void]
+    # Public: Stop the event from bubbling
+    # 
+    # Returns nothing
     def stop
       self.stopped = true
     end
 
-    # @return [Array<Block>] the captured blocks for this event
+    # Internal: All captures for this event
+    # 
+    # Returns Array(Hokusai::Block)
     def captures
       @captures ||= []
     end
@@ -3070,10 +4060,11 @@ module Hokusai
       raise Hokusai::Error.new("#{self.class} must implement to_json")
     end
 
-    # Does the event match the provided Hokusai::Block?
+    # Internal: Does the event match the provided Hokusai::Block template?
     #
-    # @param [Hokusai::Block]
-    # @return [Bool]
+    # value - a Hokusai::Block
+    # 
+    # Returns boolean
     def matches(block)
       return false if block.node.portal.nil?
 
@@ -3082,8 +4073,8 @@ module Hokusai
       !!val
     end
 
-    # Emit the event to all captured blocks,
-    # stopping if any of the blocks stop propagation
+    # Internal: Emit the event to all captured blocks,
+    #           stopping if any of the blocks stop propagation
     def bubble
       while block = captures.pop
         block.emit(name, self)
@@ -3093,10 +4084,9 @@ module Hokusai
   end
 end
 
-# frozen_string_literal: true
-
 module Hokusai
-  class KeyboardEvent < Event
+  # Public: Represents a Keyboard Event
+  class KeyboardEvent < BaseEvent
     attr_reader :input
 
     def initialize(input, state)
@@ -3105,46 +4095,79 @@ module Hokusai
       @keyboard = input.keyboard
     end
 
+    # Public: is the key printable to the screen?
+    # 
+    # Returns boolean
     def printable?
       @keyboard.printable?
     end
     
+    # Public: array of pressed keys
+    # 
+    # Returns Array(Hash)
     def pressed
       @keyboard.pressed
     end
 
+    # Public: array of released keys
+    # 
+    # Returns Array(Hash)
     def released
       @keyboard.released
     end
 
+    # Public: array of keys currently being held down
+    # 
+    # Returns Array(Hash)
     def down
       @keyboard.down
     end
 
+    # Public: the pressed/released character
+    # 
+    # Returns String
     def char
       @keyboard.char
     end
     
+    # Public: the pressed/released key symbol
+    # 
+    # Returns Symbol
     def symbol
       @keyboard.symbol
     end
 
+    # Public: the pressed/released key code
+    # 
+    # Returns Integer
     def code
       @keyboard.code
     end
 
+    # Public: shift being pressed/released?
+    # 
+    # Returns boolean
     def shift
       @keyboard.shift
     end
 
+    # Public: is super being pressed/released?
+    # 
+    # Returns boolean
     def super
       @keyboard.send(:super)
     end
 
+    # Public: is ctrl being pressed/released?
+    #
+    # Returns boolean
     def ctrl
       @keyboard.ctrl
     end
 
+    # Public: is alt being pressed/released?
+    #
+    # Returns boolean
     def alt
       @keyboard.alt
     end
@@ -3167,17 +4190,28 @@ module Hokusai
     end
   end
 
+  # Public: A [Hokusai::KeyboardEvent](/api/Hokusai/KeyboardEvent) where a key has been released.
+  # 
   class KeyUpEvent < KeyboardEvent
     name "keyup"
 
+    # Public: The released key in symbol from
+    #
+    # Returns Symbol
     def key
       released[0]&.[](:symbol)
     end
 
+    # Public: the pressed/released key code
+    # 
+    # Returns Integer
     def code
       released[0]&.[](:code)
     end
 
+    # Public: the pressed/released character
+    # 
+    # Returns String
     def char
       released[0]&.[](:char)
     end
@@ -3187,17 +4221,28 @@ module Hokusai
     end
   end
 
+  # Public: A [Hokusai::KeyboardEvent](/api/Hokusai/KeyboardEvent) where a key is being pressed.
+  # 
   class KeyDownEvent < KeyboardEvent
     name "keydown"
     
+    # Public: The key in symbol from
+    #
+    # Returns Symbol
     def key
       down[0]&.[](:symbol)
     end
 
+    # Public: the key code
+    # 
+    # Returns Integer
     def code
       down[0]&.[](:code)
     end
 
+    # Public: the character
+    # 
+    # Returns String
     def char
       down[0]&.[](:char)
     end
@@ -3209,17 +4254,28 @@ module Hokusai
     end
   end
 
+  # Public: A [Hokusai::KeyboardEvent](/api/Hokusai/KeyboardEvent) where a key has been pressed/released.
+  # 
   class KeyPressEvent < KeyboardEvent
     name "keypress"
 
+    # Public: The key in symbol from
+    #
+    # Returns Symbol
     def key
       pressed[0]&.[](:symbol)
     end
 
+    # Public: the key code
+    # 
+    # Returns Integer
     def code
       pressed[0]&.[](:code)
     end
 
+    # Public: the character
+    # 
+    # Returns String
     def char
       pressed[0]&.[](:char)
     end
@@ -3230,10 +4286,9 @@ module Hokusai
     end
   end
 end
-# frozen_string_literal: true
-
 module Hokusai
-  class MouseEvent < Event
+  # An class representing a Mouse event
+  class MouseEvent < BaseEvent
     attr_reader :input, :state
 
     def initialize(input, state)
@@ -3249,30 +4304,51 @@ module Hokusai
       @mouse
     end
 
+    # Public: the x,y coordinates of the mouse
+    # 
+    # Returns Hokusai::Vec2
     def pos
       mouse.pos
     end
 
+    # Public: the x,y delta coordinates
+    # 
+    # Returns Hokusai::Vec2
     def delta
       mouse.delta
     end
 
+    # Public: the scroll amount
+    # 
+    # Returns Float
     def scroll
       mouse.scroll
     end
 
+    # Public: the scroll delta value
+    # 
+    # Returns Float
     def scroll_delta
       mouse.scroll_delta
     end
 
+    # Public: the details of the left mouse button
+    # 
+    # Returns [Hokusai::MouseButton](/api/Hokusai/MouseButton)
     def left
       @left
     end
 
+    # Public: the details of the middle mouse button
+    # 
+    # Returns [Hokusai::MouseButton](/api/Hokusai/MouseButton)    
     def right
       @right
     end
 
+    # Public: the details of the right mouse button
+    # 
+    # Returns [Hokusai::MouseButton](/api/Hokusai/MouseButton)    
     def middle
       @middle
     end
@@ -3303,21 +4379,26 @@ module Hokusai
     end
   end
 
+  # Triggered when a mouse move occurs
   class MouseMoveEvent < MouseEvent
     name "mousemove"
 
+    # Captured if the block is listening for @mousemove
     def capture(block, canvas)
       add_evented_styles(block) if hovered(canvas)
 
-      if matches(block) #&& (delta.y != 0.0000000000 && delta.x != 0.0000000000)
+      if matches(block)
         add_capture(block)
       end
     end
   end
 
+  # Public: Triggered when left mouse click occurs
   class ClickEvent < MouseEvent
     name "click"
 
+    # Internal: Captured if the block is listening for @click 
+    #           and the left mouse clicks the block geometry
     def capture(block, canvas)
       if left.clicked && clicked(canvas)
         block.node.meta.focus
@@ -3337,6 +4418,7 @@ module Hokusai
     end
   end
 
+  # Public: Triggered when left mouse button is up
   class MouseUpEvent < MouseEvent
     name "mouseup"
 
@@ -3349,6 +4431,7 @@ module Hokusai
     end
   end
 
+  # Public: Triggered when left mouse button is down
   class MouseDownEvent < MouseEvent
     name "mousedown"
 
@@ -3361,6 +4444,7 @@ module Hokusai
     end
   end
 
+  # Public: Triggered when mouse wheel is scrolled
   class WheelEvent < MouseEvent
     name "wheel"
 
@@ -3373,6 +4457,7 @@ module Hokusai
     end
   end
 
+  # Public: Triggered when mouse cursor is over a block
   class HoverEvent < MouseEvent
     name "hover"
 
@@ -3406,6 +4491,7 @@ module Hokusai
     end
   end
 
+  # Public: Triggered when mouse cursor leaves a block
   class MouseOutEvent < MouseEvent
     name "mouseout"
 
@@ -3423,10 +4509,9 @@ module Hokusai
   end
 end
 
-# frozen_string_literal: true
-
 module Hokusai
-  class TouchEvent < Event
+  # Parent class representing a generic touch event
+  class TouchEvent < BaseEvent
     attr_reader :input
 
     def initialize(input, state)
@@ -3435,14 +4520,19 @@ module Hokusai
       @touch = input.touch
     end
 
+    # Are there any touches?
+    # @return [Bool]
     def down?
       @touch.count > 0
     end
 
+    # Are there <not> any touches?
+    # @return [Bool]
     def up?
       @touch.count <= 0
     end
 
+    # @return [Bool] did a touch stop?
     def released?
       @touch.released?
     end
@@ -3637,6 +4727,7 @@ module Hokusai
   end
 end
 module Hokusai
+  # Internal: Describes a Block with layout coordinates for rendering
   class PainterEntry
     attr_reader :block, :parent, :x, :y, :w, :h
     def initialize(block, x, y, w, h)
@@ -3659,6 +4750,8 @@ module Hokusai
   ZTARGET_ROOT = "root"
   ZTARGET_PARENT = "parent"
 
+  # Internal: Responsible for iterating through the render tree, event handling, and invoking the draw callbacks
+  #           Used by the C/MRuby backend
   class Painter
     attr_reader :root, :input, :before_render, :after_render,
                 :events
@@ -3707,18 +4800,13 @@ module Hokusai
       @after_render = block
     end
 
-    # def debug(parent, children)
-    #   @i ||= 0
-      
-    #   pp [
-    #     "#{@i}",
-    #     "parent: #{parent.block.class}##{parent.block.node.portal&.ast&.id} (z: #{parent.block.node.meta.get_prop(:z)})",
-    #     "children: #{children.map {|c| "#{c.block.class}##{c.block.node.portal&.ast&.id} (z: #{c.block.node.meta.get_prop(:z)})"} }"
-    #   ]
-    #   @i += 1
-    # end
-
-    # @return [Array(Commands::Base)] the command list
+    # Internal: Render the block on this painter in (canvas)
+    # 
+    # canvas - a Hokusai::Canvas to render on
+    # resize - boolean telling us if this frame is resized
+    # capture: - kwarg telling us if we should capture events
+    # 
+    # Returns nothing
     def render(canvas, resize = false, capture: true)
       return if root.children.empty?
 
@@ -4565,6 +5653,7 @@ module Hokusai::Util
 end
 
 module Hokusai::Util
+  # Public: Payload for [Hokusai::Util::WrapStream#on_text](/api/Hokusai/Util/WrapStream.html#on-text-block)
   class Wrapped
     attr_accessor :y
     attr_accessor :text, :x, :width, :height, :extra, :widths, :positions
@@ -4595,15 +5684,15 @@ module Hokusai::Util
     end
   end
 
-  # A cache that stores the results of WrapStream.
-  # Utiltiy methods are provided to quickly fetch a subset of tokens
-  # Based on a given window's coordinates (canvas)
+  # Public: A cache that stores the results of WrapStream.
+  #         Utiltiy methods are provided to quickly fetch a subset of tokens
+  #         Based on a given window's coordinates (canvas)
   class WrapCache
     attr_accessor :tokens
 
-    # returns range denoting the index of the changed lines
-    # from 2 different strings.
-    # NOTE: the change must be consecutive
+    # Public: returns range denoting the index of the changed lines
+    #         from 2 different strings.
+    #         NOTE: the change must be consecutive
     def self.diff(first, second)
       arr = (0..first.length).to_a
 
@@ -4645,6 +5734,11 @@ module Hokusai::Util
       @tokens = []
     end
 
+    # Public: Adds a token
+    # 
+    # token - Hokusai::Util::Wrapped 
+    # 
+    # Returns nothing
     def <<(element)
       @tokens << element
     end
@@ -4773,16 +5867,16 @@ module Hokusai::Util
       wrapped.y >= canvas.y && wrapped.y <= canvas.y + canvas.height
     end
 
-    #  arrows = cursor index
-    #  letters = selected positions
-    #                          
-    #  │     │      │     │     │  
-    #  │  A  │   B  │  C  │  D  │  
-    #  │     │      │     │     │  
-    #  ▼  0  ▼   1  ▼  2  ▼  3  ▼  
-    #                           
-    #  -1    0      1     2     3  
-    #                            
+    # Public: Gets the area coordinates for a selection
+    #         to draw a text selection background.
+    # 
+    # tokens - the result of WrapCache#tokens_for
+    # selector - a [Hokusai::Util::Selection](/api/Hokusai/Util/Selection) object
+    # options - kwargs options
+    #           copy - boolean to copy selected tokens
+    #           padding - a Hokusai::Padding object
+    #           
+    # Returns Hokusai::Util::WrapCachePayload
     def selected_area_for_tokens(tokens, selector, copy: false, padding: Hokusai::Padding.default)
       return if selector.nil? || !selector.selecting?
 
@@ -4899,6 +5993,11 @@ module Hokusai::Util
       WrapCachePayload.new(copy_buffer, position_buffer, pcursor)
     end
 
+    # Public: Get cached tokens for a given Hokusai::Canvas
+    # 
+    # canvas - a Hokusai::Canvas
+    # 
+    # Return Array(Hokusai::Util::Wrapped)
     def tokens_for(canvas)
       index = bsearch(canvas)
       return [] if index.nil?
@@ -4917,16 +6016,46 @@ module Hokusai::Util
     end
   end
 
-  # A disposable streaming text wrapper
-  # tokens can be appended onto it, where it they will break on a given width.
-  # Opaque payloads can be passed for each token, which will be provided to callbacks.
-  # This makes it suitable for processing and wrapping markdown/html/tokenized text
+  # Public: A disposable streaming text wrapper
+  #         tokens can be appended onto it, where it they will break on a given width.
+  #         Opaque payloads can be passed for each token, which will be provided to callbacks.
+  #         This makes it suitable for processing and wrapping markdown/html/tokenized text
   #
-  # height of the wrapped text is tracked with `stream#y`
+  # Examples
+  # 
+  #   stream = Hokusai::Util::WrapStream.new(canvas.width, canvas.x, canvas.y) do |string, extra|
+  #     # String is the data being wrapped
+  #     # Extra is the payload provided for that string
+  #     # Callbacks takes a [width, height] as response
+  #     [Hokusai.fonts.get("default").measure(string, size).first, size]
+  #   end
+  #   #
+  #   # subscribe to emitted tokens Hokusai::Util::Wrapped
+  #   stream.on_text do |wrapped|
+  #     draw do
+  #       text(wrapped.text, wrapped.x, wrapped.y) do |command|
+  #         command.color = wrapped.extra[:color]
+  #       end
+  #     end
+  #   end
+  #   # Feed the stream content
+  #   stream.wrap("Hello this red text might be wrapped over the width", { color: Hokusai::Color.new(222,22,22) })
+  #   stream.wrap("This is blue text", { color: Hokusai::Color.new(22,22,222) })
+  #   # flush remaining tokens
+  #   stream.flush
+  #   # stream#y now holds the total height of the wrapped tokens
+  #   stream.y
+  #
   class WrapStream
     attr_accessor :buffer, :x, :y, :origin_y, :current_width, :stack, :widths, :current_position, :positions, :on_text_cb
     attr_reader :width, :origin_x, :on_text_cb
 
+    # Public: constructor for WrapStream
+    # 
+    # width - a float. When text exceeds this width, it will wrap to a new line
+    # origin_x - where the x value starts (default: 0.0)
+    # origin_y - where the y value starts (default: 0.0)
+    # block - a callback to measure a given string.  Callback must return an array containing the width and height of the string
     def initialize(width, origin_x = 0.0, origin_y = 0.0, &measure)
       @width = width            # the width of the container for this wrap
       @measure_cb = measure     # a measure callback that returns the width/height of a given char (takes 2 params: a char and an token payload)
@@ -4946,12 +6075,14 @@ module Hokusai::Util
 
     NEW_LINE_REGEX = /\n/
 
-    # Appends <text> to the wrap stream.
-    # If the text supplies causes the buffer to grow beyond the supplied width
-    # The buffer will be flushed to the <on_text_cb> callback.
+    # Public: Appends (text) to the wrap stream.
+    #         If the text supplies causes the buffer to grow beyond the supplied width
+    #         The buffer will be flushed to the (on_text_cb) callback.
     #
-    # @param [String] text (text to append to this wrap stream)
-    # @param [Object] extra (an opaque payload that will be passed to callbacks)
+    # text - text to append to this wrap stream
+    # extra - an opaque payload that will be passed to callbacks
+    # 
+    # Returns nothing
     def wrap(text, extra)
       offset = 0
       size = text.size
@@ -5069,7 +6200,7 @@ module Hokusai::Util
       end
     end
 
-    # Flushes the current buffer/stack.
+    # Public: Flushes the current buffer/stack.
     def flush
       stack.each do |(range, extra)|
         content = buffer[range]
@@ -5088,6 +6219,11 @@ module Hokusai::Util
       self.x = origin_x
     end
 
+    # Public: A callback that is called whenever the stream is wrapped or flushes
+    # 
+    # block - the provided callback
+    # 
+    # Returns nothing
     def on_text(&block)
       @on_text_cb = block
     end
@@ -5105,6 +6241,13 @@ module Hokusai::Util
   end
 end
 
+# Flags to pass to Hokusai::Backend::Config
+# Example:
+# ```ruby
+# Hokusai::Backend.run(App) do |config|
+#   config.config_flags = HP_FLAG_WINDOW_RESIZABLE | HP_FLAG_VSYNC_HINT
+# end
+# ```
 HP_FLAG_VSYNC_HINT = 64                  # Set to try enabling V-Sync on GPU
 HP_FLAG_FULLSCREEN_MODE = 2              # Set to run program in fullscreen
 HP_FLAG_WINDOW_RESIZABLE = 4             # Set to allow resizable window
@@ -5123,6 +6266,8 @@ HP_FLAG_MSAA_4X_HINT = 32                # Set to try enabling MSAA 4X
 HP_FLAG_INTERLACED_HINT = 65536          # Set to try enabling interlaced video format (for V3D)
 
 module Hokusai
+  # A class for traversing a hokusai-pocket project
+  # Yields every file that's required (depth-first)
   class Reloader
     def initialize(file_path, document = File.read(file_path))
       @file_path = file_path
@@ -5144,12 +6289,32 @@ module Hokusai
     end
   end
 
+  # Public: Runs a [Hokusai::Block](/api/Hokusai/Block) as a Game / Application
+  #         Used by the C/MRuby/Raylb backend
+  #
+  # Examples
+  #
+  # Hokusai::Backend.run(BonziBuddy) do |config|
+  #   config.title = "BonziBuddy reloaded"
+  #   config.width = 500
+  #   config.height = 500
+  #   #
+  #   # need to set at least one font if using text
+  #   config.after_load do
+  #     Hokusai.fonts.register "default", Hokusai::Backend::Font.default
+  #     Hokusai.fonts.activate "default"
+  #   end
+  # end
   class Backend
     def self.htop  
       @running = true
       binding
     end
 
+    # Public: Run a hokusai-pocket app.  Blocking until app is exited.
+    #
+    # klass - a Hokusai::Block.class
+    # block - a callback to configure the application
     def self.run(klass, &block)
       return if @running
       config = Backend::Config.new
@@ -5161,17 +6326,80 @@ module Hokusai
 
     attr_reader :app, :config
 
+    # Internal: constructor for Backend
+    # 
+    # app - a Hokusai::Block.class
+    # config - a Hokusai::Backend::Config
     def initialize(app, config)
       @app = app
       @config = config
     end
 
+    # Public: Configure the properties of a hokusai pocket app
+    #         Set config flags, fps, title, and register assets.
+    #         Passed as a callback parameter to [Hokusai::Backend.run](/api/Hokusai/Backend#run)
     class Config
-      attr_accessor :width, :height, :fps,
-                  :title, :config_flags, :window_state_flags,
+      # Public: Set the width of the window on load
+      #
+      # value - The window pixel width (Integer)
+      attr_accessor :width
+
+      # Public: Set the height of the window on load
+      #
+      # value - The window pixel height (Integer)
+      attr_accessor :height
+
+      # Public: Set the desired frame rate (frames per second)
+      #
+      # value - The frames per second (Integer)
+      attr_accessor :fps
+
+      # Public: Set the title of the window
+      #
+      # value - The title of the window (String)
+      attr_accessor :title
+
+      # Public: Set any config flags for the window
+      #
+      # value - A union of HP_FLAG_*
+      #
+      # Examples
+      #
+      #   Hokusai::Backend.run(App) do |config|
+      #     config.config_flags = HP_FLAG_VSYNC_HINT | HP_FLAG_WINDOW_RESIZABLE
+      #   end
+      #   # configures window to be resizable and sync frame rate with monitor
+      attr_accessor :config_flags
+
+      # Public: Set if application should pause rendering until an event comes through
+      #
+      # value - a boolean (false to turn off event waiting)
+      attr_accessor :event_waiting
+
+      # Public: Set if the application should draw the FPS in the top left corner
+      #
+      # value - true to draw FPS
+      attr_accessor :draw_fps
+
+      # Public: Set if the application should log to stdout
+      #         Note LOG_LEVEL env var can be set to filter logging
+      #
+      # value - true to log
+      attr_accessor :log
+
+      # Public: Accessor to toggle audio (default false)
+      #
+      # value - true to use audio
+      attr_accessor :audio
+
+      # Public: Accessor to toggle touch input handling (default false)
+      #
+      # value - true to use touch events
+      attr_accessor :touch
+
+      attr_accessor :window_state_flags,
                   :automation_driver, :background, :after_load_cb,
-                  :host, :port, :automated, :on_reload_proc, :event_waiting, :touch,
-                  :draw_fps, :log, :audio
+                  :host, :port, :automated, :on_reload_proc
 
       def initialize
         @width = 500
@@ -5194,24 +6422,47 @@ module Hokusai
         @log = false
       end
 
+      # Internal: Not implemented
       def start_automation_driver
         raise ConfigError.new("Need a Hokusai::Driver in order to automate") if automation_driver.nil?
 
         automation_driver.serve(host, port)
       end
 
+      # Internal: Not implemented
       def automate(host, port)
         self.host = host
         self.port = port
         self.automated = true
       end
 
+      # Public: Called after the OpenGL context is established.
+      # This is the place to register assets which depend on the GPU
+      #
+      # block - a callback to run code after an OpenGL window is established
+      # 
+      # Examples
+      #
+      #   Hokusai::Backend.run(App) do |config|
+      #     config.after_load do
+      #       Hokusai.fonts.register "default", Hokusai::Backend::Font.default
+      #     end
+      #   end
+      # 
+      # Returns nothing.
       def after_load(&block)
         self.after_load_cb = block
       end
 
-      def hot_reload=(topper)
+      # Public: Sets hot reload entypoint (should probably be same as the app entrypoint)
+      #         Note: for best results, also set `event_waiting = false`
+      #
+      # entrypoint - the file path to watch
+      #
+      # Returns nothing.
+      def hot_reload=(entrypoint)
         @mtimes = {}
+        topper = entrypoint
   
         on_reload do
           reload = false
@@ -5241,6 +6492,7 @@ module Hokusai
         end
       end
 
+      # Internal: Used by hot_reload= to set the reload logic
       def on_reload(&block)
         @on_reload_proc = block
       end
@@ -5249,6 +6501,16 @@ module Hokusai
 end
 
 
+# Public: A block with a virtual node
+#         useful for collecting events on a block without rendering anything
+#         
+# Examples
+# 
+#   template <<-EOF
+#   [template]
+#     empty { @click="do_something" }
+#   EOF
+#
 class Hokusai::Blocks::Empty < Hokusai::Block
   template <<~EOF
     [template]
@@ -5262,6 +6524,7 @@ end
 
 module Hokusai
   module Blocks
+    # Public: Renders all children vertically
     class Vblock < Hokusai::Block
       template <<~EOF
         [template]
@@ -5300,6 +6563,7 @@ module Hokusai
   end
 end
 
+# Public: Renders all children horizontally
 class Hokusai::Blocks::Hblock < Hokusai::Block
   template <<~EOF
     [template]
@@ -5335,7 +6599,7 @@ class Hokusai::Blocks::Hblock < Hokusai::Block
     end
   end
 end
-# frozen_string_literal: true
+# Public: A simple label that changes node size according to text size
 class Hokusai::Blocks::Label < Hokusai::Block
   template <<~EOF
   [template]
@@ -5402,8 +6666,7 @@ class Hokusai::Blocks::Rect < Hokusai::Block
     yield canvas
   end
 end
-# frozen_string_literal: true
-
+# Deprecated: A crappy button implmentation
 class Hokusai::Blocks::Button < Hokusai::Block
   template <<~EOF
     [template]
@@ -5503,6 +6766,7 @@ class Hokusai::Blocks::Button < Hokusai::Block
   end
 end
 
+# Public: Draws a circle
 class Hokusai::Blocks::Circle < Hokusai::Block
   template <<~EOF
     [template]
@@ -5532,6 +6796,7 @@ class Hokusai::Blocks::Circle < Hokusai::Block
   end
 end
 
+# Public: Checkbox
 class Hokusai::Blocks::Checkbox < Hokusai::Block
   template <<~EOF
     [template]
@@ -5584,6 +6849,19 @@ class Hokusai::Blocks::Checkbox < Hokusai::Block
   end
 end
 
+# Public: Starts a clipping region with everything
+#         inside being clipped to the canvas dimensions
+#         Last child should be [Hokusai::Blocks::ScissorEnd](/api/Hokusai/Blocks/ScissorEnd)
+#         
+# Examples
+# 
+#   template <<-EOF
+#   [template]
+#     scissor_begin
+#       more
+#         components
+#       scissor_end
+#   EOF
 class Hokusai::Blocks::ScissorBegin < Hokusai::Block
   template <<~EOF
   [template]
@@ -5604,6 +6882,7 @@ class Hokusai::Blocks::ScissorBegin < Hokusai::Block
     yield canvas
   end
 end
+# Public: Stops clipping region
 class Hokusai::Blocks::ScissorEnd < Hokusai::Block
   template <<~EOF
   [template]
@@ -5617,6 +6896,7 @@ class Hokusai::Blocks::ScissorEnd < Hokusai::Block
   end
 end
 
+# Public: Clip descendants according to clipping region (slotted)
 class Hokusai::Blocks::Clipped < Hokusai::Block
   style <<-EOF
   [style]
@@ -5642,6 +6922,7 @@ class Hokusai::Blocks::Clipped < Hokusai::Block
   computed :auto, default: true
   computed :offset, default: 0.0
 end
+# Public: Represents a blinking cursor
 class Hokusai::Blocks::Cursor < Hokusai::Block
   template <<~EOF
     [template]
@@ -5695,8 +6976,7 @@ class Hokusai::Blocks::Cursor < Hokusai::Block
     yield canvas
   end
 end
-# require "pathname"
-
+# Public: Renders an image in Hokusai.images
 class Hokusai::Blocks::Image < Hokusai::Block
   template <<~EOF
     [template]
@@ -5718,26 +6998,7 @@ class Hokusai::Blocks::Image < Hokusai::Block
     yield canvas
   end
 end
-class Hokusai::Blocks::SVG < Hokusai::Block
-  template <<~EOF
-    [template]
-      virtual
-  EOF
-
-  computed! :source
-  computed :size, default: 12, convert: proc(&:to_i)
-  computed :color, default: [255,255,255], convert: Hokusai::Color
-
-  def render(canvas)
-    draw do
-      svg(source, canvas.x, canvas.y, size, size) do |command|
-        command.color = color
-      end
-    end
-
-    yield canvas
-  end
-end
+# Public: toggle for on/off scenarios
 class Hokusai::Blocks::Toggle < Hokusai::Block
   template <<-EOF
   [template]
@@ -5793,6 +7054,7 @@ class Hokusai::Blocks::Toggle < Hokusai::Block
     yield(canvas)
   end
 end
+# Public: A scrollbar that emits the scroll position
 class Hokusai::Blocks::Scrollbar < Hokusai::Block
   style <<~EOF
   [style]
@@ -5907,6 +7169,7 @@ class Hokusai::Blocks::Scrollbar < Hokusai::Block
     yield(canvas)
   end
 end
+# Public: Measures it's children and emits the width and height
 class Hokusai::Blocks::Dynamic < Hokusai::Block
   template <<~EOF
     [template]
@@ -5950,6 +7213,7 @@ class Hokusai::Blocks::Dynamic < Hokusai::Block
     yield canvas
   end
 end
+# Renders block inside a scrollable panel (slotted)
 class Hokusai::Blocks::Panel < Hokusai::Block
   template <<~EOF
     [template]
@@ -6110,851 +7374,8 @@ class Hokusai::Blocks::Panel < Hokusai::Block
   end
 end
 
-
-module Hokusai::Util
-  class Wrapped
-    attr_accessor :y
-    attr_accessor :text, :x, :width, :height, :extra, :widths, :positions
-    
-    def initialize(text, rect, extra, widths:, positions:)
-      @text = text
-      @x = rect.x
-      @y = rect.y
-      @width = rect.width
-      @height = rect.height
-      @widths = widths
-      @extra = extra
-      @positions = positions
-    end
-
-    def range
-      positions.first..positions.last
-    end
-  end
-
-  class WrapCachePayload
-    attr_accessor :copy, :positions, :cursor
-    
-    def initialize(copy, positions, cursor)
-      @copy = copy
-      @positions = positions
-      @cursor = cursor
-    end
-  end
-
-  # A cache that stores the results of WrapStream.
-  # Utiltiy methods are provided to quickly fetch a subset of tokens
-  # Based on a given window's coordinates (canvas)
-  class WrapCache
-    attr_accessor :tokens
-
-    # returns range denoting the index of the changed lines
-    # from 2 different strings.
-    # NOTE: the change must be consecutive
-    def self.diff(first, second)
-      arr = (0..first.length).to_a
-
-      v = arr.bsearch do |i|
-        first.rindex(second[0..i]) != 0
-      end
-
-      # bounds checks
-      v = first.size if v.nil?
-      v -= 1 if first[v] == "\n"
-
-      a = 0
-      while true
-        if first[v] == "\n"
-          a = v + 1
-          break
-        elsif v.zero?
-          a = v
-          break
-        end
-        v -= 1
-      end
-
-      b = a
-      while true
-        if first[b].nil?
-          b = first.size - 1
-          break
-        elsif first[b] == "\n"
-          break
-        end
-        b += 1
-      end
-
-      a..b
-    end
-
-    def initialize
-      @tokens = []
-    end
-
-    def <<(element)
-      @tokens << element
-    end
-
-    def splice(stream, last_content, new_content, selection: nil)
-      change_line_indicies = WrapCache.diff(last_content, new_content)
-      new_changed_line_indicies = WrapCache.diff(new_content, last_content)
-
-      new_data = new_content[new_changed_line_indicies]
-      old_text_callback = stream.on_text_cb
-      records = []
-      # the height of the new records
-      records_height = 0.0
-
-      stream.on_text do |wrapped|
-        unless wrapped.positions.empty?
-          records_height += wrapped.height
-          wrapped.positions.map! do |pos|
-            pos + change_line_indicies.begin
-          end
-          records << wrapped
-        end
-      end
-
-      stream.wrap(new_data, nil)
-      stream.flush
-
-      # puts ["original.tokens.last.y", tokens.last.y].inspect
-
-      # splice in new tokens
-      #
-      # update the new positions
-      # NOTE: still need to udpate the y positions with the 
-      # records.each do |record|
-      #   records_height += record.height
-      #   record.positions.map! do |pos|
-      #     pos + change_line_indicies.begin
-      #   end
-      # end
-
-      diff_pos = (new_changed_line_indicies.end - change_line_indicies.end)
-      new_tokens = []
-      found = false
-      last_token = nil
-      new_last_tokens_height = 0.0
-      last_tokens_height = 0.0
-      insert_index = 0
-
-      while token = tokens.shift
-        next if token.positions.empty?
-        if token.range.begin >= change_line_indicies.begin && token.range.end <= change_line_indicies.end
-          # this is a match
-          # we want to remove these tokens from the list...and then sub in our new tokens.
-          last_token = token
-          last_tokens_height += token.height
-          found = true
-          next
-        end
-
-        if found
-          token.y += (records_height - last_tokens_height)
-
-          token.positions.map! do |pos|
-            pos + diff_pos
-          end
-        else
-          insert_index += 1
-          new_last_tokens_height += token.height
-        end
-
-        new_tokens << token
-      end
-
-      records.each do |record|
-        record.y += new_last_tokens_height
-      end
-
-      # puts ["insert", records.first.y, records.map(&:height).sum, insert_index, new_last_tokens_height].inspect
-
-      new_tokens.insert(insert_index, *records)
-      self.tokens = new_tokens
-      
-
-      # i = 0
-      # tokens.each do |token|
-      #   # puts ["token", token].inspect
-      #   token.positions.each do |n|
-      #     if n != i
-      #       puts ["Mismatch token", token, i, n].inspect
-      #     end
-
-      #     i += 1
-      #   end
-      # end
-
-      # restore callback
-      stream.on_text(&old_text_callback)
-      # return y
-      tokens.last.y + tokens.last.height
-    end
-
-    def bsearch(canvas)
-      low = 0
-      high = tokens.size - 1
-
-      while low <= high
-        mid = low + (high - low) / 2
-
-        if matches(tokens[mid], canvas)
-          return mid
-        end
-
-        if tokens[mid].y > canvas.y
-          high = mid - 1
-        end
-
-        if tokens[mid].y < canvas.y
-          low = mid + 1
-        end
-      end
-
-      return nil
-    end
-
-    def matches(wrapped, canvas)
-      wrapped.y >= canvas.y && wrapped.y <= canvas.y + canvas.height
-    end
-
-    #  arrows = cursor index
-    #  letters = selected positions
-    #                          
-    #  │     │      │     │     │  
-    #  │  A  │   B  │  C  │  D  │  
-    #  │     │      │     │     │  
-    #  ▼  0  ▼   1  ▼  2  ▼  3  ▼  
-    #                           
-    #  -1    0      1     2     3  
-    #                            
-    def selected_area_for_tokens(tokens, selector, copy: false, padding: Hokusai::Padding.default)
-      return if selector.nil? || !selector.selecting?
-
-      copy_buffer = ""
-      x = nil
-      tw = 0.0
-      cy = nil
-      position_buffer = []
-      cursor = nil
-      pcursor = nil
-
-      tokens.each do |token|
-        tx = token.x + padding.left
-        ty = token.y + padding.top
-
-        if token.y != cy
-          x = nil
-          cy = token.y
-          tw = 0.0
-        end
-
-        token.widths.each_with_index do |w, i|
-          by = selector.geom.frozen? ? ty : ty - selector.offset_y
-          sy = ty
-
-          if (selector.geom? && selector.geom.selected(tx, by, w, token.height))
-            if (selector.geom.left? || selector.geom.up?)
-              cursor ||= [tx, sy, 0.5, token.height]
-              pcursor ||= token.positions[i]
-            else
-              # puts ["set selection cursor: #{sy}"]
-              cursor = [tx + w, sy, 0.5, token.height]
-              pcursor = token.positions[i]
-            end
-
-            position_buffer << token.positions[i]
-
-            if copy
-              copy_buffer += token.text[i]
-            end
-
-            if x.nil?
-              x = tx
-            end
-
-            tw += w
-          elsif selector.pos? && selector.pos.selected(token.positions[i])
-            # puts ["pos 1"]
-            if selector.pos.cursor_index == selector.pos.positions.first
-              cursor ||= [tx, sy, 0.5, token.height]
-              pcursor ||= token.positions[i]
-            elsif selector.pos.cursor_index == selector.pos.positions.last
-              cursor = [tx + w, sy, 0.5, token.height]
-              pcursor = token.positions[i]
-            elsif selector.pos.cursor_index + 1 == token.positions[i]
-              cursor = [tx, sy, 0.5, token.height]
-              pcursor = token.positions[i] - 1
-            end
-
-            position_buffer << token.positions[i]
-
-            if copy
-              copy_buffer += token.text[i]
-            end
-
-            if x.nil?
-              x = tx
-            end
-
-            tw += w
-
-          # [0, [0]]
-          elsif selector.pos? && selector.pos.cursor_index && selector.pos.cursor_index + 1 == token.positions[i]
-            # puts "pos 2"
-            cursor = [tx, sy, 0.5, token.height]
-            pcursor = token.positions[i] - 1
-            # position_buffer = selector.pos.positions
-
-            # if copy
-            #   copy_buffer += token.text[i]
-            # end
-
-          elsif selector.pos? && selector.pos.cursor_index && selector.pos.cursor_index == token.positions[i]
-            # puts "pos 3"
-            cursor = [tx + w, sy, 0.5, token.height]
-            pcursor = selector.pos.cursor_index
-            # position_buffer = selector.pos.positions
-          elsif selector.geom? && selector.geom.clicked(tx, by, (w / 2), token.height)
-            cursor = [tx, sy, 0.5, token.height]
-            pcursor = token.positions[i] - 1
-            # puts "setting cursor #{sy}"
-
-          elsif selector.geom? && selector.geom.clicked(tx + (w/2.0), by, (w/2.0), token.height)
-            # puts "geom click 2"
-            cursor = [tx + w, sy, 0.5, token.height]
-            pcursor = token.positions[i]
-          end
-          
-          tx += w
-        end
-
-        if !x.nil?
-          ay = cy + padding.top - selector.offset_y
-          yield Hokusai::Rect.new(x, ay, tw, token.height)
-
-          tw = 0.0
-        end
-      end
-
-      selector.pos.cursor_index = pcursor
-      selector.pos.positions = position_buffer
-      selector.geom.cursor = cursor
-
-      WrapCachePayload.new(copy_buffer, position_buffer, pcursor)
-    end
-
-    def tokens_for(canvas)
-      index = bsearch(canvas)
-      return [] if index.nil?
-      lindex = index.zero? ? index : index - 1
-      rindex = index + 1
-
-      while rindex < tokens.size - 1 && matches(tokens[rindex], canvas)
-        rindex += 1
-      end
-
-      while lindex > 0 && matches(tokens[lindex], canvas)
-        lindex -= 1
-      end
-
-      tokens[lindex..rindex].clone
-    end
-  end
-
-  # A disposable streaming text wrapper
-  # tokens can be appended onto it, where it they will break on a given width.
-  # Opaque payloads can be passed for each token, which will be provided to callbacks.
-  # This makes it suitable for processing and wrapping markdown/html/tokenized text
-  #
-  # height of the wrapped text is tracked with `stream#y`
-  class WrapStream
-    attr_accessor :buffer, :x, :y, :origin_y, :current_width, :stack, :widths, :current_position, :positions, :on_text_cb
-    attr_reader :width, :origin_x, :on_text_cb
-
-    def initialize(width, origin_x = 0.0, origin_y = 0.0, &measure)
-      @width = width            # the width of the container for this wrap
-      @measure_cb = measure     # a measure callback that returns the width/height of a given char (takes 2 params: a char and an token payload)
-      @on_text_cb = ->(_) {}    # a callback that receives a wrapped token for a given line.  (takes a Hokusai::Util::Wrapped paramter)
-
-      @origin_x = origin_x      # the origin x coordinate, x will reset to this
-      @x = origin_x             # the marker for x coord, this is used to track against the width of a given line
-      @y = origin_y             # the marker for the y coord, this grows by <size> for each line, resulting in the height of the wrapped text
-      @current_width = 0.0      # the current width of the buffer
-      @stack = []               # a stack storing buffer offsets with their respective token payloads.
-      @buffer = ""              # the current buffer that the stack represents.
-      
-      @current_position = 0     # the current char index
-      @positions = []           # a stack of char positions, used for editing
-      @widths = []              # a stack of char widths, used later in selection
-    end
-
-    NEW_LINE_REGEX = /\n/
-
-    # Appends <text> to the wrap stream.
-    # If the text supplies causes the buffer to grow beyond the supplied width
-    # The buffer will be flushed to the <on_text_cb> callback.
-    #
-    # @param [String] text (text to append to this wrap stream)
-    # @param [Object] extra (an opaque payload that will be passed to callbacks)
-    def wrap(text, extra)
-      offset = 0
-      size = text.size
-      
-      # appends the initial stack value for this text
-      stack << [((buffer.size)..(text.size + buffer.size - 1)), extra]
-
-      # char-by-char processing.
-      while offset < size
-        char = text[offset]
-        self.current_position = offset
-
-        w, h = measure(char, extra)
-
-        # this char is actually a newline.
-        if NEW_LINE_REGEX.match(char)
-          self.widths << 0
-          self.buffer << char
-          self.positions << current_position
-          flush
-
-          # append the rest of this text to the stack.
-          stack << [(0...(text.size - offset - 1)), extra]
-          self.y += h
-          self.x = origin_x
-          offset += 1
-
-          next
-        end
-
-        # adding this char will extend beyond the provided width
-        if w + current_width >= width
-          # if this is a space in the second half of this line, 
-          # split the buffer @ it's index and render
-          idx = buffer.rindex(" ")
-          if !idx.nil?
-            cur = []
-            nex = []
-
-            found = false
-
-            # we need to split up the buffer and the ranges.
-            while payload = stack.shift
-              range, xtra = payload
-
-              # this range contains the space
-              # we will split the stack here
-              if range.include?(idx)
-                cur << [(range.begin..idx), xtra]
-                nex << [(0..(range.end - idx - 1)), xtra] unless idx == range.end
-              
-                found = true
-              # the space has not been found
-              # append to first stack
-              elsif !found
-                cur << payload
-              # the space has been found
-              # append to second stack.
-              # (note: we need to subtract the idx from the range because 
-              #        we are flushing everything before the space)
-              else
-                nex << [((range.begin - idx - 1)..(range.end - idx - 1)), xtra] 
-              end
-            end
-
-            # get the string values from the buffer
-            scur = buffer[0..idx]
-            snex = buffer[(idx + 1)..-1]
-
-            wcur = widths[0..idx]
-            wnex = widths[(idx + 1)..-1]
-
-            pcur = positions[0..idx]
-            pnex = positions[(idx + 1)..-1]
-
-            # set the buffer and stack to everything before the space
-            self.buffer = scur
-            self.widths = wcur
-            self.stack = cur
-            self.positions = pcur
-
-            flush
-
-            # set the buffer and stack to everything after the space
-            self.buffer = snex + char
-            self.widths = wnex.concat([w])
-            self.positions = pnex.concat([current_position])
-            self.stack = nex
-            self.x = origin_x
-            self.current_width = widths.sum#measure(buffer, xtra).first
-
-
-            # bump the height
-            self.y += h
-          # no space: force a break on the char.
-          else
-            flush
-
-            self.current_width = w
-            self.y += h
-            self.buffer = text[offset]
-            self.widths = [w]
-            self.positions = [current_position]
-            stack << [(0...(text.size - offset)), xtra]
-          end
-        # append this char does NOT extend beyond the width
-        else
-          self.current_width += w
-          buffer << char
-          widths << w
-          positions << current_position
-        end
-
-        offset += 1
-      end
-    end
-
-    # Flushes the current buffer/stack.
-    def flush
-      stack.each do |(range, extra)|
-        content = buffer[range]
-        size = content.size
-        content_width, content_height = measure(content, extra)
-
-        wrap_and_call(content, content_width, content_height, extra)
-        self.x += content_width
-      end
-
-      self.buffer = ""
-      self.current_width = 0.0
-      stack.clear
-      widths.clear
-      positions.clear
-      self.x = origin_x
-    end
-
-    def on_text(&block)
-      @on_text_cb = block
-    end
-
-    private
-
-    def wrap_and_call(text, width, height, extra)
-      rect = Hokusai::Rect.new(x, y, width, height)
-      @on_text_cb.call Wrapped.new(text.dup, rect, extra, widths: widths.dup, positions: positions.dup)
-    end
-
-    def measure(string, extra)
-      @measure_cb.call(string, extra)
-    end
-  end
-end
-
-module Hokusai::Util
-  class GeometrySelection
-    attr_accessor :start_x, :start_y, :stop_x, :stop_y,
-                  :type, :cursor, :diff, :click_pos, :parent
-
-    def initialize(parent)
-      @parent = parent
-      @type = :none         # state for the geometry selection (active/frozen/etc)
-      @start_x = 0.0        # the x coordinate for the geometry
-      @start_y = 0.0        # the y coordinate for the geometry 
-      @stop_x = 0.0
-      @stop_y = 0.0
-      @diff = 0.0
-      @cursor = nil
-      @click_pos = nil
-    end
-
-    def set_click_pos(x, y)
-      @click_pos = [x, y]
-    end
-
-    def none?
-      type == :none
-    end
-
-    def ready?
-      type == :none || type == :frozen
-    end
-
-    def clear
-      self.start_x = 0.0
-      self.start_y = 0.0
-      self.stop_x = 0.0
-      self.stop_y = 0.0
-      self.cursor = nil
-    end
-
-    def changed_direction?
-      @changed_direction
-    end
-
-    def active?
-      type == :active
-    end
-
-    def frozen?
-      type == :frozen
-    end
-
-    def activate!
-      self.type = :active
-    end
-
-    def freeze!
-      self.type = :frozen
-    end
-
-    def coords
-      [start_x, stop_x, start_y, stop_y]
-    end
-
-    def start(x, y)
-      self.start_x = x
-      self.start_y = y
-      self.stop_x = x
-      self.stop_y = y
-      self.cursor = nil
-
-      activate!
-    end
-
-    def stop(x, y)
-      self.stop_x = x
-      self.stop_y = y
-
-      if up? && @direction == :down || down? && @direction == :up
-        @changed_direction = true
-      else
-        @changed_direction = false
-      end
-
-      @direction = up? ? :up : :down
-    end
-
-    def up?(height = 0)
-      stop_y < start_y - height
-    end
-
-    def down?(height = 0)
-      start_y <= stop_y - height
-    end
-
-    def left?
-      stop_x < start_x
-    end
-
-    def right?
-      start_x <= stop_x
-    end
-
-    def cursor
-      return nil unless @cursor
-
-      return [@cursor[0], @cursor[1] - parent.offset_y, @cursor[2], @cursor[3]] if frozen?
-
-      @cursor
-    end
-
-    def rect_selected(rect)
-      selected(rect[0], rect[1], rect[2], rect[3])
-    end
-
-    def clicked(x,y,w,h)
-      return false if click_pos.nil?
-
-      pos = Hokusai::Rect.new(x, y, w, h)
-      # pos.move_x_left
-      pos.includes_x?(click_pos[0]) && pos.includes_y?(click_pos[1])
-    end
-
-    def selected(x, y, width, height)
-      return false if none?
-
-      if frozen?
-        y -= parent.offset_y
-      end
-
-      sx = @start_x
-      sy = @start_y
-      ex = @stop_x
-      ey = @stop_y
-
-      down = sy <= ey
-      up = ey < sy
-      left = ex < sx
-      right = sx <= ex
-
-      rect = Hokusai::Rect.new(x, y, width, height)
-      x_shifted_right = rect.move_x_right(1)
-      y_shifted_up = rect.move_y_up(2)
-      y_shifted_down = rect.move_y_down(2)
-      end_y = y + height
-
-      a = ((down &&
-        # first line of multiline selection
-        ((x_shifted_right > sx && end_y < ey && rect.includes_y?(sy)) ||
-          # last line of multiline selection
-          (x_shifted_right <= ex && y_shifted_up + height < ey && y > sy) ||
-          # middle line (all selected)
-          (y > sy && end_y < ey))) ||
-        (up &&
-          # first line of multiline selection
-          ((x_shifted_right <= sx && y > ey && rect.includes_y?(sy)) ||
-          # last line of multiline selection
-            (x_shifted_right >= ex && y_shifted_down > ey && end_y < sy) ||
-            # middle line (all selected)
-            (y > ey && y + height < sy))) ||
-        # single line selection
-        ((rect.includes_y?(sy) && rect.includes_y?(ey)) &&
-          ((left && x_shifted_right < sx && x_shifted_right > ex) || (right && x_shifted_right > sx && x_shifted_right < ex)))
-      )
-
-      a
-    end
-  end
-end
-module Hokusai::Util
-  class PositionSelection
-    attr_accessor :positions, :cursor_index, :direction, :active
-
-    def initialize
-      @cursor_index = nil
-      @positions = []
-      @direction = :right
-      @active = false
-    end
-
-    def move(to, selecting)
-      self.active = selecting
-  
-      return if cursor_index.nil?
-
-      # puts ["before", to, cursor_index, positions].inspect
-      
-      case to
-      when :right
-        self.cursor_index += 1
-        if selecting && !positions.empty? && cursor_index <= positions.last
-          positions.shift
-        elsif selecting
-          positions << cursor_index 
-        end
-
-      when :left
-        if selecting && !positions.empty? && cursor_index >= positions.last
-          positions.pop
-        elsif selecting
-          positions.unshift cursor_index
-        end
-  
-        self.cursor_index -= 1 unless cursor_index == -1
-      end
-    end
-
-    def active?
-      @active
-    end
-
-    def left?
-      direction == :left
-    end
-
-    def right?
-      direction == :right
-    end
-
-    def clear
-      self.cursor_index = nil
-      positions.clear
-    end
-
-    def selected(index)
-      active && (positions.first..positions.last).include?(index)
-    end
-
-    def select(range)
-      self.positions = range.to_a
-    end
-  end
-end
-
-module Hokusai::Util
-  class Selection
-    attr_reader :geom, :pos
-    attr_accessor :type, :offset_y, :diff, :cursor
-
-    def initialize
-      @geom = GeometrySelection.new(self)
-      @pos = PositionSelection.new
-      @type = :geom
-      @offset_y = 0.0
-      @diff = 0.0
-      @cursor = nil
-    end
-
-    def clear
-      pos.clear
-      geom.clear
-    end
-
-    def cursor
-      geom.cursor
-    end
-
-    def geom!
-      pos.clear
-      pos.cursor_index = nil
-
-      self.type = :geom
-    end
-
-    def pos!
-      geom.clear
-
-      self.type = :pos
-    end
-
-    def geom?
-      type == :geom
-    end
-
-    def pos?
-      type == :pos
-    end
-
-    def left?
-      geom? ? geom.left? : pos.left?
-    end
-
-    def right?
-      geom? ? geom.right? : pos.right?
-    end
-
-    def up?
-      geom? && geom.up?
-    end
-
-    def down?
-      geom? && geom.down?
-    end
-
-    def selecting?
-      !(geom.type == :none && geom.click_pos.nil?)
-    end
-
-    # should we show the cursor?
-    def active?
-      !cursor.nil?
-    end
-  end
-end
-
 module Hokusai::Blocks
+  # Public: A text rendering component
   class Text < Hokusai::Block
     template <<-EOF
     [template]
@@ -7455,6 +7876,8 @@ module Hokusai::Util
   end
 end
 
+# Public: slotted block which provides text selection information
+#         to descendants
 module Hokusai::Blocks
   class Selectable < Hokusai::Block
     template <<~EOF
@@ -7538,851 +7961,8 @@ module Hokusai::Blocks
     end
   end
 end
-
-module Hokusai::Util
-  class Wrapped
-    attr_accessor :y
-    attr_accessor :text, :x, :width, :height, :extra, :widths, :positions
-    
-    def initialize(text, rect, extra, widths:, positions:)
-      @text = text
-      @x = rect.x
-      @y = rect.y
-      @width = rect.width
-      @height = rect.height
-      @widths = widths
-      @extra = extra
-      @positions = positions
-    end
-
-    def range
-      positions.first..positions.last
-    end
-  end
-
-  class WrapCachePayload
-    attr_accessor :copy, :positions, :cursor
-    
-    def initialize(copy, positions, cursor)
-      @copy = copy
-      @positions = positions
-      @cursor = cursor
-    end
-  end
-
-  # A cache that stores the results of WrapStream.
-  # Utiltiy methods are provided to quickly fetch a subset of tokens
-  # Based on a given window's coordinates (canvas)
-  class WrapCache
-    attr_accessor :tokens
-
-    # returns range denoting the index of the changed lines
-    # from 2 different strings.
-    # NOTE: the change must be consecutive
-    def self.diff(first, second)
-      arr = (0..first.length).to_a
-
-      v = arr.bsearch do |i|
-        first.rindex(second[0..i]) != 0
-      end
-
-      # bounds checks
-      v = first.size if v.nil?
-      v -= 1 if first[v] == "\n"
-
-      a = 0
-      while true
-        if first[v] == "\n"
-          a = v + 1
-          break
-        elsif v.zero?
-          a = v
-          break
-        end
-        v -= 1
-      end
-
-      b = a
-      while true
-        if first[b].nil?
-          b = first.size - 1
-          break
-        elsif first[b] == "\n"
-          break
-        end
-        b += 1
-      end
-
-      a..b
-    end
-
-    def initialize
-      @tokens = []
-    end
-
-    def <<(element)
-      @tokens << element
-    end
-
-    def splice(stream, last_content, new_content, selection: nil)
-      change_line_indicies = WrapCache.diff(last_content, new_content)
-      new_changed_line_indicies = WrapCache.diff(new_content, last_content)
-
-      new_data = new_content[new_changed_line_indicies]
-      old_text_callback = stream.on_text_cb
-      records = []
-      # the height of the new records
-      records_height = 0.0
-
-      stream.on_text do |wrapped|
-        unless wrapped.positions.empty?
-          records_height += wrapped.height
-          wrapped.positions.map! do |pos|
-            pos + change_line_indicies.begin
-          end
-          records << wrapped
-        end
-      end
-
-      stream.wrap(new_data, nil)
-      stream.flush
-
-      # puts ["original.tokens.last.y", tokens.last.y].inspect
-
-      # splice in new tokens
-      #
-      # update the new positions
-      # NOTE: still need to udpate the y positions with the 
-      # records.each do |record|
-      #   records_height += record.height
-      #   record.positions.map! do |pos|
-      #     pos + change_line_indicies.begin
-      #   end
-      # end
-
-      diff_pos = (new_changed_line_indicies.end - change_line_indicies.end)
-      new_tokens = []
-      found = false
-      last_token = nil
-      new_last_tokens_height = 0.0
-      last_tokens_height = 0.0
-      insert_index = 0
-
-      while token = tokens.shift
-        next if token.positions.empty?
-        if token.range.begin >= change_line_indicies.begin && token.range.end <= change_line_indicies.end
-          # this is a match
-          # we want to remove these tokens from the list...and then sub in our new tokens.
-          last_token = token
-          last_tokens_height += token.height
-          found = true
-          next
-        end
-
-        if found
-          token.y += (records_height - last_tokens_height)
-
-          token.positions.map! do |pos|
-            pos + diff_pos
-          end
-        else
-          insert_index += 1
-          new_last_tokens_height += token.height
-        end
-
-        new_tokens << token
-      end
-
-      records.each do |record|
-        record.y += new_last_tokens_height
-      end
-
-      # puts ["insert", records.first.y, records.map(&:height).sum, insert_index, new_last_tokens_height].inspect
-
-      new_tokens.insert(insert_index, *records)
-      self.tokens = new_tokens
-      
-
-      # i = 0
-      # tokens.each do |token|
-      #   # puts ["token", token].inspect
-      #   token.positions.each do |n|
-      #     if n != i
-      #       puts ["Mismatch token", token, i, n].inspect
-      #     end
-
-      #     i += 1
-      #   end
-      # end
-
-      # restore callback
-      stream.on_text(&old_text_callback)
-      # return y
-      tokens.last.y + tokens.last.height
-    end
-
-    def bsearch(canvas)
-      low = 0
-      high = tokens.size - 1
-
-      while low <= high
-        mid = low + (high - low) / 2
-
-        if matches(tokens[mid], canvas)
-          return mid
-        end
-
-        if tokens[mid].y > canvas.y
-          high = mid - 1
-        end
-
-        if tokens[mid].y < canvas.y
-          low = mid + 1
-        end
-      end
-
-      return nil
-    end
-
-    def matches(wrapped, canvas)
-      wrapped.y >= canvas.y && wrapped.y <= canvas.y + canvas.height
-    end
-
-    #  arrows = cursor index
-    #  letters = selected positions
-    #                          
-    #  │     │      │     │     │  
-    #  │  A  │   B  │  C  │  D  │  
-    #  │     │      │     │     │  
-    #  ▼  0  ▼   1  ▼  2  ▼  3  ▼  
-    #                           
-    #  -1    0      1     2     3  
-    #                            
-    def selected_area_for_tokens(tokens, selector, copy: false, padding: Hokusai::Padding.default)
-      return if selector.nil? || !selector.selecting?
-
-      copy_buffer = ""
-      x = nil
-      tw = 0.0
-      cy = nil
-      position_buffer = []
-      cursor = nil
-      pcursor = nil
-
-      tokens.each do |token|
-        tx = token.x + padding.left
-        ty = token.y + padding.top
-
-        if token.y != cy
-          x = nil
-          cy = token.y
-          tw = 0.0
-        end
-
-        token.widths.each_with_index do |w, i|
-          by = selector.geom.frozen? ? ty : ty - selector.offset_y
-          sy = ty
-
-          if (selector.geom? && selector.geom.selected(tx, by, w, token.height))
-            if (selector.geom.left? || selector.geom.up?)
-              cursor ||= [tx, sy, 0.5, token.height]
-              pcursor ||= token.positions[i]
-            else
-              # puts ["set selection cursor: #{sy}"]
-              cursor = [tx + w, sy, 0.5, token.height]
-              pcursor = token.positions[i]
-            end
-
-            position_buffer << token.positions[i]
-
-            if copy
-              copy_buffer += token.text[i]
-            end
-
-            if x.nil?
-              x = tx
-            end
-
-            tw += w
-          elsif selector.pos? && selector.pos.selected(token.positions[i])
-            # puts ["pos 1"]
-            if selector.pos.cursor_index == selector.pos.positions.first
-              cursor ||= [tx, sy, 0.5, token.height]
-              pcursor ||= token.positions[i]
-            elsif selector.pos.cursor_index == selector.pos.positions.last
-              cursor = [tx + w, sy, 0.5, token.height]
-              pcursor = token.positions[i]
-            elsif selector.pos.cursor_index + 1 == token.positions[i]
-              cursor = [tx, sy, 0.5, token.height]
-              pcursor = token.positions[i] - 1
-            end
-
-            position_buffer << token.positions[i]
-
-            if copy
-              copy_buffer += token.text[i]
-            end
-
-            if x.nil?
-              x = tx
-            end
-
-            tw += w
-
-          # [0, [0]]
-          elsif selector.pos? && selector.pos.cursor_index && selector.pos.cursor_index + 1 == token.positions[i]
-            # puts "pos 2"
-            cursor = [tx, sy, 0.5, token.height]
-            pcursor = token.positions[i] - 1
-            # position_buffer = selector.pos.positions
-
-            # if copy
-            #   copy_buffer += token.text[i]
-            # end
-
-          elsif selector.pos? && selector.pos.cursor_index && selector.pos.cursor_index == token.positions[i]
-            # puts "pos 3"
-            cursor = [tx + w, sy, 0.5, token.height]
-            pcursor = selector.pos.cursor_index
-            # position_buffer = selector.pos.positions
-          elsif selector.geom? && selector.geom.clicked(tx, by, (w / 2), token.height)
-            cursor = [tx, sy, 0.5, token.height]
-            pcursor = token.positions[i] - 1
-            # puts "setting cursor #{sy}"
-
-          elsif selector.geom? && selector.geom.clicked(tx + (w/2.0), by, (w/2.0), token.height)
-            # puts "geom click 2"
-            cursor = [tx + w, sy, 0.5, token.height]
-            pcursor = token.positions[i]
-          end
-          
-          tx += w
-        end
-
-        if !x.nil?
-          ay = cy + padding.top - selector.offset_y
-          yield Hokusai::Rect.new(x, ay, tw, token.height)
-
-          tw = 0.0
-        end
-      end
-
-      selector.pos.cursor_index = pcursor
-      selector.pos.positions = position_buffer
-      selector.geom.cursor = cursor
-
-      WrapCachePayload.new(copy_buffer, position_buffer, pcursor)
-    end
-
-    def tokens_for(canvas)
-      index = bsearch(canvas)
-      return [] if index.nil?
-      lindex = index.zero? ? index : index - 1
-      rindex = index + 1
-
-      while rindex < tokens.size - 1 && matches(tokens[rindex], canvas)
-        rindex += 1
-      end
-
-      while lindex > 0 && matches(tokens[lindex], canvas)
-        lindex -= 1
-      end
-
-      tokens[lindex..rindex].clone
-    end
-  end
-
-  # A disposable streaming text wrapper
-  # tokens can be appended onto it, where it they will break on a given width.
-  # Opaque payloads can be passed for each token, which will be provided to callbacks.
-  # This makes it suitable for processing and wrapping markdown/html/tokenized text
-  #
-  # height of the wrapped text is tracked with `stream#y`
-  class WrapStream
-    attr_accessor :buffer, :x, :y, :origin_y, :current_width, :stack, :widths, :current_position, :positions, :on_text_cb
-    attr_reader :width, :origin_x, :on_text_cb
-
-    def initialize(width, origin_x = 0.0, origin_y = 0.0, &measure)
-      @width = width            # the width of the container for this wrap
-      @measure_cb = measure     # a measure callback that returns the width/height of a given char (takes 2 params: a char and an token payload)
-      @on_text_cb = ->(_) {}    # a callback that receives a wrapped token for a given line.  (takes a Hokusai::Util::Wrapped paramter)
-
-      @origin_x = origin_x      # the origin x coordinate, x will reset to this
-      @x = origin_x             # the marker for x coord, this is used to track against the width of a given line
-      @y = origin_y             # the marker for the y coord, this grows by <size> for each line, resulting in the height of the wrapped text
-      @current_width = 0.0      # the current width of the buffer
-      @stack = []               # a stack storing buffer offsets with their respective token payloads.
-      @buffer = ""              # the current buffer that the stack represents.
-      
-      @current_position = 0     # the current char index
-      @positions = []           # a stack of char positions, used for editing
-      @widths = []              # a stack of char widths, used later in selection
-    end
-
-    NEW_LINE_REGEX = /\n/
-
-    # Appends <text> to the wrap stream.
-    # If the text supplies causes the buffer to grow beyond the supplied width
-    # The buffer will be flushed to the <on_text_cb> callback.
-    #
-    # @param [String] text (text to append to this wrap stream)
-    # @param [Object] extra (an opaque payload that will be passed to callbacks)
-    def wrap(text, extra)
-      offset = 0
-      size = text.size
-      
-      # appends the initial stack value for this text
-      stack << [((buffer.size)..(text.size + buffer.size - 1)), extra]
-
-      # char-by-char processing.
-      while offset < size
-        char = text[offset]
-        self.current_position = offset
-
-        w, h = measure(char, extra)
-
-        # this char is actually a newline.
-        if NEW_LINE_REGEX.match(char)
-          self.widths << 0
-          self.buffer << char
-          self.positions << current_position
-          flush
-
-          # append the rest of this text to the stack.
-          stack << [(0...(text.size - offset - 1)), extra]
-          self.y += h
-          self.x = origin_x
-          offset += 1
-
-          next
-        end
-
-        # adding this char will extend beyond the provided width
-        if w + current_width >= width
-          # if this is a space in the second half of this line, 
-          # split the buffer @ it's index and render
-          idx = buffer.rindex(" ")
-          if !idx.nil?
-            cur = []
-            nex = []
-
-            found = false
-
-            # we need to split up the buffer and the ranges.
-            while payload = stack.shift
-              range, xtra = payload
-
-              # this range contains the space
-              # we will split the stack here
-              if range.include?(idx)
-                cur << [(range.begin..idx), xtra]
-                nex << [(0..(range.end - idx - 1)), xtra] unless idx == range.end
-              
-                found = true
-              # the space has not been found
-              # append to first stack
-              elsif !found
-                cur << payload
-              # the space has been found
-              # append to second stack.
-              # (note: we need to subtract the idx from the range because 
-              #        we are flushing everything before the space)
-              else
-                nex << [((range.begin - idx - 1)..(range.end - idx - 1)), xtra] 
-              end
-            end
-
-            # get the string values from the buffer
-            scur = buffer[0..idx]
-            snex = buffer[(idx + 1)..-1]
-
-            wcur = widths[0..idx]
-            wnex = widths[(idx + 1)..-1]
-
-            pcur = positions[0..idx]
-            pnex = positions[(idx + 1)..-1]
-
-            # set the buffer and stack to everything before the space
-            self.buffer = scur
-            self.widths = wcur
-            self.stack = cur
-            self.positions = pcur
-
-            flush
-
-            # set the buffer and stack to everything after the space
-            self.buffer = snex + char
-            self.widths = wnex.concat([w])
-            self.positions = pnex.concat([current_position])
-            self.stack = nex
-            self.x = origin_x
-            self.current_width = widths.sum#measure(buffer, xtra).first
-
-
-            # bump the height
-            self.y += h
-          # no space: force a break on the char.
-          else
-            flush
-
-            self.current_width = w
-            self.y += h
-            self.buffer = text[offset]
-            self.widths = [w]
-            self.positions = [current_position]
-            stack << [(0...(text.size - offset)), xtra]
-          end
-        # append this char does NOT extend beyond the width
-        else
-          self.current_width += w
-          buffer << char
-          widths << w
-          positions << current_position
-        end
-
-        offset += 1
-      end
-    end
-
-    # Flushes the current buffer/stack.
-    def flush
-      stack.each do |(range, extra)|
-        content = buffer[range]
-        size = content.size
-        content_width, content_height = measure(content, extra)
-
-        wrap_and_call(content, content_width, content_height, extra)
-        self.x += content_width
-      end
-
-      self.buffer = ""
-      self.current_width = 0.0
-      stack.clear
-      widths.clear
-      positions.clear
-      self.x = origin_x
-    end
-
-    def on_text(&block)
-      @on_text_cb = block
-    end
-
-    private
-
-    def wrap_and_call(text, width, height, extra)
-      rect = Hokusai::Rect.new(x, y, width, height)
-      @on_text_cb.call Wrapped.new(text.dup, rect, extra, widths: widths.dup, positions: positions.dup)
-    end
-
-    def measure(string, extra)
-      @measure_cb.call(string, extra)
-    end
-  end
-end
-
-module Hokusai::Util
-  class GeometrySelection
-    attr_accessor :start_x, :start_y, :stop_x, :stop_y,
-                  :type, :cursor, :diff, :click_pos, :parent
-
-    def initialize(parent)
-      @parent = parent
-      @type = :none         # state for the geometry selection (active/frozen/etc)
-      @start_x = 0.0        # the x coordinate for the geometry
-      @start_y = 0.0        # the y coordinate for the geometry 
-      @stop_x = 0.0
-      @stop_y = 0.0
-      @diff = 0.0
-      @cursor = nil
-      @click_pos = nil
-    end
-
-    def set_click_pos(x, y)
-      @click_pos = [x, y]
-    end
-
-    def none?
-      type == :none
-    end
-
-    def ready?
-      type == :none || type == :frozen
-    end
-
-    def clear
-      self.start_x = 0.0
-      self.start_y = 0.0
-      self.stop_x = 0.0
-      self.stop_y = 0.0
-      self.cursor = nil
-    end
-
-    def changed_direction?
-      @changed_direction
-    end
-
-    def active?
-      type == :active
-    end
-
-    def frozen?
-      type == :frozen
-    end
-
-    def activate!
-      self.type = :active
-    end
-
-    def freeze!
-      self.type = :frozen
-    end
-
-    def coords
-      [start_x, stop_x, start_y, stop_y]
-    end
-
-    def start(x, y)
-      self.start_x = x
-      self.start_y = y
-      self.stop_x = x
-      self.stop_y = y
-      self.cursor = nil
-
-      activate!
-    end
-
-    def stop(x, y)
-      self.stop_x = x
-      self.stop_y = y
-
-      if up? && @direction == :down || down? && @direction == :up
-        @changed_direction = true
-      else
-        @changed_direction = false
-      end
-
-      @direction = up? ? :up : :down
-    end
-
-    def up?(height = 0)
-      stop_y < start_y - height
-    end
-
-    def down?(height = 0)
-      start_y <= stop_y - height
-    end
-
-    def left?
-      stop_x < start_x
-    end
-
-    def right?
-      start_x <= stop_x
-    end
-
-    def cursor
-      return nil unless @cursor
-
-      return [@cursor[0], @cursor[1] - parent.offset_y, @cursor[2], @cursor[3]] if frozen?
-
-      @cursor
-    end
-
-    def rect_selected(rect)
-      selected(rect[0], rect[1], rect[2], rect[3])
-    end
-
-    def clicked(x,y,w,h)
-      return false if click_pos.nil?
-
-      pos = Hokusai::Rect.new(x, y, w, h)
-      # pos.move_x_left
-      pos.includes_x?(click_pos[0]) && pos.includes_y?(click_pos[1])
-    end
-
-    def selected(x, y, width, height)
-      return false if none?
-
-      if frozen?
-        y -= parent.offset_y
-      end
-
-      sx = @start_x
-      sy = @start_y
-      ex = @stop_x
-      ey = @stop_y
-
-      down = sy <= ey
-      up = ey < sy
-      left = ex < sx
-      right = sx <= ex
-
-      rect = Hokusai::Rect.new(x, y, width, height)
-      x_shifted_right = rect.move_x_right(1)
-      y_shifted_up = rect.move_y_up(2)
-      y_shifted_down = rect.move_y_down(2)
-      end_y = y + height
-
-      a = ((down &&
-        # first line of multiline selection
-        ((x_shifted_right > sx && end_y < ey && rect.includes_y?(sy)) ||
-          # last line of multiline selection
-          (x_shifted_right <= ex && y_shifted_up + height < ey && y > sy) ||
-          # middle line (all selected)
-          (y > sy && end_y < ey))) ||
-        (up &&
-          # first line of multiline selection
-          ((x_shifted_right <= sx && y > ey && rect.includes_y?(sy)) ||
-          # last line of multiline selection
-            (x_shifted_right >= ex && y_shifted_down > ey && end_y < sy) ||
-            # middle line (all selected)
-            (y > ey && y + height < sy))) ||
-        # single line selection
-        ((rect.includes_y?(sy) && rect.includes_y?(ey)) &&
-          ((left && x_shifted_right < sx && x_shifted_right > ex) || (right && x_shifted_right > sx && x_shifted_right < ex)))
-      )
-
-      a
-    end
-  end
-end
-module Hokusai::Util
-  class PositionSelection
-    attr_accessor :positions, :cursor_index, :direction, :active
-
-    def initialize
-      @cursor_index = nil
-      @positions = []
-      @direction = :right
-      @active = false
-    end
-
-    def move(to, selecting)
-      self.active = selecting
-  
-      return if cursor_index.nil?
-
-      # puts ["before", to, cursor_index, positions].inspect
-      
-      case to
-      when :right
-        self.cursor_index += 1
-        if selecting && !positions.empty? && cursor_index <= positions.last
-          positions.shift
-        elsif selecting
-          positions << cursor_index 
-        end
-
-      when :left
-        if selecting && !positions.empty? && cursor_index >= positions.last
-          positions.pop
-        elsif selecting
-          positions.unshift cursor_index
-        end
-  
-        self.cursor_index -= 1 unless cursor_index == -1
-      end
-    end
-
-    def active?
-      @active
-    end
-
-    def left?
-      direction == :left
-    end
-
-    def right?
-      direction == :right
-    end
-
-    def clear
-      self.cursor_index = nil
-      positions.clear
-    end
-
-    def selected(index)
-      active && (positions.first..positions.last).include?(index)
-    end
-
-    def select(range)
-      self.positions = range.to_a
-    end
-  end
-end
-
-module Hokusai::Util
-  class Selection
-    attr_reader :geom, :pos
-    attr_accessor :type, :offset_y, :diff, :cursor
-
-    def initialize
-      @geom = GeometrySelection.new(self)
-      @pos = PositionSelection.new
-      @type = :geom
-      @offset_y = 0.0
-      @diff = 0.0
-      @cursor = nil
-    end
-
-    def clear
-      pos.clear
-      geom.clear
-    end
-
-    def cursor
-      geom.cursor
-    end
-
-    def geom!
-      pos.clear
-      pos.cursor_index = nil
-
-      self.type = :geom
-    end
-
-    def pos!
-      geom.clear
-
-      self.type = :pos
-    end
-
-    def geom?
-      type == :geom
-    end
-
-    def pos?
-      type == :pos
-    end
-
-    def left?
-      geom? ? geom.left? : pos.left?
-    end
-
-    def right?
-      geom? ? geom.right? : pos.right?
-    end
-
-    def up?
-      geom? && geom.up?
-    end
-
-    def down?
-      geom? && geom.down?
-    end
-
-    def selecting?
-      !(geom.type == :none && geom.click_pos.nil?)
-    end
-
-    # should we show the cursor?
-    def active?
-      !cursor.nil?
-    end
-  end
-end
-
 module Hokusai::Blocks
+  # Public: A text rendering component
   class Text < Hokusai::Block
     template <<-EOF
     [template]
@@ -8582,6 +8162,7 @@ module Hokusai::Blocks
 end
 
 
+# Public: Input block, needs work
 class Hokusai::Blocks::Input < Hokusai::Block
   template <<~EOF
   [template]
@@ -8753,6 +8334,7 @@ class Hokusai::Blocks::Input < Hokusai::Block
   end
 end
 
+# Public: evaluates a Hokusai::Block from a string.  Dangerous.
 class Hokusai::Blocks::Variable < Hokusai::Block
   template <<~EOF
   [template]
@@ -8936,6 +8518,7 @@ module Hokusai::Blocks::Titlebar
     end
   end
 end
+# Public: A modal component
 class Hokusai::Blocks::Modal < Hokusai::Block
   style <<~EOF
   [style]
@@ -9014,6 +8597,7 @@ class Hokusai::Blocks::Texture < Hokusai::Block
   end
 end
 
+# Public: Starts a shader for this region that affects all descendants.
 class Hokusai::Blocks::ShaderBegin < Hokusai::Block
   template <<~EOF
   [template]
@@ -9038,6 +8622,7 @@ class Hokusai::Blocks::ShaderBegin < Hokusai::Block
     yield canvas
   end
 end
+# Public: Stops a shader defined by ShaderBegin
 class Hokusai::Blocks::ShaderEnd < Hokusai::Block
   template <<~EOF
   [template]
@@ -9051,7 +8636,8 @@ class Hokusai::Blocks::ShaderEnd < Hokusai::Block
   end
 end
 
-class PickerCircle < Hokusai::Block
+# Public: OpenGL Color picker
+class Hokusai::Blocks::PickerCircle < Hokusai::Block
   template <<-EOF
   [template]
     virtual
@@ -9127,7 +8713,7 @@ class Hokusai::Blocks::ColorPicker < Hokusai::Block
     texture: Hokusai::Blocks::Texture,
     hblock: Hokusai::Blocks::Hblock,
     vblock: Hokusai::Blocks::Vblock,
-    pickercircle: PickerCircle
+    pickercircle: Hokusai::Blocks::PickerCircle
   )
 
   attr_accessor :position, :top, :left, :height, :width, :selecting, :selection,
@@ -10214,7 +9800,7 @@ class Hokusai::Blocks::Translation < Hokusai::Block
     end
   end
 end
-
+# Public: A slider component with customizable min max and step
 module Hokusai::Blocks
   class Slider < Hokusai::Block
     style <<~EOF
@@ -10340,30 +9926,6 @@ module Hokusai::Blocks
       # event.stop
     end
 
-    #        ┌───────────────────── canvas.width ──────────────────────┐    
-    #        │                                                         │    
-    #        │   ┌────────────────────────────────────────────────┐    │    
-    #            │slider_width = canvas.width - slider_start - padding.right
-    #        ┌───┴────────────────────────────────────────────────┴────┐    
-    #        │                                                         │    
-    #        │   ┌────────────xxxx────────────────────────────────┐    │    
-    #        │   │           xxxxxx                               │    │    
-    #        │   │      │    xxxxxx                               │    │    
-    #        │   └──────┼─────xxxx────────────────────────────────┘    │    
-    #        │          │      │                                       │    
-    #        ├───┬──────┼──────┼───────────────────────────────────────┘    
-    #        │   │      │      │                                            
-    #        │   │      │      │                                            
-    #        ▼   │      │      └► cursor_x                                  
-    # canvas.x   │      │                                                   
-    #            │      │                                                   
-    #            │      │   slider_start = canvas.x + padding.left          
-    #        ┌───┤      │                                                   
-    #        │   │      │                                                   
-    #        ▼   ▼      │                                                   
-    #    padding.left   │                                                   
-    #                   └────────► fill_x = slider_start
-    #                              fill_w = slider_x - slider_start + padding.width 
     def render(canvas)
       if max != @last_max
         on_resize(canvas)
@@ -10416,851 +9978,8 @@ module Hokusai::Blocks
   end
 end
 
-
-module Hokusai::Util
-  class Wrapped
-    attr_accessor :y
-    attr_accessor :text, :x, :width, :height, :extra, :widths, :positions
-    
-    def initialize(text, rect, extra, widths:, positions:)
-      @text = text
-      @x = rect.x
-      @y = rect.y
-      @width = rect.width
-      @height = rect.height
-      @widths = widths
-      @extra = extra
-      @positions = positions
-    end
-
-    def range
-      positions.first..positions.last
-    end
-  end
-
-  class WrapCachePayload
-    attr_accessor :copy, :positions, :cursor
-    
-    def initialize(copy, positions, cursor)
-      @copy = copy
-      @positions = positions
-      @cursor = cursor
-    end
-  end
-
-  # A cache that stores the results of WrapStream.
-  # Utiltiy methods are provided to quickly fetch a subset of tokens
-  # Based on a given window's coordinates (canvas)
-  class WrapCache
-    attr_accessor :tokens
-
-    # returns range denoting the index of the changed lines
-    # from 2 different strings.
-    # NOTE: the change must be consecutive
-    def self.diff(first, second)
-      arr = (0..first.length).to_a
-
-      v = arr.bsearch do |i|
-        first.rindex(second[0..i]) != 0
-      end
-
-      # bounds checks
-      v = first.size if v.nil?
-      v -= 1 if first[v] == "\n"
-
-      a = 0
-      while true
-        if first[v] == "\n"
-          a = v + 1
-          break
-        elsif v.zero?
-          a = v
-          break
-        end
-        v -= 1
-      end
-
-      b = a
-      while true
-        if first[b].nil?
-          b = first.size - 1
-          break
-        elsif first[b] == "\n"
-          break
-        end
-        b += 1
-      end
-
-      a..b
-    end
-
-    def initialize
-      @tokens = []
-    end
-
-    def <<(element)
-      @tokens << element
-    end
-
-    def splice(stream, last_content, new_content, selection: nil)
-      change_line_indicies = WrapCache.diff(last_content, new_content)
-      new_changed_line_indicies = WrapCache.diff(new_content, last_content)
-
-      new_data = new_content[new_changed_line_indicies]
-      old_text_callback = stream.on_text_cb
-      records = []
-      # the height of the new records
-      records_height = 0.0
-
-      stream.on_text do |wrapped|
-        unless wrapped.positions.empty?
-          records_height += wrapped.height
-          wrapped.positions.map! do |pos|
-            pos + change_line_indicies.begin
-          end
-          records << wrapped
-        end
-      end
-
-      stream.wrap(new_data, nil)
-      stream.flush
-
-      # puts ["original.tokens.last.y", tokens.last.y].inspect
-
-      # splice in new tokens
-      #
-      # update the new positions
-      # NOTE: still need to udpate the y positions with the 
-      # records.each do |record|
-      #   records_height += record.height
-      #   record.positions.map! do |pos|
-      #     pos + change_line_indicies.begin
-      #   end
-      # end
-
-      diff_pos = (new_changed_line_indicies.end - change_line_indicies.end)
-      new_tokens = []
-      found = false
-      last_token = nil
-      new_last_tokens_height = 0.0
-      last_tokens_height = 0.0
-      insert_index = 0
-
-      while token = tokens.shift
-        next if token.positions.empty?
-        if token.range.begin >= change_line_indicies.begin && token.range.end <= change_line_indicies.end
-          # this is a match
-          # we want to remove these tokens from the list...and then sub in our new tokens.
-          last_token = token
-          last_tokens_height += token.height
-          found = true
-          next
-        end
-
-        if found
-          token.y += (records_height - last_tokens_height)
-
-          token.positions.map! do |pos|
-            pos + diff_pos
-          end
-        else
-          insert_index += 1
-          new_last_tokens_height += token.height
-        end
-
-        new_tokens << token
-      end
-
-      records.each do |record|
-        record.y += new_last_tokens_height
-      end
-
-      # puts ["insert", records.first.y, records.map(&:height).sum, insert_index, new_last_tokens_height].inspect
-
-      new_tokens.insert(insert_index, *records)
-      self.tokens = new_tokens
-      
-
-      # i = 0
-      # tokens.each do |token|
-      #   # puts ["token", token].inspect
-      #   token.positions.each do |n|
-      #     if n != i
-      #       puts ["Mismatch token", token, i, n].inspect
-      #     end
-
-      #     i += 1
-      #   end
-      # end
-
-      # restore callback
-      stream.on_text(&old_text_callback)
-      # return y
-      tokens.last.y + tokens.last.height
-    end
-
-    def bsearch(canvas)
-      low = 0
-      high = tokens.size - 1
-
-      while low <= high
-        mid = low + (high - low) / 2
-
-        if matches(tokens[mid], canvas)
-          return mid
-        end
-
-        if tokens[mid].y > canvas.y
-          high = mid - 1
-        end
-
-        if tokens[mid].y < canvas.y
-          low = mid + 1
-        end
-      end
-
-      return nil
-    end
-
-    def matches(wrapped, canvas)
-      wrapped.y >= canvas.y && wrapped.y <= canvas.y + canvas.height
-    end
-
-    #  arrows = cursor index
-    #  letters = selected positions
-    #                          
-    #  │     │      │     │     │  
-    #  │  A  │   B  │  C  │  D  │  
-    #  │     │      │     │     │  
-    #  ▼  0  ▼   1  ▼  2  ▼  3  ▼  
-    #                           
-    #  -1    0      1     2     3  
-    #                            
-    def selected_area_for_tokens(tokens, selector, copy: false, padding: Hokusai::Padding.default)
-      return if selector.nil? || !selector.selecting?
-
-      copy_buffer = ""
-      x = nil
-      tw = 0.0
-      cy = nil
-      position_buffer = []
-      cursor = nil
-      pcursor = nil
-
-      tokens.each do |token|
-        tx = token.x + padding.left
-        ty = token.y + padding.top
-
-        if token.y != cy
-          x = nil
-          cy = token.y
-          tw = 0.0
-        end
-
-        token.widths.each_with_index do |w, i|
-          by = selector.geom.frozen? ? ty : ty - selector.offset_y
-          sy = ty
-
-          if (selector.geom? && selector.geom.selected(tx, by, w, token.height))
-            if (selector.geom.left? || selector.geom.up?)
-              cursor ||= [tx, sy, 0.5, token.height]
-              pcursor ||= token.positions[i]
-            else
-              # puts ["set selection cursor: #{sy}"]
-              cursor = [tx + w, sy, 0.5, token.height]
-              pcursor = token.positions[i]
-            end
-
-            position_buffer << token.positions[i]
-
-            if copy
-              copy_buffer += token.text[i]
-            end
-
-            if x.nil?
-              x = tx
-            end
-
-            tw += w
-          elsif selector.pos? && selector.pos.selected(token.positions[i])
-            # puts ["pos 1"]
-            if selector.pos.cursor_index == selector.pos.positions.first
-              cursor ||= [tx, sy, 0.5, token.height]
-              pcursor ||= token.positions[i]
-            elsif selector.pos.cursor_index == selector.pos.positions.last
-              cursor = [tx + w, sy, 0.5, token.height]
-              pcursor = token.positions[i]
-            elsif selector.pos.cursor_index + 1 == token.positions[i]
-              cursor = [tx, sy, 0.5, token.height]
-              pcursor = token.positions[i] - 1
-            end
-
-            position_buffer << token.positions[i]
-
-            if copy
-              copy_buffer += token.text[i]
-            end
-
-            if x.nil?
-              x = tx
-            end
-
-            tw += w
-
-          # [0, [0]]
-          elsif selector.pos? && selector.pos.cursor_index && selector.pos.cursor_index + 1 == token.positions[i]
-            # puts "pos 2"
-            cursor = [tx, sy, 0.5, token.height]
-            pcursor = token.positions[i] - 1
-            # position_buffer = selector.pos.positions
-
-            # if copy
-            #   copy_buffer += token.text[i]
-            # end
-
-          elsif selector.pos? && selector.pos.cursor_index && selector.pos.cursor_index == token.positions[i]
-            # puts "pos 3"
-            cursor = [tx + w, sy, 0.5, token.height]
-            pcursor = selector.pos.cursor_index
-            # position_buffer = selector.pos.positions
-          elsif selector.geom? && selector.geom.clicked(tx, by, (w / 2), token.height)
-            cursor = [tx, sy, 0.5, token.height]
-            pcursor = token.positions[i] - 1
-            # puts "setting cursor #{sy}"
-
-          elsif selector.geom? && selector.geom.clicked(tx + (w/2.0), by, (w/2.0), token.height)
-            # puts "geom click 2"
-            cursor = [tx + w, sy, 0.5, token.height]
-            pcursor = token.positions[i]
-          end
-          
-          tx += w
-        end
-
-        if !x.nil?
-          ay = cy + padding.top - selector.offset_y
-          yield Hokusai::Rect.new(x, ay, tw, token.height)
-
-          tw = 0.0
-        end
-      end
-
-      selector.pos.cursor_index = pcursor
-      selector.pos.positions = position_buffer
-      selector.geom.cursor = cursor
-
-      WrapCachePayload.new(copy_buffer, position_buffer, pcursor)
-    end
-
-    def tokens_for(canvas)
-      index = bsearch(canvas)
-      return [] if index.nil?
-      lindex = index.zero? ? index : index - 1
-      rindex = index + 1
-
-      while rindex < tokens.size - 1 && matches(tokens[rindex], canvas)
-        rindex += 1
-      end
-
-      while lindex > 0 && matches(tokens[lindex], canvas)
-        lindex -= 1
-      end
-
-      tokens[lindex..rindex].clone
-    end
-  end
-
-  # A disposable streaming text wrapper
-  # tokens can be appended onto it, where it they will break on a given width.
-  # Opaque payloads can be passed for each token, which will be provided to callbacks.
-  # This makes it suitable for processing and wrapping markdown/html/tokenized text
-  #
-  # height of the wrapped text is tracked with `stream#y`
-  class WrapStream
-    attr_accessor :buffer, :x, :y, :origin_y, :current_width, :stack, :widths, :current_position, :positions, :on_text_cb
-    attr_reader :width, :origin_x, :on_text_cb
-
-    def initialize(width, origin_x = 0.0, origin_y = 0.0, &measure)
-      @width = width            # the width of the container for this wrap
-      @measure_cb = measure     # a measure callback that returns the width/height of a given char (takes 2 params: a char and an token payload)
-      @on_text_cb = ->(_) {}    # a callback that receives a wrapped token for a given line.  (takes a Hokusai::Util::Wrapped paramter)
-
-      @origin_x = origin_x      # the origin x coordinate, x will reset to this
-      @x = origin_x             # the marker for x coord, this is used to track against the width of a given line
-      @y = origin_y             # the marker for the y coord, this grows by <size> for each line, resulting in the height of the wrapped text
-      @current_width = 0.0      # the current width of the buffer
-      @stack = []               # a stack storing buffer offsets with their respective token payloads.
-      @buffer = ""              # the current buffer that the stack represents.
-      
-      @current_position = 0     # the current char index
-      @positions = []           # a stack of char positions, used for editing
-      @widths = []              # a stack of char widths, used later in selection
-    end
-
-    NEW_LINE_REGEX = /\n/
-
-    # Appends <text> to the wrap stream.
-    # If the text supplies causes the buffer to grow beyond the supplied width
-    # The buffer will be flushed to the <on_text_cb> callback.
-    #
-    # @param [String] text (text to append to this wrap stream)
-    # @param [Object] extra (an opaque payload that will be passed to callbacks)
-    def wrap(text, extra)
-      offset = 0
-      size = text.size
-      
-      # appends the initial stack value for this text
-      stack << [((buffer.size)..(text.size + buffer.size - 1)), extra]
-
-      # char-by-char processing.
-      while offset < size
-        char = text[offset]
-        self.current_position = offset
-
-        w, h = measure(char, extra)
-
-        # this char is actually a newline.
-        if NEW_LINE_REGEX.match(char)
-          self.widths << 0
-          self.buffer << char
-          self.positions << current_position
-          flush
-
-          # append the rest of this text to the stack.
-          stack << [(0...(text.size - offset - 1)), extra]
-          self.y += h
-          self.x = origin_x
-          offset += 1
-
-          next
-        end
-
-        # adding this char will extend beyond the provided width
-        if w + current_width >= width
-          # if this is a space in the second half of this line, 
-          # split the buffer @ it's index and render
-          idx = buffer.rindex(" ")
-          if !idx.nil?
-            cur = []
-            nex = []
-
-            found = false
-
-            # we need to split up the buffer and the ranges.
-            while payload = stack.shift
-              range, xtra = payload
-
-              # this range contains the space
-              # we will split the stack here
-              if range.include?(idx)
-                cur << [(range.begin..idx), xtra]
-                nex << [(0..(range.end - idx - 1)), xtra] unless idx == range.end
-              
-                found = true
-              # the space has not been found
-              # append to first stack
-              elsif !found
-                cur << payload
-              # the space has been found
-              # append to second stack.
-              # (note: we need to subtract the idx from the range because 
-              #        we are flushing everything before the space)
-              else
-                nex << [((range.begin - idx - 1)..(range.end - idx - 1)), xtra] 
-              end
-            end
-
-            # get the string values from the buffer
-            scur = buffer[0..idx]
-            snex = buffer[(idx + 1)..-1]
-
-            wcur = widths[0..idx]
-            wnex = widths[(idx + 1)..-1]
-
-            pcur = positions[0..idx]
-            pnex = positions[(idx + 1)..-1]
-
-            # set the buffer and stack to everything before the space
-            self.buffer = scur
-            self.widths = wcur
-            self.stack = cur
-            self.positions = pcur
-
-            flush
-
-            # set the buffer and stack to everything after the space
-            self.buffer = snex + char
-            self.widths = wnex.concat([w])
-            self.positions = pnex.concat([current_position])
-            self.stack = nex
-            self.x = origin_x
-            self.current_width = widths.sum#measure(buffer, xtra).first
-
-
-            # bump the height
-            self.y += h
-          # no space: force a break on the char.
-          else
-            flush
-
-            self.current_width = w
-            self.y += h
-            self.buffer = text[offset]
-            self.widths = [w]
-            self.positions = [current_position]
-            stack << [(0...(text.size - offset)), xtra]
-          end
-        # append this char does NOT extend beyond the width
-        else
-          self.current_width += w
-          buffer << char
-          widths << w
-          positions << current_position
-        end
-
-        offset += 1
-      end
-    end
-
-    # Flushes the current buffer/stack.
-    def flush
-      stack.each do |(range, extra)|
-        content = buffer[range]
-        size = content.size
-        content_width, content_height = measure(content, extra)
-
-        wrap_and_call(content, content_width, content_height, extra)
-        self.x += content_width
-      end
-
-      self.buffer = ""
-      self.current_width = 0.0
-      stack.clear
-      widths.clear
-      positions.clear
-      self.x = origin_x
-    end
-
-    def on_text(&block)
-      @on_text_cb = block
-    end
-
-    private
-
-    def wrap_and_call(text, width, height, extra)
-      rect = Hokusai::Rect.new(x, y, width, height)
-      @on_text_cb.call Wrapped.new(text.dup, rect, extra, widths: widths.dup, positions: positions.dup)
-    end
-
-    def measure(string, extra)
-      @measure_cb.call(string, extra)
-    end
-  end
-end
-
-module Hokusai::Util
-  class GeometrySelection
-    attr_accessor :start_x, :start_y, :stop_x, :stop_y,
-                  :type, :cursor, :diff, :click_pos, :parent
-
-    def initialize(parent)
-      @parent = parent
-      @type = :none         # state for the geometry selection (active/frozen/etc)
-      @start_x = 0.0        # the x coordinate for the geometry
-      @start_y = 0.0        # the y coordinate for the geometry 
-      @stop_x = 0.0
-      @stop_y = 0.0
-      @diff = 0.0
-      @cursor = nil
-      @click_pos = nil
-    end
-
-    def set_click_pos(x, y)
-      @click_pos = [x, y]
-    end
-
-    def none?
-      type == :none
-    end
-
-    def ready?
-      type == :none || type == :frozen
-    end
-
-    def clear
-      self.start_x = 0.0
-      self.start_y = 0.0
-      self.stop_x = 0.0
-      self.stop_y = 0.0
-      self.cursor = nil
-    end
-
-    def changed_direction?
-      @changed_direction
-    end
-
-    def active?
-      type == :active
-    end
-
-    def frozen?
-      type == :frozen
-    end
-
-    def activate!
-      self.type = :active
-    end
-
-    def freeze!
-      self.type = :frozen
-    end
-
-    def coords
-      [start_x, stop_x, start_y, stop_y]
-    end
-
-    def start(x, y)
-      self.start_x = x
-      self.start_y = y
-      self.stop_x = x
-      self.stop_y = y
-      self.cursor = nil
-
-      activate!
-    end
-
-    def stop(x, y)
-      self.stop_x = x
-      self.stop_y = y
-
-      if up? && @direction == :down || down? && @direction == :up
-        @changed_direction = true
-      else
-        @changed_direction = false
-      end
-
-      @direction = up? ? :up : :down
-    end
-
-    def up?(height = 0)
-      stop_y < start_y - height
-    end
-
-    def down?(height = 0)
-      start_y <= stop_y - height
-    end
-
-    def left?
-      stop_x < start_x
-    end
-
-    def right?
-      start_x <= stop_x
-    end
-
-    def cursor
-      return nil unless @cursor
-
-      return [@cursor[0], @cursor[1] - parent.offset_y, @cursor[2], @cursor[3]] if frozen?
-
-      @cursor
-    end
-
-    def rect_selected(rect)
-      selected(rect[0], rect[1], rect[2], rect[3])
-    end
-
-    def clicked(x,y,w,h)
-      return false if click_pos.nil?
-
-      pos = Hokusai::Rect.new(x, y, w, h)
-      # pos.move_x_left
-      pos.includes_x?(click_pos[0]) && pos.includes_y?(click_pos[1])
-    end
-
-    def selected(x, y, width, height)
-      return false if none?
-
-      if frozen?
-        y -= parent.offset_y
-      end
-
-      sx = @start_x
-      sy = @start_y
-      ex = @stop_x
-      ey = @stop_y
-
-      down = sy <= ey
-      up = ey < sy
-      left = ex < sx
-      right = sx <= ex
-
-      rect = Hokusai::Rect.new(x, y, width, height)
-      x_shifted_right = rect.move_x_right(1)
-      y_shifted_up = rect.move_y_up(2)
-      y_shifted_down = rect.move_y_down(2)
-      end_y = y + height
-
-      a = ((down &&
-        # first line of multiline selection
-        ((x_shifted_right > sx && end_y < ey && rect.includes_y?(sy)) ||
-          # last line of multiline selection
-          (x_shifted_right <= ex && y_shifted_up + height < ey && y > sy) ||
-          # middle line (all selected)
-          (y > sy && end_y < ey))) ||
-        (up &&
-          # first line of multiline selection
-          ((x_shifted_right <= sx && y > ey && rect.includes_y?(sy)) ||
-          # last line of multiline selection
-            (x_shifted_right >= ex && y_shifted_down > ey && end_y < sy) ||
-            # middle line (all selected)
-            (y > ey && y + height < sy))) ||
-        # single line selection
-        ((rect.includes_y?(sy) && rect.includes_y?(ey)) &&
-          ((left && x_shifted_right < sx && x_shifted_right > ex) || (right && x_shifted_right > sx && x_shifted_right < ex)))
-      )
-
-      a
-    end
-  end
-end
-module Hokusai::Util
-  class PositionSelection
-    attr_accessor :positions, :cursor_index, :direction, :active
-
-    def initialize
-      @cursor_index = nil
-      @positions = []
-      @direction = :right
-      @active = false
-    end
-
-    def move(to, selecting)
-      self.active = selecting
-  
-      return if cursor_index.nil?
-
-      # puts ["before", to, cursor_index, positions].inspect
-      
-      case to
-      when :right
-        self.cursor_index += 1
-        if selecting && !positions.empty? && cursor_index <= positions.last
-          positions.shift
-        elsif selecting
-          positions << cursor_index 
-        end
-
-      when :left
-        if selecting && !positions.empty? && cursor_index >= positions.last
-          positions.pop
-        elsif selecting
-          positions.unshift cursor_index
-        end
-  
-        self.cursor_index -= 1 unless cursor_index == -1
-      end
-    end
-
-    def active?
-      @active
-    end
-
-    def left?
-      direction == :left
-    end
-
-    def right?
-      direction == :right
-    end
-
-    def clear
-      self.cursor_index = nil
-      positions.clear
-    end
-
-    def selected(index)
-      active && (positions.first..positions.last).include?(index)
-    end
-
-    def select(range)
-      self.positions = range.to_a
-    end
-  end
-end
-
-module Hokusai::Util
-  class Selection
-    attr_reader :geom, :pos
-    attr_accessor :type, :offset_y, :diff, :cursor
-
-    def initialize
-      @geom = GeometrySelection.new(self)
-      @pos = PositionSelection.new
-      @type = :geom
-      @offset_y = 0.0
-      @diff = 0.0
-      @cursor = nil
-    end
-
-    def clear
-      pos.clear
-      geom.clear
-    end
-
-    def cursor
-      geom.cursor
-    end
-
-    def geom!
-      pos.clear
-      pos.cursor_index = nil
-
-      self.type = :geom
-    end
-
-    def pos!
-      geom.clear
-
-      self.type = :pos
-    end
-
-    def geom?
-      type == :geom
-    end
-
-    def pos?
-      type == :pos
-    end
-
-    def left?
-      geom? ? geom.left? : pos.left?
-    end
-
-    def right?
-      geom? ? geom.right? : pos.right?
-    end
-
-    def up?
-      geom? && geom.up?
-    end
-
-    def down?
-      geom? && geom.down?
-    end
-
-    def selecting?
-      !(geom.type == :none && geom.click_pos.nil?)
-    end
-
-    # should we show the cursor?
-    def active?
-      !cursor.nil?
-    end
-  end
-end
-
 module Hokusai::Blocks
+  # Public: A text rendering component
   class Text < Hokusai::Block
     template <<-EOF
     [template]
@@ -11459,6 +10178,7 @@ module Hokusai::Blocks
   end
 end
 
+# Public: Centers immediate descendants (slot)
 class Hokusai::Blocks::Center < Hokusai::Block
   template <<~EOF
   [template]
@@ -11488,6 +10208,7 @@ class Hokusai::Blocks::Center < Hokusai::Block
     yield canvas
   end
 end
+# Public: Spawns a directional tooltip
 class Hokusai::Blocks::Tooltip < Hokusai::Block
   template <<~EOF
   [template]
@@ -11553,6 +10274,7 @@ class Hokusai::Blocks::Tooltip < Hokusai::Block
     yield canvas
   end
 end
+# Deprecated: Renders an icon
 class Hokusai::Blocks::Icon < Hokusai::Block
   template <<~EOF
   [template]
@@ -11622,6 +10344,7 @@ class Hokusai::Blocks::Icon < Hokusai::Block
     end
   end
 end
+# Public: Dropdown item for Hokusai::Blocks::Dropdown
 class Hokusai::Blocks::DropdownItem < Hokusai::Block
   style <<~EOF
   [style]
@@ -11704,6 +10427,9 @@ class Hokusai::Blocks::DropdownItem < Hokusai::Block
     end
   end
 end
+
+# Public: A dropdown menu.  takes the prop :options which is an array of strings
+#         or an array of objects which respond to :value
 class Hokusai::Blocks::Dropdown < Hokusai::Block
   style <<~EOF
   [style]
@@ -11885,7 +10611,10 @@ class Hokusai::Blocks::Dropdown < Hokusai::Block
 end
 
 module Hokusai
+  # Internal: Compile time patches for various sources
   module Patches
+    # Internal: Patch for SDL Touch handling
+    #           affects build using SDL/ARM64 architecture
     def self.sdl_patch
       <<~BAD
 diff --git a/src/platforms/rcore_desktop_sdl.c b/src/platforms/rcore_desktop_sdl.c
@@ -11994,6 +10723,8 @@ index a201f2c..3d0e4a1 100644
 BAD
     end
 
+    # Internal: Patch for raylib to compile against different sources
+    #           Thanks to the [Taylor](https://taylormadetech.dev/) project for this
     def self.raylib_patch
       <<~BAD
 
@@ -12070,6 +10801,8 @@ EOT
 BAD
     end
 
+    # Internal: A bunch of patches for TLSUV
+    #           TODO: Remove dependency
     def self.tlsuv_patch
       <<-BAD
 diff --git a/CMakeLists.txt b/CMakeLists.txt
@@ -12297,6 +11030,8 @@ end
 # os : <osx|windows|linux>
 # target: <app.rb>
 module Hokusai
+  # Internal: Docker templates that get written to disk by binary
+  #           during cross platform publishing
   def self.docker_template
     <<~HELL
 FROM skinnyjames/mruby-cross-<%= os %> as cross
@@ -12848,20 +11583,20 @@ HELL
   end
 end
 
-HP_SHADER_UNIFORM_FLOAT = 0      # Shader uniform type: float
-HP_SHADER_UNIFORM_VEC2 = 1       # Shader uniform type: vec2 (2 float)
-HP_SHADER_UNIFORM_VEC3 = 2       # Shader uniform type: vec3 (3 float)
-HP_SHADER_UNIFORM_VEC4 = 3       # Shader uniform type: vec4 (4 float)
-HP_SHADER_UNIFORM_INT = 4        # Shader uniform type: int
-HP_SHADER_UNIFORM_IVEC2 = 5      # Shader uniform type: ivec2 (2 int)
-HP_SHADER_UNIFORM_IVEC3 = 6      # Shader uniform type: ivec3 (3 int)
-HP_SHADER_UNIFORM_IVEC4 = 7      # Shader uniform type: ivec4 (4 int)
-HP_SHADER_UNIFORM_UINT = 8       # Shader uniform type: unsigned int
+HP_SHADER_UNIFORM_FLOAT  = 0     # Shader uniform type: float
+HP_SHADER_UNIFORM_VEC2   = 1     # Shader uniform type: vec2 (2 float)
+HP_SHADER_UNIFORM_VEC3   = 2     # Shader uniform type: vec3 (3 float)
+HP_SHADER_UNIFORM_VEC4   = 3     # Shader uniform type: vec4 (4 float)
+HP_SHADER_UNIFORM_INT    = 4     # Shader uniform type: int
+HP_SHADER_UNIFORM_IVEC2  = 5     # Shader uniform type: ivec2 (2 int)
+HP_SHADER_UNIFORM_IVEC3  = 6     # Shader uniform type: ivec3 (3 int)
+HP_SHADER_UNIFORM_IVEC4  = 7     # Shader uniform type: ivec4 (4 int)
+HP_SHADER_UNIFORM_UINT   = 8     # Shader uniform type: unsigned int
 HP_SHADER_UNIFORM_UIVEC2 = 9     # Shader uniform type: uivec2 (2 unsigned int)
 HP_SHADER_UNIFORM_UIVEC3 = 10    # Shader uniform type: uivec3 (3 unsigned int)
 HP_SHADER_UNIFORM_UIVEC4 = 11    # Shader uniform type: uivec4 (4 unsigned int)
 
-# A backend agnostic library for authoring 
+# A backend agnostic library for authoring
 # desktop applications
 # @author skinnyjames
 module Hokusai
@@ -12904,28 +11639,37 @@ module Hokusai
     @tmpdir = val
   end
 
-  # Access the font registry
+  # Public: Access the font registry
   #
-  # @return [Hokusai::FontRegistry]
+  # Returns a [Hokusai::FontRegistry](/api/Hokusai/FontRegistry)
   def self.fonts
     @fonts ||= FontRegistry.new
   end
 
+  # Public: Access the texture registry
+  # 
+  # Returns a [Hokusai::TextureRegistry](/api/Hokusai/TextureRegistry)
   def self.textures
     @textures ||= TextureRegistry.new
   end
 
+  # Public: Access the image registry
+  # 
+  # Returns a [Hokusai::ImageRegistry](/api/Hokusai/ImageRegistry)
   def self.images
     @images ||= ImageRegistry.new
   end
 
+  # Public: Access the music registry
+  # 
+  # Returns a [Hokusai::MusicRegistry](/api/Hokusai/MusicRegistry)
   def self.musics
     @musics ||= MusicRegistry.new
   end
 
-  # Close the current window
+  # Public: close the current window
   #
-  # @return [void]
+  # Returns nothing
   def self.close_window
     @on_close_window&.call
   end
@@ -12940,16 +11684,16 @@ module Hokusai
     @on_restore_window = block
   end
 
-  # Restores the current window
+  # Public: Restores the current window
   #
-  # @return [void]
+  # Returns nothing
   def self.restore_window
     @on_restore_window&.call
   end
 
-  # Minimizes the current window
+  # Public: Minimizes the current window
   #
-  # @return [void]
+  # Returns nothing
   def self.minimize_window
     @on_minimize_window&.call
   end
@@ -12959,9 +11703,9 @@ module Hokusai
     @on_minimize_window = block
   end
 
-  # Maxmizes the current window
+  # Public: Maxmizes the current window
   #
-  # @return [void]
+  # Returns nothing
   def self.maximize_window
     @on_maximize_window&.call
   end
@@ -12979,10 +11723,12 @@ module Hokusai
     @on_resize_window&.call(width, height)
   end
 
-  # Sets the window position on the screen
+  # Public: Sets the window position on the screen
   #
-  # @param [Array<Float, Float>]
-  # @return [void]
+  # x - the screen's x coordinate
+  # y - the screen's y coordinate
+  #
+  # Returns nothing
   def self.set_window_position(x, y)
     @on_set_window_position&.call(x, y)
   end
@@ -12997,59 +11743,96 @@ module Hokusai
     @on_set_mouse_position = block
   end
 
-  # Sets the window position on the screen
-  #
-  # @param [Array<Float, Float>]
-  # @return [void]
+  # Public: Sets the mouse position
+  # 
+  # mouse - a Hokusai::Mouse with the position set.
   def self.set_mouse_position(mouse)
     @on_set_mouse_position&.call(mouse)
   end
 
+  # **Backend** Provides the can_render callback
   def self.on_can_render(&block)
     @on_renderable = block
   end
 
+  # **Backend** Provides the open_file callback
   def self.on_open_file(&block)
     @on_open_file = block
   end
 
+  # Public: Picks a file path to open using native file dialog
+  # 
+  # hash - options for native file dialog
+  #        :filter - A comma delimited string of extensions to filter
+  #
+  # Examples
+  # 
+  #   if path = Hokusai.open_file(filter: "png,jpg,jpeg,gif")
+  #     p File.read(path)
+  #   end
+  #
   def self.open_file(hash = {})
     hash.transform_keys!(&:to_s)
 
     @on_open_file&.call(hash)
   end
 
+  # **Backend** Provides the save_file callback
   def self.on_save_file(&block)
     @on_save_file = block
   end
 
+  # Public: Picks a file path to save using native file dialog
+  #
+  # hash - options for native file dialog
+  #        :filter - A comma delimited string of extensions to filter
+  #
+  # Examples
+  #
+  #   if path = Hokusai.save_file(filter: "txt,md")
+  #     File.open(path, "w") { |io| io << "Hello" }
+  #   end
+  #
+  # Returns nothing
   def self.save_file(hash = {})
     hash.transform_keys!(&:to_s)
 
     @on_save_file&.call(hash)
   end
 
-  # Tells if a canvas is renderable
-  # Useful for pruning unneeded renders
+  # Public: Tells if a canvas is renderable (useful for pruning unneeded renders)
+  # 
+  # canvas - a Hokusai::Canvas
   #
-  # @param [Hokusai::Canvas]
-  # @return [Bool]
+  # Returns a boolean
   def self.can_render(canvas)
     @on_renderable&.call(canvas)
   end
 
+  # **Backend** Provides set mouse cursor callback
   def self.on_set_mouse_cursor(&block)
     @on_set_mouse_cursor = block
   end
 
+  # Public: Sets the mouse cursor from the available types:
+  # 
+  # type - A symbol representing the type.
+  #        can be one of [:default, :arrow, :ibeam, :crosshair, :pointer, :none]
+  #
   def self.set_mouse_cursor(type)
     @on_set_mouse_cursor&.call(type)
   end
 
+  # **Backend** Provides copy callback
   def self.on_copy(&block)
     @on_copy = block
   end
 
+  # Public: Copies text to clipboard
+  #
+  # text - the text to copy (String)
+  #
+  # Returns nothing
   def self.copy(text)
     @on_copy&.call(text)
   end
@@ -13079,6 +11862,9 @@ module Hokusai
     @on_keyboard_visible&.call
   end
 
+  # Internal: Copies state from one Hokusai::Block to another Hokusai::Block
+  #           Used in hot reloading to preserve state between reloads
+  #           You probably don't need this
   def self.copy_state(src, target)
     stack = [src]
     tstack = [target]
@@ -13119,6 +11905,8 @@ module Hokusai
     end
   end
 
+  # **Backend** updates the state in a Hokusai::Block 
+  # after running event handlers
   def self.update(block)
     stack = [block]
   

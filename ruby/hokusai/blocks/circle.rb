@@ -1,3 +1,4 @@
+# Public: Draws a circle
 class Hokusai::Blocks::Circle < Hokusai::Block
   template <<~EOF
     [template]

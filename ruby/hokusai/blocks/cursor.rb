@@ -1,3 +1,4 @@
+# Public: Represents a blinking cursor
 class Hokusai::Blocks::Cursor < Hokusai::Block
   template <<~EOF
     [template]

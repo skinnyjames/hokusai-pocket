@@ -1,3 +1,4 @@
+# Public: A scrollbar that emits the scroll position
 class Hokusai::Blocks::Scrollbar < Hokusai::Block
   style <<~EOF
   [style]

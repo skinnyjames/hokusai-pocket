@@ -1,5 +1,8 @@
 module Hokusai
+  # Internal: Compile time patches for various sources
   module Patches
+    # Internal: Patch for SDL Touch handling
+    #           affects build using SDL/ARM64 architecture
     def self.sdl_patch
       <<~BAD
 diff --git a/src/platforms/rcore_desktop_sdl.c b/src/platforms/rcore_desktop_sdl.c
@@ -108,6 +111,8 @@ index a201f2c..3d0e4a1 100644
 BAD
     end
 
+    # Internal: Patch for raylib to compile against different sources
+    #           Thanks to the [Taylor](https://taylormadetech.dev/) project for this
     def self.raylib_patch
       <<~BAD
 
@@ -184,6 +189,8 @@ EOT
 BAD
     end
 
+    # Internal: A bunch of patches for TLSUV
+    #           TODO: Remove dependency
     def self.tlsuv_patch
       <<-BAD
 diff --git a/CMakeLists.txt b/CMakeLists.txt

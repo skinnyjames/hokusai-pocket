@@ -1,5 +1,6 @@
 module Hokusai
   module Mounting
+    # Internal: Holds update logic for a block/ast
     class UpdateEntry
       attr_reader :block, :parent, :target
 

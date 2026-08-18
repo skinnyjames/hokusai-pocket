@@ -1,3 +1,4 @@
+# Public: Spawns a directional tooltip
 class Hokusai::Blocks::Tooltip < Hokusai::Block
   template <<~EOF
   [template]

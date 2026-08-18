@@ -1,12 +1,13 @@
-# frozen_string_literal: true
-
 module Hokusai
-  # A Basic UI Event
-  class Event
+  # Internal: A UI input event used in [Hokusai::Painter](/api/Hokusai/Painter)
+  class BaseEvent
     attr_reader :captures
     attr_accessor :stopped
 
-    # Sets the name of this event kind
+    # Internal: Sets the name of this event kind
+    #  
+    # name - event name (String)
+    # 
     def self.name(name)
       @name = name
     end
@@ -15,29 +16,40 @@ module Hokusai
       self.class.instance_variable_get("@name")
     end
 
+    # Internal: adds evented styles to this block
+    # 
+    # value - a Hokusai::Block 
+    #
     def add_evented_styles(block)
       if target = block.node.meta.target
         block.node.add_evented_styles(target.class, name)
       end
     end
 
+    # Internal: capture a block
+    # 
+    # value - a Hokusai::Block
     def add_capture(block)
       captures << block
     end
 
-    # Has the event stopped propagation?
-    # @return [Bool]
+    # Internal: Has the event stopped propagation?
+    # 
+    # Returns boolean
     def stopped
       @stopped ||= false
     end
 
-    # Stop propagation on this event
-    # @return [Void]
+    # Public: Stop the event from bubbling
+    # 
+    # Returns nothing
     def stop
       self.stopped = true
     end
 
-    # @return [Array<Block>] the captured blocks for this event
+    # Internal: All captures for this event
+    # 
+    # Returns Array(Hokusai::Block)
     def captures
       @captures ||= []
     end
@@ -50,10 +62,11 @@ module Hokusai
       raise Hokusai::Error.new("#{self.class} must implement to_json")
     end
 
-    # Does the event match the provided Hokusai::Block?
+    # Internal: Does the event match the provided Hokusai::Block template?
     #
-    # @param [Hokusai::Block]
-    # @return [Bool]
+    # value - a Hokusai::Block
+    # 
+    # Returns boolean
     def matches(block)
       return false if block.node.portal.nil?
 
@@ -62,8 +75,8 @@ module Hokusai
       !!val
     end
 
-    # Emit the event to all captured blocks,
-    # stopping if any of the blocks stop propagation
+    # Internal: Emit the event to all captured blocks,
+    #           stopping if any of the blocks stop propagation
     def bubble
       while block = captures.pop
         block.emit(name, self)

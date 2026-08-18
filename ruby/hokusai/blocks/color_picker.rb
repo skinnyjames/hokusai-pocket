@@ -1,4 +1,5 @@
-class PickerCircle < Hokusai::Block
+# Public: OpenGL Color picker
+class Hokusai::Blocks::PickerCircle < Hokusai::Block
   template <<-EOF
   [template]
     virtual
@@ -74,7 +75,7 @@ class Hokusai::Blocks::ColorPicker < Hokusai::Block
     texture: Hokusai::Blocks::Texture,
     hblock: Hokusai::Blocks::Hblock,
     vblock: Hokusai::Blocks::Vblock,
-    pickercircle: PickerCircle
+    pickercircle: Hokusai::Blocks::PickerCircle
   )
 
   attr_accessor :position, :top, :left, :height, :width, :selecting, :selection,

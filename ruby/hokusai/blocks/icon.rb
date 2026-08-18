@@ -1,3 +1,4 @@
+# Deprecated: Renders an icon
 class Hokusai::Blocks::Icon < Hokusai::Block
   template <<~EOF
   [template]

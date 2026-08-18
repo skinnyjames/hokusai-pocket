@@ -1,5 +1,4 @@
-# require "pathname"
-
+# Public: Renders an image in Hokusai.images
 class Hokusai::Blocks::Image < Hokusai::Block
   template <<~EOF
     [template]

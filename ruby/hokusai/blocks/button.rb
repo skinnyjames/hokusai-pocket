@@ -1,5 +1,4 @@
-# frozen_string_literal: true
-
+# Deprecated: A crappy button implmentation
 class Hokusai::Blocks::Button < Hokusai::Block
   template <<~EOF
     [template]

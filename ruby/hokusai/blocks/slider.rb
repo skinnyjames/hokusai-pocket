@@ -1,4 +1,4 @@
-
+# Public: A slider component with customizable min max and step
 module Hokusai::Blocks
   class Slider < Hokusai::Block
     style <<~EOF
@@ -124,30 +124,6 @@ module Hokusai::Blocks
       # event.stop
     end
 
-    #        ┌───────────────────── canvas.width ──────────────────────┐    
-    #        │                                                         │    
-    #        │   ┌────────────────────────────────────────────────┐    │    
-    #            │slider_width = canvas.width - slider_start - padding.right
-    #        ┌───┴────────────────────────────────────────────────┴────┐    
-    #        │                                                         │    
-    #        │   ┌────────────xxxx────────────────────────────────┐    │    
-    #        │   │           xxxxxx                               │    │    
-    #        │   │      │    xxxxxx                               │    │    
-    #        │   └──────┼─────xxxx────────────────────────────────┘    │    
-    #        │          │      │                                       │    
-    #        ├───┬──────┼──────┼───────────────────────────────────────┘    
-    #        │   │      │      │                                            
-    #        │   │      │      │                                            
-    #        ▼   │      │      └► cursor_x                                  
-    # canvas.x   │      │                                                   
-    #            │      │                                                   
-    #            │      │   slider_start = canvas.x + padding.left          
-    #        ┌───┤      │                                                   
-    #        │   │      │                                                   
-    #        ▼   ▼      │                                                   
-    #    padding.left   │                                                   
-    #                   └────────► fill_x = slider_start
-    #                              fill_w = slider_x - slider_start + padding.width 
     def render(canvas)
       if max != @last_max
         on_resize(canvas)

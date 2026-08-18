@@ -1,4 +1,4 @@
-# frozen_string_literal: true
+# Public: A simple label that changes node size according to text size
 class Hokusai::Blocks::Label < Hokusai::Block
   template <<~EOF
   [template]

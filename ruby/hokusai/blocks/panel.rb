@@ -1,3 +1,4 @@
+# Renders block inside a scrollable panel (slotted)
 class Hokusai::Blocks::Panel < Hokusai::Block
   template <<~EOF
     [template]

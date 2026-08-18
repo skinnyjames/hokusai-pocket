@@ -1,3 +1,4 @@
+# Public: Checkbox
 class Hokusai::Blocks::Checkbox < Hokusai::Block
   template <<~EOF
     [template]

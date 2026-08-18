@@ -1,4 +1,5 @@
 module Hokusai
+  # Internal: value used in loop directive callbacks
   class ProxyValue
     attr_accessor :value
     def initialize(value)
@@ -6,8 +7,12 @@ module Hokusai
     end
   end
 
+  # Public: Template DSL used in [Hokusai::Block.template](/api/Hokusai/Block.html#template-template-block)
   class NodeBuilder
-    # returns mounted block
+    # Public: Builds an AST using a DSL
+    # 
+    # name - a Hokusai::Block.class
+    # block - a DSL callback to build this AST
     def self.build(name, loopvar = nil, &block)
       ast = Ast.new
       ast.type = name
@@ -32,12 +37,29 @@ module Hokusai
       ast.id = value
     end
 
+    # Public: Merge style defintions into this template
+    # 
+    # names - a splatted array of style names (*names)
+    # 
+    # Returns nothing
     def merge_styles(*names)
       names.each do |name|
         ast.style_list << name
       end
     end
 
+    # Public: Declares a static prop
+    # 
+    # name - the prop key (Symbol)
+    # value - a String containing the static prop value
+    # 
+    # Examples:
+    #  
+    #   static :size, "10"
+    #   
+    #   static :content, "'string'"
+    #   
+    # Returns nothing
     def static(name, value)
       raise Hokusai::Error.new("Static prop needs a string value") unless value.is_a?(String)
 
@@ -45,6 +67,14 @@ module Hokusai
       ast.props[name.to_s] = Ast::Prop.new(true, name, func)
     end
 
+    # Public: declare a prop value.
+    #         evaluates in the context of the Hokusai::Block
+    # 
+    # name - the prop name (Symbol)
+    # value - a prop value (required if &block is nil)
+    # block - a callback that returns the prop value
+    # 
+    # Returns nothing
     def prop(name, value = nil, &block)
       raise Hokusai::Error.new("Prop needs a value (symbol or block)") if block.nil? && value.nil?
       
@@ -54,6 +84,14 @@ module Hokusai
       ast.props[name.to_s] = Ast::Prop.new(true, name, func)
     end
 
+    # Public: conditionally render this node if the provided method evaluates to true
+    # 
+    # method - name of a method on the calling Hokusai::Block
+    #          (optional if passing block)
+    # block - callback that should evaluate to a boolean
+    #         (optional if passing method)
+    #         
+    # Returns nothing
     def show_if(method = nil, &block)
       raise Hokusai::Error.new("Need a method or block for show_if") if method.nil? && block.nil?
 
@@ -66,7 +104,37 @@ module Hokusai
       ast.if = cond
     end
 
-    # define an loop directive
+    # Public: defines a loop directive
+    # 
+    # klass - the Hokusai::Block to use
+    # method - a method name (Symbol) that returns an Enumerable
+    # block - callback for building this AST node
+    #  
+    # Examples
+    # 
+    #   class Something < Hokusai::Block
+    #     template do
+    #       child(Hokusai::Blocks::Vblock) do
+    #         each_child(Hokusai::Blocks::Text, :items) do |item|
+    #           prop :key do
+    #             "key-#{item.value}"
+    #           end
+    #           #
+    #           # item is a Hokusai::ProxyValue
+    #           #
+    #           prop :content do
+    #             item.value
+    #           end
+    #         end
+    #       end
+    #     end
+    #     #
+    #     def items
+    #       %w[foo bar baz]
+    #     end
+    #   end
+    #
+    # Returns nothing
     def each_child(klass, method, &block)
       raise Hokusai::Error.new("each cannot be called at the top level currently.") unless ast.dynamic?
 
@@ -89,13 +157,39 @@ module Hokusai
       ast.children << child
     end
 
+    # Public: Event handler subscription
+    # 
+    # event_name - name of event (Symbol | String)
+    # block - callback that is passed the event parameters as block params
+    # 
+    # Examples
+    # 
+    #   on :click do |event|
+    #     puts event.pos.x # clicked x coordinate
+    #   end
+    #
+    # Returns nothing
     def on(event_name, &block)
       func = Ast::Func.new(block, [])
       ast.events[event_name.to_s] = Ast::Event.new(event_name, func)
     end
 
-    # create a new child and add it 
-    # to the children of this node
+    # Public: declare a child block
+    # 
+    # klass - a Hokusai::Block
+    # block - a callback to build this AST node
+    #
+    # Examples
+    # 
+    #   template do
+    #     child(Hokusai::Blocks::Vblock) do
+    #       child(Hokusai::Blocks::Text) do
+    #         #...
+    #       end
+    #     end
+    #   end 
+    #
+    # Returns nothing
     def child(klass, &block)
       child_ast = NodeBuilder.build(klass, &block)
       child_ast.siblingindex = @counter

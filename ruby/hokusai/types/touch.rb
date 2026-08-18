@@ -1,4 +1,5 @@
 module Hokusai
+  # Internal: tracks drag touch input state
   class Drag
     attr_accessor :pos, :angle
     def initialize
@@ -24,6 +25,7 @@ module Hokusai
     1024 => :released,
   }
 
+  # Internal: Touch management. Populated from MRuby/Raylib layer
   class Touch
     attr_accessor :type, :hold_duration, :drag, :pinch, :down, :up,
                   :pos, :count
@@ -36,6 +38,9 @@ module Hokusai
       @pinch = Pinch.new
     end
 
+    # Internal: Not touching?
+    # 
+    # Returns boolean
     def released?
       @type == :released || @type == :none
     end

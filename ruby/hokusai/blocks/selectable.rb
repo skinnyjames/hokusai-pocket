@@ -1,5 +1,7 @@
 require_relative "../util/selection"
 
+# Public: slotted block which provides text selection information
+#         to descendants
 module Hokusai::Blocks
   class Selectable < Hokusai::Block
     template <<~EOF

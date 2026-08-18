@@ -1,8 +1,9 @@
 # hokusai pocket
 
 [![Ruby Users Forum](https://img.shields.io/discourse/topics?server=https%3A%2F%2Fwww.rubyforum.org&style=flat&logo=discourse&label=Ruby%20Users%20Forum)](https://www.rubyforum.org/tag/hokusai-pocket)
+[![Documentation](https://img.shields.io/badge/documentation-2c3b44)](https://hokusai.skinnyjames.net)
 
-A project for making portable apps and games using [hokusai](https://hokusai.skinnyjames.net)
+A project for making portable apps and games using Ruby
 
 Work in progress, expect changes.  ideas and contributions are welcome.
 

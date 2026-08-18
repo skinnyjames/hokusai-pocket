@@ -1,4 +1,5 @@
 module Hokusai
+  # Internal: Command to draw a Hokusai::Texture
   class Commands::Texture < Commands::Base
     attr_reader :texture, :x, :y
     attr_accessor :width, :height, :flip, :repeat, :rotation
@@ -18,14 +19,4 @@ module Hokusai
       [self.class, width, height].hash
     end
   end
-
-  class Commands::TextureBegin < Commands::Base
-    attr_reader :texture
-
-    def initialize(texture)
-      @texture = texture
-    end
-  end
-
-  class Commands::TextureEnd < Commands::Base; end
 end

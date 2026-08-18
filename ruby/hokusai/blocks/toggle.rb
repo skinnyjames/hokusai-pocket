@@ -1,3 +1,4 @@
+# Public: toggle for on/off scenarios
 class Hokusai::Blocks::Toggle < Hokusai::Block
   template <<-EOF
   [template]

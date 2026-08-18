@@ -1,3 +1,4 @@
+# Public: A modal component
 class Hokusai::Blocks::Modal < Hokusai::Block
   style <<~EOF
   [style]

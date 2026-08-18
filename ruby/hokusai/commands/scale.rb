@@ -1,7 +1,12 @@
 module Hokusai
+  # Starts a Scale filter
+  # Every command inside this filter
+  # will be scaled to [x,y]
   class Commands::ScaleBegin < Commands::Base
     attr_reader :x, :y
 
+    # @param [Float] width of scale
+    # @param [Float] height of scale
     def initialize(x, y = x)
       @x = x
       @y = y

@@ -1,4 +1,5 @@
 module Hokusai
+  # Public: A class to represent x,y coordinates
   class Vec2
     attr_accessor :x, :y
     def initialize(x, y)
@@ -7,6 +8,7 @@ module Hokusai
     end
   end
   
+  # Public: A class to represent a rectangle
   class Rect
     attr_accessor :x, :y, :width, :height
 
@@ -17,6 +19,11 @@ module Hokusai
       @height = height
     end
 
+    # Public: combines rectangle with another rectangle
+    # 
+    # other - another Hokusai::Rect to add.
+    # 
+    # Returns a new Hokusai::Rect
     def add(other)
       ex = x + width
       ey = y + height
@@ -34,14 +41,29 @@ module Hokusai
       )
     end
 
+    # Public: Does this rectangle intersect with (other)?
+    # 
+    # other - a Hokusai::Rect to compare
+    # 
+    # Returns boolean
     def intersect?(other)
       (x - other.x).abs <= ((width)) && (y - other.y).abs <= ((height))
     end
 
+    # Public: does this rectangle include (y)?
+    # 
+    # y - a y coordinate
+    # 
+    # Returns boolean
     def includes_y?(y)
       y > @y && y <= (@y + @height)
     end
 
+    # Public: does this rectangle include (x)?
+    # 
+    # x - x coordinate
+    # 
+    # Returns boolean
     def includes_x?(x)
       x > @x && x <= (@x + @width)
     end
