@@ -23,18 +23,18 @@ module Hokusai
   # Public: Representation of mouse state
   class Mouse  
     # Public: A [Hokusai::Vec2](/api/Hokusai/Vec2) holding the mouse position
-    attr_reader :pos
+    attr_accessor :pos
 
     # Public: A [Hokusai::Vec2](/api/Hokusai/Vec2) holding the mouse delta
-    attr_reader :delta
+    attr_accessor :delta
 
     # Public: A float containing the mouse scroll
-    attr_reader :scroll
+    attr_accessor :scroll
 
     # Public: A float containing the mouse scroll delta
-    attr_reader :scroll_delta
+    attr_accessor :scroll_delta
 
-    attr_reader :left, :right, :middle
+    attr_accessor :left, :right, :middle
 
     def initialize
       @pos = Vec2.new(0.0, 0.0)

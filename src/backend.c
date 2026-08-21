@@ -876,7 +876,7 @@ void hp_backend_render_callbacks(mrb_state* mrb, struct RClass* module)
   struct RProc* circle_proc = mrb_proc_new_cfunc(mrb, on_draw_circle);
   mrb_funcall_with_block(mrb, mrb_obj_value(circle_class), mrb_intern_lit(mrb, "on_draw"), 0, NULL, mrb_obj_value(circle_proc));
   
-  struct RClass* rect_class = mrb_class_get_under(mrb, com_class, "Rect");
+  struct RClass* rect_class = mrb_class_get_under(mrb, com_class, "Rectangle");
   struct RProc* rect_proc = mrb_proc_new_cfunc(mrb, on_draw_rect);
   mrb_funcall_with_block(mrb, mrb_obj_value(rect_class), mrb_intern_lit(mrb, "on_draw"), 0, NULL, mrb_obj_value(rect_proc));
 
