@@ -6,6 +6,28 @@ def mingw?
   !!ENV["MINGW"]
 end
 
+def triplet(args)
+  arch = args[:arm64] ? "aarch64" : "x86_64"
+  if Barista.os == "MacOS"
+    "#{arch}-apple-darwin"
+  elsif Barista.os == "Windows" || mingw?
+    "#{arch}-w64-mingw32"
+  else
+    "#{arch}-unknown-linux-gnu"
+  end
+end
+
+def couplet(args)
+  arch = args[:arm64] ? "aarch64" : "x86_64"
+  if Barista.os == "MacOS"
+    "#{arch}-darwin"
+  elsif Barista.os == "Windows" || mingw?
+    "#{arch}-mingw32"
+  else
+    "#{arch}-linux-gnu"
+  end
+end
+
 # Helpers for path resolution of dependency
 # libs, includes, and frameworks
 module BuildHelpers
@@ -24,10 +46,19 @@ module BuildHelpers
         vendor/nfd/src/include
         vendor/tree-sitter/build/include 
         vendor/raylib/src
+        vendor/miniaudio
         vendor/mruby/include 
         vendor/hokusai-pocket 
         vendor/libuv/include
     ]
+        
+    if args[:voice]
+      paths.concat %w[
+        vendor/whisper/include
+        vendor/whisper/ggml/include
+        vendor/flite/include
+      ]
+    end
 
     paths.concat [
       "#{prefix}/grammar/tree_sitter",
@@ -52,16 +83,32 @@ module BuildHelpers
   end
 
   def frameworks(args)
+    cppflag = nil
+
+    if args[:voice]
+      cppflag = "-lstdc++"
+      
+      if detected_os == "MacOS"
+        cppflag = "-lc++ -lstdc++"
+      end
+    end
+
     list = if detected_os == "MacOS"
       if args[:platform] == "sdl"
         extras = "-framework CoreGraphics -framework UniformTypeIdentifiers -framework QuartzCore -framework Metal -framework GameController -framework AudioToolbox -framework AVFoundation -framework Foundation -framework CoreHaptics -framework CoreMedia -framework Carbon -framework ForceFeedback"
       end
-      "-framework CoreVideo -framework CoreAudio -framework AppKit -framework IOKit -framework Cocoa -framework GLUT -framework OpenGL #{extras}"
+
+      if args[:voice]
+        extras ||= ""
+        extras += " -framework Metal -framework Foundation -framework MetalKit -framework Accelerate"
+      end
+
+      "-framework CoreVideo -framework CoreAudio -framework AppKit -framework IOKit -framework Cocoa -framework GLUT -framework OpenGL #{extras} #{cppflag}"
     elsif detected_os == "Windows" || mingw?
       # add -mwindows after figuring out why apps don't launch... 
-      "-lgdi32 -lwinmm -lws2_32 -lcomctl32 -lcomdlg32 -lole32 -luuid -ldbghelp -luserenv -liphlpapi -lbcrypt -lcrypt32 -static -lwinpthread -lsynchronization"
+      "-lgdi32 -lwinmm -lws2_32 -lcomctl32 -lcomdlg32 -lole32 -luuid -ldbghelp -luserenv -liphlpapi -lbcrypt -lcrypt32 -static -lwinpthread -lsynchronization #{cppflag}"
     elsif detected_os == "Linux"
-      "-lGL -lm -lpthread -ldl -lrt -lX11"
+      "-lGL -lm -lpthread -ldl -lrt -lX11 #{cppflag}"
     else
       ""
     end
@@ -84,7 +131,21 @@ module BuildHelpers
 
     links << "vendor/nfd/build/#{NFD_LIB}"
     links << "vendor/raylib/build/raylib/#{RAYLIB_LIB}"
-    
+
+    if args[:voice]
+      # whisper libs
+      links << "vendor/whisper/build/src/libwhisper.a"
+      links << "vendor/whisper/build/ggml/src/libggml.a"
+      # flite libs
+      links.concat (%w[libflite_cmu_us_slt.a libflite_usenglish.a libflite_cmulex.a libflite.a].map do |lib| 
+        if mingw?
+          "vendor/flite/build/x86_64-linux-gnu/lib/#{lib}"
+        else
+          "vendor/flite/build/#{couplet(args)}/lib/#{lib}"
+        end
+      end)
+    end
+
     if args[:platform] == "sdl"
       links << "vendor/sdl3/build/libSDL3.a"
     end
@@ -111,12 +172,35 @@ module BuildHelpers
 end
 
 module Mingw
-  def patchmingw(folder)
-    ruby do
-      patch = File.read("support/mingw32.cmake")
-      File.open("#{folder}/mingw32.cmake", "w") { |io| io << patch }
-    end
+def patchmingw(folder)
+  ruby do
+    patch = <<-EOF
+if(NOT HOST_ARCH)
+  message(SEND_ERROR "-DHOST_ARCH required to be q")
+endif()
+
+list(APPEND CMAKE_TRY_COMPILE_PLATFORM_VARIABLES
+  HOST_ARCH
+  )
+
+SET(CMAKE_SYSTEM_NAME Windows)
+set(COMPILER_PREFIX "${HOST_ARCH}-w64-mingw32")
+
+find_program(CMAKE_RC_COMPILER NAMES ${COMPILER_PREFIX}-windres)
+find_program(C_COMPILER_FOUND NAMES ${COMPILER_PREFIX}-gcc-posix ${COMPILER_PREFIX}-gcc)
+find_program(CXX_COMPILER_FOUND NAMES ${COMPILER_PREFIX}-g++-posix ${COMPILER_PREFIX}-g++)
+
+set(CMAKE_C_COMPILER ${C_COMPILER_FOUND} CACHE FILEPATH "C Compiler" FORCE)
+set(CMAKE_CXX_COMPILER ${CXX_COMPILER_FOUND} CACHE FILEPATH "CXX Compiler" FORCE)
+
+set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_FIND_ROOT_PATH_MODE_PROGRAM BOTH)
+set(CMAKE_FIND_ROOT_PATH_MODE_LIBRARY ONLY)
+set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
+EOF
+    File.open("#{folder}/mingw32.cmake", "w") { |io| io << patch }
   end
+end
 
   def cmake(str, **args)
     cmake = ENV["CMAKE"] || "cmake"
@@ -124,10 +208,10 @@ module Mingw
     command("#{cmake} #{str}", **args)
   end
 
-  def make(str, **args)
+  def make(str, env = "", **args)
     make = ENV["MAKE"] || "make"
 
-    command("#{make} #{str}", **args)
+    command("#{env} #{make} #{str}", **args)
   end
 
   def gcc(str, **args)
@@ -144,11 +228,11 @@ module Mingw
 end
 
 spec("hokusai-pocket") do |config|
-  recipe "desktop", "cli,hokusai:http=true"
-  recipe "build", "cli,hokusai:http=true:remote=true"
-  recipe "mobile", "cli,raylib,nfd,hokusai:http=true:arm64=true:platform=sdl:opengl=es"
-  recipe "mobile-rebuild", "cli,raylib,nfd,hokusai:http=true:remote=true:arm64=true:platform=sdl:opengl=es"
-  recipe "rebuild", "cli,hokusai:http=true:remote=true mruby:gem_config=./gems"
+  recipe "desktop", "cli,hokusai:http=true:voice=true"
+  recipe "build", "cli,hokusai:http=true:remote=true:voice=true"
+  recipe "mobile", "cli,raylib,nfd,hokusai,flite:http=true:arm64=true:platform=sdl:opengl=es:voice=true"
+  recipe "mobile-rebuild", "cli,raylib,nfd,hokusai,flite:http=true:remote=true:arm64=true:platform=sdl:opengl=es:voice=true"
+  recipe "rebuild", "cli,hokusai:http=true:remote=true:voice=true mruby:gem_config=./gems"
 
   NFD_LIB = mingw? ? "nfd.lib" : "libnfd.a"
   LIBUV_LIB = "build/dist/lib/libuv.a"
@@ -164,6 +248,73 @@ spec("hokusai-pocket") do |config|
   task "clean" do
     def build
       command("rm -Rf vendor")
+    end
+  end
+
+  task "flite" do |args|
+    include Mingw
+
+    def fetch
+      unless Dir.exist?("vendor/flite")
+        command("git clone --depth 1 http://github.com/festvox/flite vendor/flite")
+      end
+    end
+
+    def cc
+      ENV["GCC"] || "gcc"
+    end
+
+    def build
+      fetch
+
+      if mingw?
+        cflags = "CC=#{cc} CFLAGS='-DCST_AUDIO_NONE -DCST_NO_SOCKETS -fgnu89-inline'"
+        # everything on mingw is super messy.  flite tries to build a bunch of extra stuff that doesn't work.
+        command("#{cflags} ./configure --with-audio=\"none\" --host=#{triplet(args)} --target=x86_64-unknown-linux-gnu", chdir: "vendor/flite")
+      else
+        cflags = "CC=#{cc} CFLAGS='-DCST_AUDIO_NONE -DCST_NO_SOCKETS'"
+        command("#{cflags} ./configure --with-audio=\"none\" --host=#{triplet(args)}", chdir: "vendor/flite")
+      end
+
+      # race condition with parallel builds
+      #
+      # see: https://github.com/festvox/flite/issues/99
+      make("-j 1", cflags, chdir: "vendor/flite")
+    end
+  end
+
+  task "miniaudio" do
+    def build
+      unless Dir.exists?("vendor/miniaudio")
+        command("git clone --depth 1 https://github.com/mackron/miniaudio.git vendor/miniaudio")
+      end
+    end
+  end
+
+  # Task: whisper
+  # Builds whisper.cpp as a static library
+  # output: vendor/whisper/build/libwhisper.a (or similar path)
+  task "whisper" do |args|
+    include Mingw
+
+    def fetch
+      unless Dir.exists?("vendor/whisper")
+        command("git clone --branch v1.7.1 --depth 1 https://github.com/ggml-org/whisper.cpp.git vendor/whisper")
+      end
+    end
+
+    def flags
+      if detected_os == "Linux"
+        "-DGGML_AVX2=OFF -DGGML_FMA=OFF"
+      end
+    end
+
+    def build
+      fetch
+
+      command("mkdir -p build", chdir: "vendor/whisper")
+      cmake("-S . -B build -DCMAKE_BUILD_TYPE=Release -DGGML_NATIVE=OFF #{flags} -DWHISPER_BUILD_TESTS=OFF -DGGML_OPENMP=OFF -DWHISPER_OPENMP=OFF -DBUILD_SHARED_LIBS=OFF -DWHISPER_BUILD_EXAMPLES=OFF -DWHISPER_BUILD_SERVER=OFF", chdir: "vendor/whisper")
+      make("-j 5 all", chdir: "vendor/whisper/build")
     end
   end
 
@@ -482,7 +633,7 @@ spec("hokusai-pocket") do |config|
       command("mkdir -p vendor/tree-sitter/build")
 
       if mingw?
-        command("make -j 5 all install PREFIX=build LD=x86_64-w64-mingw32-ld CC=x86_64-w64-mingw32-gcc-posix", chdir: "vendor/tree-sitter")
+        command("make -j 5 all install PREFIX=build CC=x86_64-w64-mingw32-gcc-posix", chdir: "vendor/tree-sitter")
       else
         make("-j 5 all install PREFIX=build", chdir: "vendor/tree-sitter")
       end
@@ -547,7 +698,7 @@ spec("hokusai-pocket") do |config|
 
               conf.cc.command = "\#{conf.host_target}-gcc-posix"
               conf.cc.flags += %w[-O2]
-              conf.linker.command = conf.cc.command
+              conf.linker.command = conf.cc.command        
               conf.archiver.command = "\#{conf.host_target}-gcc-ar"
               conf.exts.executable = ".exe"
 
@@ -602,6 +753,10 @@ spec("hokusai-pocket") do |config|
     dependency "raylib" do
       files "vendor/raylib/build/raylib/#{RAYLIB_LIB}"
     end
+
+    dependency "miniaudio" do
+      files "vendor/miniaudio/miniaudio.h"
+    end
     
     dependency "tree-sitter" do
       files "vendor/tree-sitter/build/lib/libtree-sitter.a"
@@ -622,6 +777,20 @@ spec("hokusai-pocket") do |config|
     dependency "tlsuv" do
       if args[:http]
         files "vendor/tlsuv/build/#{TLSUV_LIB}"
+      end
+    end
+
+    dependency "whisper" do
+      if args[:voice]
+        files "vendor/whisper/build/src/libwhisper.a"
+      end
+    end
+
+    dependency "flite" do
+      if args[:voice] && mingw?
+        files "vendor/flite/build/x86_64-linux-gnu/lib/libflite.a"
+      elsif args[:voice]
+        files "vendor/flite/build/#{couplet(args)}/lib/libflite.a"
       end
     end
 
@@ -663,6 +832,20 @@ spec("hokusai-pocket") do |config|
         code = ruby_file("#{prefix}/ruby/hokusai.rb")
         File.open("#{prefix}/mrblib/hokusai.rb", "w") do |io|
           io << code
+
+          if args[:voice]
+            io.puts <<-EOF
+              module Hokusai
+                VOICE = true
+              end
+            EOF
+          else
+            io.puts <<-EOF
+              module Hokusai
+                VOICE = false
+              end
+            EOF
+          end
         end
       end
 
@@ -703,6 +886,13 @@ spec("hokusai-pocket") do |config|
         gcc("-O3 -Wall  -DNOGDI -DWIN32_LEAN_AND_MEAN -DNOUSER #{includes(args)} -c ../../#{prefix}/src/http/http.c", chdir: "vendor/hokusai-pocket")
 
         defs = "-DHP_HTTP"
+      end
+
+      if args[:voice]
+        gcc("-O3 -Wall  -DNOGDI -DWIN32_LEAN_AND_MEAN -DNOUSER #{includes(args)} -c ../../#{prefix}/src/voice/voice.c", chdir: "vendor/hokusai-pocket")
+        gcc("-O3 -Wall  -DNOGDI -DWIN32_LEAN_AND_MEAN -DNOUSER #{includes(args)} -c ../../#{prefix}/src/voice/speech.c", chdir: "vendor/hokusai-pocket")
+
+        defs += " -DHP_VOICE"
       end
       
       ruby do
@@ -811,29 +1001,52 @@ spec("hokusai-pocket") do |config|
   # Arg: <target:string> the ruby file to run
   # output: <none>
   task "run" do |args|
-    def build
-      out = args[:target]
-      raise "Need to supply an application! (ex: hokusai-pocket run:target=some-app.rb)" if out.nil?
+    def ensure_models
+      if Hokusai::VOICE
+        return if File.exist?("assets/models/ggml-tiny.bin")
 
-      code = ruby_file(out)
+        ruby do
+          unless Dir.exist?("scripts")
+            Dir.mkdir("scripts")
+          end
 
-      begin
-        eval code, top
-      rescue => e
-        lines = code.split("\n")
-        puts "An error occurred: #{e.message}"
-        puts "Error backtrace: #{e.backtrace.join("\n")}"
-
-        e.backtrace.each_with_index do |trace, idx|
-          ev, lineno, func = trace.split(":")
-
-          puts "#{func}"
-          puts "#{lines[(lineno.to_i)]}"
-          if idx.zero?
-            puts "#{lines[(lineno.to_i + 1)..(lineno.to_i + 5)].join("\n")}"
+          File.open("scripts/whisper.sh", "w") do |io|
+            io << Hokusai.whisper_download_template
           end
         end
 
+        command("chmod 775 whisper.sh", chdir: "scripts")
+        command("./scripts/whisper.sh tiny")        
+      end
+    end
+
+    def build
+      ensure_models
+
+      ruby do
+
+        out = args[:target]
+        raise "Need to supply an application! (ex: hokusai-pocket run:target=some-app.rb)" if out.nil?
+
+        code = ruby_file(out)
+
+        begin
+          eval code, top
+        rescue => e
+          lines = code.split("\n")
+          puts "An error occurred: #{e.message}"
+          puts "Error backtrace: #{e.backtrace.join("\n")}"
+
+          e.backtrace.each_with_index do |trace, idx|
+            ev, lineno, func = trace.split(":")
+
+            puts "#{func}"
+            puts "#{lines[(lineno.to_i)]}"
+            if idx.zero?
+              puts "#{lines[(lineno.to_i + 1)..(lineno.to_i + 5)].join("\n")}"
+            end
+          end
+        end
       end
     end
   end
@@ -983,6 +1196,7 @@ spec("hokusai-pocket") do |config|
             string: true, 
             vars: {
               target: args[:target],
+              voice: args[:voice],
               deps: deps,
               extras: extras,
               assets_path: assets,

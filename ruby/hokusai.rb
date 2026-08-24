@@ -333,6 +333,14 @@ module Hokusai
     @on_keyboard_visible&.call
   end
 
+  def self.on_speak_words
+    @on_speak_words ||= []
+  end
+
+  def self.speak(words)
+    on_speak_words << words
+  end
+
   # Internal: Copies state from one Hokusai::Block to another Hokusai::Block
   #           Used in hot reloading to preserve state between reloads
   #           You probably don't need this

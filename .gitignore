@@ -16,5 +16,7 @@ docker/
 platforms/
 .DS_Store
 src/pocket.c
+src/whisper_model.h
 docs/.vitepress/cache
 docs/.vitepress/dist
+scripts/

@@ -2,21 +2,10 @@
 #define HOKUSAI_POCKET_BACKEND
 
 #include "backend.h"
-// #include "monotonic_timer.h"
+#include "voice/voice.h"
+#include "voice/speech.h"
 
-// SHADER_UNIFORM_FLOAT = 0      # Shader uniform type: float
-// SHADER_UNIFORM_VEC2 = 1       # Shader uniform type: vec2 (2 float)
-// SHADER_UNIFORM_VEC3 = 2       # Shader uniform type: vec3 (3 float)
-// SHADER_UNIFORM_VEC4 = 3       # Shader uniform type: vec4 (4 float)
-// SHADER_UNIFORM_INT = 4        # Shader uniform type: int
-// SHADER_UNIFORM_IVEC2 = 5      # Shader uniform type: ivec2 (2 int)
-// SHADER_UNIFORM_IVEC3 = 6      # Shader uniform type: ivec3 (3 int)
-// SHADER_UNIFORM_IVEC4 = 7      # Shader uniform type: ivec4 (4 int)
-// SHADER_UNIFORM_UINT = 8       # Shader uniform type: unsigned int
-// SHADER_UNIFORM_UIVEC2 = 9     # Shader uniform type: uivec2 (2 unsigned int)
-// SHADER_UNIFORM_UIVEC3 = 10    # Shader uniform type: uivec3 (3 unsigned int)
-// SHADER_UNIFORM_UIVEC4 = 11    # Shader uniform type: uivec4 (4 unsigned int)
-
+static hp_speech* speech = NULL;
 
 uint64_t char_cache_hash(const void* item, uint64_t seed0, uint64_t seed1)
 {
@@ -848,6 +837,16 @@ mrb_value on_save_file(mrb_state* mrb, mrb_value self)
   }
 }
 
+mrb_value on_speak(mrb_state* mrb, mrb_value self)
+{ 
+  const char* words;
+  mrb_get_args(mrb, "z", &words);
+  if (speech == NULL) return mrb_nil_value();
+
+  hp_speech_start(speech, words);
+  return mrb_nil_value();
+}
+
 void hp_backend_render_callbacks(mrb_state* mrb, struct RClass* module)
 {
   /* Top level callbacks */
@@ -868,6 +867,9 @@ void hp_backend_render_callbacks(mrb_state* mrb, struct RClass* module)
 
   struct RProc* save_file_proc = mrb_proc_new_cfunc(mrb, on_save_file);
   mrb_funcall_with_block(mrb, mrb_obj_value(module), mrb_intern_lit(mrb, "on_save_file"), 0, NULL, mrb_obj_value(save_file_proc));
+
+  // struct RProc* speak_proc = mrb_proc_new_cfunc(mrb, on_speak);
+  // mrb_funcall_with_block(mrb, mrb_obj_value(module), mrb_intern_lit(mrb, "on_speak"), 0, NULL, mrb_obj_value(speak_proc));
 
   /* Render callbacks */
   struct RClass* com_class = mrb_class_get_under(mrb, module, "Commands");
@@ -1104,6 +1106,75 @@ void hp_process_input(mrb_state* mrb, mrb_value input, bool use_touch)
   }
 }
 
+AudioStream audio;
+static uint32_t speech_sample_index = 0;
+static bool audio_initialized = false;
+
+void hp_process_voice(mrb_state* mrb, hp_voice* voice) {
+  // handle voice
+  int ptt_key = KEY_RIGHT_SHIFT;
+
+  if (IsKeyPressed(ptt_key)) {
+    f_log(F_LOG_INFO, "Toggle Record");
+    hp_voice_toggle_recording(voice);
+  }
+
+  char* data = hp_voice_inbox_data(voice);
+  if (data)
+  {
+    mrb_gv_set(mrb, mrb_intern_lit(mrb, "$voice"), mrb_str_new_cstr(mrb, data));
+    f_log(F_LOG_INFO, "Voice: %s", data);
+    free(data);
+  }
+
+  if (hp_speech_speaking(speech)) {
+    
+    if (!audio_initialized) {
+      pthread_mutex_lock(&hp_speech_mutex);
+      SetAudioStreamBufferSizeDefault(4096);
+      audio = LoadAudioStream(speech->sample_rate, 32, 1); 
+      PlayAudioStream(audio);
+      
+      speech_sample_index = 0;
+      audio_initialized = true;
+      
+      pthread_mutex_unlock(&hp_speech_mutex);
+    }
+
+    if (IsAudioStreamProcessed(audio)) {
+      pthread_mutex_lock(&hp_speech_mutex);
+
+      if (speech_sample_index < speech->sample_count) {
+        uint32_t remaining = speech->sample_count - speech_sample_index;
+        uint32_t chunk_size = (remaining > 4096) ? 4096 : remaining;
+
+        float* current_chunk_ptr = speech->samples + speech_sample_index;
+        UpdateAudioStream(audio, current_chunk_ptr, chunk_size);
+
+        speech_sample_index += chunk_size;
+      } else {
+        UnloadAudioStream(audio);
+        audio_initialized = false;
+        speech_sample_index = 0;
+        speech->speaking = false;
+      }
+
+      pthread_mutex_unlock(&hp_speech_mutex);
+    }
+  }
+  else
+  {
+    struct RClass* hokusai = mrb_module_get(mrb, "Hokusai");
+    mrb_value arr = mrb_funcall(mrb, mrb_obj_value(hokusai), "on_speak_words", 0, NULL);
+    mrb_value words = mrb_ary_shift(mrb, arr);
+    if (!(mrb_nil_p(words)))
+    {
+      const char* wordstr = mrb_str_to_cstr(mrb, words);
+      hp_speech_start(speech, wordstr);
+    }
+  }
+}
+
 int hp_backend_run(mrb_state* mrb, struct RClass* hokusai_module, mrb_value backend)
 {
   textures = hashmap_new(sizeof(texture_cache), 0, 0, 0, texture_hash, texture_compare, texture_free, NULL);
@@ -1147,10 +1218,19 @@ int hp_backend_run(mrb_state* mrb, struct RClass* hokusai_module, mrb_value back
   int fps = mrb_nil_p(mrb_fps) ? 60 : mrb_int(mrb, mrb_fps);
   bool event_waiting = mrb_bool(mrb_funcall(mrb, config, "event_waiting", 0, NULL));
   bool use_touch = mrb_bool(mrb_funcall(mrb, config, "touch", 0, NULL));
+  bool use_voice = mrb_bool(mrb_funcall(mrb, config, "voice", 0, NULL));
 
+  hp_voice* voice = NULL;
   if (use_touch) mrb_funcall(mrb, input, "support_touch!", 0, NULL);
 
   bool resize = false;
+
+  // Pollution for voice
+  if (use_voice)
+  {
+    voice = hp_voice_init();
+    speech = hp_speech_init();
+  }
 
   InitWindow(width, height, title);
   SetTargetFPS(fps);
@@ -1168,6 +1248,7 @@ int hp_backend_run(mrb_state* mrb, struct RClass* hokusai_module, mrb_value back
 
   while(!WindowShouldClose())
   {
+
 
     // f_log(F_LOG_DEBUG, "begin drawing");
     if (IsWindowFocused())
@@ -1197,7 +1278,10 @@ int hp_backend_run(mrb_state* mrb, struct RClass* hokusai_module, mrb_value back
           }
         }
       }
-
+    // audio frame
+    f_log(F_LOG_DEBUG, "processing audio frame");
+    if (use_voice) hp_process_voice(mrb, voice);
+    f_log(F_LOG_DEBUG, "processed audio frame");
       // f_log(F_LOG_DEBUG, "proces input");
       hp_process_input(mrb, input, use_touch);
       int render_width = GetScreenWidth();
@@ -1242,6 +1326,10 @@ int hp_backend_run(mrb_state* mrb, struct RClass* hokusai_module, mrb_value back
     f_log(F_LOG_FINE, "End drawing");
   }
 
+  if (use_voice){
+    hp_voice_free(voice);
+    hp_speech_free(speech);
+  }
   if (audio) CloseAudioDevice();
   hashmap_free(textures);
   hashmap_free(shaders);

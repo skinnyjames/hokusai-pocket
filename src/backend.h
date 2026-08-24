@@ -8,6 +8,7 @@
 #include <mruby/numeric.h>
 #include <mruby/hash.h>
 #include <mruby/array.h>
+#include <mruby/variable.h>
 #include <raylib.h>
 #include <rlgl.h>
 #include "ast.h"

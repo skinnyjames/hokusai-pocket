@@ -156,9 +156,10 @@ module Hokusai
 
       attr_accessor :window_state_flags,
                   :automation_driver, :background, :after_load_cb,
-                  :host, :port, :automated, :on_reload_proc
+                  :host, :port, :automated, :on_reload_proc, :voice
 
       def initialize
+        @voice = false
         @width = 500
         @height = 500
         @fps = 60
