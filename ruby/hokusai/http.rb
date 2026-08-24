@@ -25,6 +25,8 @@ module Hokusai
         end
 
         io.close
+      ensure
+        IO.popen("rm #{@tmp}") if File.exist?(@tmp)
       end
       
       # Internal: Writes content to this response's io
@@ -52,11 +54,9 @@ module Hokusai
       # 
       # Returns String
       def all
-        tmp = File.read(@tmp)
-
+        File.read(@tmp)
+      ensure
         IO.popen("rm #{@tmp}") if File.exist?(@tmp)
-
-        tmp
       end
     end
 

@@ -16,6 +16,8 @@ require_relative './hokusai/util/piece_table'
 require_relative './hokusai/util/wrap_stream'
 require_relative "./config"
 
+require_relative "./hokusai/accessibility"
+
 require_relative './hokusai/blocks/empty'
 require_relative './hokusai/blocks/vblock'
 require_relative './hokusai/blocks/hblock'
@@ -331,6 +333,14 @@ module Hokusai
 
   def self.keyboard_visible?
     @on_keyboard_visible&.call
+  end
+
+  def self.on_speak_words
+    @on_speak_words ||= []
+  end
+
+  def self.speak(words)
+    on_speak_words << words
   end
 
   # Internal: Copies state from one Hokusai::Block to another Hokusai::Block

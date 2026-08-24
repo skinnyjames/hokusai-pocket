@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.8.0
+
+### Added
+
+Adds accessiblity support
+
 ## 0.7.3
 
 ## Modified

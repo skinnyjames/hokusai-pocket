@@ -154,11 +154,62 @@ module Hokusai
       # value - true to use touch events
       attr_accessor :touch
 
+      # Public: Accessor to toggle voice / speech control
+      #         When on can use voice control.
+      # 
+      # value - true to use voice
+      attr_accessor :voice
+
+      # Public: Accessor to set speech TTS output
+      #         When on, can use [Hokusai.speak](/api/Hokusai.html#speak)
+      #
+      # value - true to use speech output
+      attr_accessor :speech
+
+      # Public: Accessor to set the model path for the embedded whisper.cpp library
+      #         (Note: Can download with `hokusai-pocket voice-assets`)
+      # 
+      # value - path to model (String)
+      attr_accessor :voice_model_path
+
+      # Public: Accessor to toggle accessibility controls
+      #
+      # value - true to use voice accessibility
+      attr_accessor :voice_accessibility
+
+      # Public: Accessor to set the hot key which enables voice control
+      # 
+      # value - One of the following symbols :apostrophe | :comma | :minus | :period | :slash | :zero | :one | :two | :three | :four | :five | 
+      #                              :six | :seven | :eight | :nine | :semicolon | :equal | :a | :b | :c | :d | :e | :f | 
+      #                              :g | :h | :i | :j | :k | :l | :m | :n | :o | :p | :q | :r | :s | :t | :u | :v | :w | 
+      #                              :x | :y | :z | :left_bracket | :backslash | :right_bracket | :grave | 
+      #                              :space | :escape | :enter | :tab | :backspace | :insert | :delete | :right | :left | 
+      #                              :down | :up | :page_up | :page_down | :home | :end | :caps_lock | :scroll_lock | 
+      #                              :num_lock | :print_screen | :pause | :f1 | :f2 | :f3 | :f4 | :f5 | :f6 | :f7 | :f8 | :f9 | 
+      #                              :f10 | :f11 | :f12 | :left_shift | :left_control | :left_alt | :left_super | :right_shift | 
+      #                              :right_control | :right_alt | :right_super | :kb_menu | :kp_0 | :kp_1 | :kp_2 | :kp_3 | :kp_4 | 
+      #                              :kp_5 | :kp_6 | :kp_7 | :kp_8 | :kp_9 | :kp_decimal | :kp_divide | :kp_multiply | :kp_subtract | 
+      #                              :kp_add | :kp_enter | :kp_equal | :back | :menu | :volume_up | :volume_down
+      attr_accessor :voice_accessibility_hot_key
+
+      # Public: Accessor to set accessibility hot key type (default: toggle)
+      #
+      # value - one of the following symbols :toggle | :hold
+      attr_accessor :voice_accessibility_hot_key_type
+
+      # Public: Accessor to set any hot key modifiers
+      # 
+      # value - an array containing one or more of the following values (:control, :shift, :super, :alt)
+      attr_accessor :voice_accessibility_hot_key_modifiers
+
+
+
       attr_accessor :window_state_flags,
                   :automation_driver, :background, :after_load_cb,
                   :host, :port, :automated, :on_reload_proc
 
       def initialize
+        @voice = false
         @width = 500
         @height = 500
         @fps = 60
@@ -177,6 +228,37 @@ module Hokusai
         @event_waiting = true
         @touch = false
         @log = false
+        @voice = false
+      end
+
+      # Public: Shortcut method for configuring accessibility options.
+      #         Automatically sets voice and audio to `true`
+      #    
+      # block - a callback to set the following props [:model_path, :hot_key, :hot_key_type, :hot_key_modifiers]
+      def accessibility(&block)
+        config = Struct.new('AccessibilityConfig', :model_path, :hot_key, :hot_key_type, :hot_key_modifiers).new
+        block.call(config)
+
+        self.audio = true
+        self.voice = true
+        self.speech = true
+        self.voice_model_path = config.model_path || "assets/models/ggml-tiny.bin"
+        self.voice_accessibility = true
+        self.voice_accessibility_hot_key = config.hot_key || :right_shift
+        self.voice_accessibility_hot_key_modifiers = config.hot_key_modifiers || [:ctrl]
+        self.voice_accessibility_hot_key_type = config.hot_key_type || :toggle
+      end
+
+      def voice_accessibility_hot_key
+        @voice_accessibility_hot_key || :right_shift
+      end
+
+      def voice_accessibility_hot_key_modifiers
+        @voice_accessibility_hot_key_modifiers || [:ctrl]
+      end
+
+      def voice_accessibility_hot_key_type
+        @voice_accessibility_hot_key_type || :toggle
       end
 
       # Internal: Not implemented

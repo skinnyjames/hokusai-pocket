@@ -5,6 +5,7 @@
 #include <mruby.h>
 #include <mruby/hash.h>
 #include <mruby/proc.h>
+#include <mruby/string.h>
 
 static char* default_codepoints = "–—‘’“”…\r\n\t 0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ!@#$%%^&*(),.?/\"\\[]-_=+|~`{}<>;:'\0";
 
@@ -129,7 +130,17 @@ mrb_value hp_font_measure(mrb_state* mrb, mrb_value self)
 
   Vector2 vec2 = MeasureTextEx(wrapper->font, cstr, h, hp_font_spacing(h, wrapper));
 
-  mrb_ary_push(mrb, arr, mrb_float_value(mrb, vec2.x));
+  float x = 0.0;
+  if (vec2.x < 0.0)
+  {
+    x = 0.0;
+  }
+  else if (vec2.x > 0.0) 
+  {
+    x = vec2.x + 1.0;
+  }
+
+  mrb_ary_push(mrb, arr, mrb_float_value(mrb, x));
   mrb_ary_push(mrb, arr, mrb_float_value(mrb, vec2.y));
   return arr;
 }
@@ -140,6 +151,11 @@ mrb_value hp_font_measure_char(mrb_state* mrb, mrb_value self)
   mrb_value chr;
   mrb_value size;
   mrb_get_args(mrb, "So", &chr, &size);
+
+  if (mrb_str_equal(mrb, chr, mrb_str_new_cstr(mrb, "\n")))
+  {
+    return mrb_float_value(mrb, 0.0);
+  }
 
   hp_font_wrapper* wrapper = hp_font_get(mrb, self);
 

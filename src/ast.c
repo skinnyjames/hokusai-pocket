@@ -200,7 +200,9 @@ mrb_value hp_ast_megaparse(mrb_state* mrb, mrb_value self)
   char* template = mrb_str_to_cstr(mrb, templ);
   char* type = mrb_str_to_cstr(mrb, templtype);
   hoku_ast* ast = hp_create_ast(mrb, type, template);
-  return hp_ast_walk(ast, mrb);
+  mrb_value rast = hp_ast_walk(ast, mrb);
+  hoku_ast_free(ast);
+  return rast;
 }
 
 void mrb_define_hokusai_ast_class(mrb_state* mrb)
