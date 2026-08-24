@@ -786,6 +786,8 @@ module Hokusai
         end
 
         io.close
+      ensure
+        IO.popen("rm #{@tmp}") if File.exist?(@tmp)
       end
       
       # Internal: Writes content to this response's io
@@ -813,11 +815,9 @@ module Hokusai
       # 
       # Returns String
       def all
-        tmp = File.read(@tmp)
-
+        File.read(@tmp)
+      ensure
         IO.popen("rm #{@tmp}") if File.exist?(@tmp)
-
-        tmp
       end
     end
 
@@ -2119,11 +2119,17 @@ module Hokusai
 
     def destroy; end
 
+    RANDOM_LEN = 6
+
     def initialize(ast, portal = nil)
       @ast = ast
       @portal = portal
-      # @uuid = SecureRandom.hex(6).freeze
       @meta = Meta.new
+      @uuid ||= begin
+        value = Random.rand(36**RANDOM_LEN)
+        id = value.to_s(36)
+        id.ljust(RANDOM_LEN, '0')[0...RANDOM_LEN]
+      end
     end
 
     def mount(klass, providers: {})
@@ -6397,11 +6403,62 @@ module Hokusai
       # value - true to use touch events
       attr_accessor :touch
 
+      # Public: Accessor to toggle voice / speech control
+      #         When on can use voice control.
+      # 
+      # value - true to use voice
+      attr_accessor :voice
+
+      # Public: Accessor to set speech TTS output
+      #         When on, can use [Hokusai.speak](/api/Hokusai.html#speak)
+      #
+      # value - true to use speech output
+      attr_accessor :speech
+
+      # Public: Accessor to set the model path for the embedded whisper.cpp library
+      #         (Note: Can download with `hokusai-pocket voice-assets`)
+      # 
+      # value - path to model (String)
+      attr_accessor :voice_model_path
+
+      # Public: Accessor to toggle accessibility controls
+      #
+      # value - true to use voice accessibility
+      attr_accessor :voice_accessibility
+
+      # Public: Accessor to set the hot key which enables voice control
+      # 
+      # value - One of the following symbols :apostrophe | :comma | :minus | :period | :slash | :zero | :one | :two | :three | :four | :five | 
+      #                              :six | :seven | :eight | :nine | :semicolon | :equal | :a | :b | :c | :d | :e | :f | 
+      #                              :g | :h | :i | :j | :k | :l | :m | :n | :o | :p | :q | :r | :s | :t | :u | :v | :w | 
+      #                              :x | :y | :z | :left_bracket | :backslash | :right_bracket | :grave | 
+      #                              :space | :escape | :enter | :tab | :backspace | :insert | :delete | :right | :left | 
+      #                              :down | :up | :page_up | :page_down | :home | :end | :caps_lock | :scroll_lock | 
+      #                              :num_lock | :print_screen | :pause | :f1 | :f2 | :f3 | :f4 | :f5 | :f6 | :f7 | :f8 | :f9 | 
+      #                              :f10 | :f11 | :f12 | :left_shift | :left_control | :left_alt | :left_super | :right_shift | 
+      #                              :right_control | :right_alt | :right_super | :kb_menu | :kp_0 | :kp_1 | :kp_2 | :kp_3 | :kp_4 | 
+      #                              :kp_5 | :kp_6 | :kp_7 | :kp_8 | :kp_9 | :kp_decimal | :kp_divide | :kp_multiply | :kp_subtract | 
+      #                              :kp_add | :kp_enter | :kp_equal | :back | :menu | :volume_up | :volume_down
+      attr_accessor :voice_accessibility_hot_key
+
+      # Public: Accessor to set accessibility hot key type (default: toggle)
+      #
+      # value - one of the following symbols :toggle | :hold
+      attr_accessor :voice_accessibility_hot_key_type
+
+      # Public: Accessor to set any hot key modifiers
+      # 
+      # value - an array containing one or more of the following values (:control, :shift, :super, :alt)
+      attr_accessor :voice_accessibility_hot_key_modifiers
+
+
+
       attr_accessor :window_state_flags,
                   :automation_driver, :background, :after_load_cb,
                   :host, :port, :automated, :on_reload_proc
 
       def initialize
+        @voice = false
         @width = 500
         @height = 500
         @fps = 60
@@ -6420,6 +6477,37 @@ module Hokusai
         @event_waiting = true
         @touch = false
         @log = false
+        @voice = false
+      end
+
+      # Public: Shortcut method for configuring accessibility options.
+      #         Automatically sets voice and audio to `true`
+      #    
+      # block - a callback to set the following props [:model_path, :hot_key, :hot_key_type, :hot_key_modifiers]
+      def accessibility(&block)
+        config = Struct.new('AccessibilityConfig', :model_path, :hot_key, :hot_key_type, :hot_key_modifiers).new
+        block.call(config)
+
+        self.audio = true
+        self.voice = true
+        self.speech = true
+        self.voice_model_path = config.model_path || "assets/models/ggml-tiny.bin"
+        self.voice_accessibility = true
+        self.voice_accessibility_hot_key = config.hot_key || :right_shift
+        self.voice_accessibility_hot_key_modifiers = config.hot_key_modifiers || [:ctrl]
+        self.voice_accessibility_hot_key_type = config.hot_key_type || :toggle
+      end
+
+      def voice_accessibility_hot_key
+        @voice_accessibility_hot_key || :right_shift
+      end
+
+      def voice_accessibility_hot_key_modifiers
+        @voice_accessibility_hot_key_modifiers || [:ctrl]
+      end
+
+      def voice_accessibility_hot_key_type
+        @voice_accessibility_hot_key_type || :toggle
       end
 
       # Internal: Not implemented
@@ -6500,6 +6588,175 @@ module Hokusai
   end
 end
 
+
+module Hokusai
+  # hp top
+  # hp next
+  # hp down
+  # hp focus
+  # hp help
+  # hp focus
+
+  # Public: Accessibilty api class
+  # 
+  # Example
+  # 
+  # register_voice do |voice|
+  #   voice.description "Echo"
+  #   voice.focus = /.*/
+  #   #
+  #   voice.build_action :echo do |action|
+  #     action.trigger = /echo/
+  #     action.description "Echos your speech back"
+  #     action.build_param :speech do |param|
+  #       param.description = "The text to echo back"
+  #       param.type = :string
+  #       param.match = /.*/
+  #     end
+  #   end
+  #   #
+  #   voice.on_action do |action|
+  #     case action.type
+  #     when :echo
+  #       Hokusai.speak(action.value)
+  #     end
+  #   end
+  # end
+  class Voice
+    def self.walk(block)
+      stack = [block]
+      while block = stack.pop
+        if block.class.voice
+          block.class.voice.ctx = block
+        end
+
+        stack.concat block.children
+      end
+    end
+
+    # def self.tree(block)
+    #   @tree ||= begin
+    #     tree_stack = [root]
+    #     stack = [[block, block.children]]
+
+    #     while group = stack.pop
+    #       if group == :break
+    #         tree_stack.pop
+    #         next
+    #       end
+
+    #       parent, children = group
+
+    #       if !!parent.class.voice
+    #         tree_stack.last.children << parent.class.voice
+    #         tree_stack << parent.class.voice
+    #         stack << :break
+    #       end
+
+    #       children.each do |child|
+    #         stack << [child, child.children]
+    #       end
+    #     end
+
+    #     root
+    #   end
+    # end
+
+    def self.map
+      @map ||= {}
+    end
+
+    def self.consume(str)
+      # check for a prefixed command
+      arr = @map.find do |prefix, voice|
+        if prefix.is_a?(Regexp)
+          re = prefix
+        else
+          re = Regexp.new("^#{prefix}", "i")
+        end
+
+        str.downcase =~ re
+      end
+
+      if arr
+        res = arr[1].actions.each do |action|
+          break true if action.test(arr[1].ctx, str.downcase)
+        end
+      else
+        @map.each do |prefix, voice|
+          voice.actions.each do |action|
+            break true if action.test(voice.ctx, str.downcase)
+          end
+        end
+      end
+    end
+
+    class Action
+      attr_accessor :description_cb, :match_cb, :type, :keyword
+
+      def initialize(type)
+        @description_cb = ->() {}
+        @match_cb = ->() {}
+        if type.is_a?(String)
+          @keyword = Regexp.new(type.downcase, "i")
+        elsif type.is_a?(Regexp)
+          @keyword = type
+        end
+      end
+
+      def description(&block)
+        @description_cb = block
+      end
+
+      def on_match(&block)
+        @match_cb = block
+      end
+
+      def test(receiver, str)
+        if str.match(@keyword)
+          res = receiver.instance_exec(str, &@match_cb)
+
+          Hokusai.speak(res) if res
+          true
+        else
+          false
+        end
+      end
+    end
+
+    attr_accessor :description_cb, :actions, :name, :ctx
+
+    def initialize(name)
+      @name = name
+      @description_cb = ->() {}
+      @actions = []
+      @ctx = nil
+    end
+
+    def description(&block)
+      @description_cb = block
+    end
+
+    def build_action(name, &block)
+      action = Action.new(name)
+      block.call(action)
+      @actions << action
+    end
+  end
+
+  class Block
+    def self.register_voice(prefix, &block)
+      api = Voice.new(prefix)
+      block.call(api)
+      Voice.map[prefix] = api
+      @voice = api
+    end
+
+    def self.voice
+      @voice
+    end
+  end
+end
 
 # Public: A block with a virtual node
 #         useful for collecting events on a block without rendering anything
@@ -11862,6 +12119,14 @@ module Hokusai
     @on_keyboard_visible&.call
   end
 
+  def self.on_speak_words
+    @on_speak_words ||= []
+  end
+
+  def self.speak(words)
+    on_speak_words << words
+  end
+
   # Internal: Copies state from one Hokusai::Block to another Hokusai::Block
   #           Used in hot reloading to preserve state between reloads
   #           You probably don't need this
@@ -11917,3 +12182,6 @@ module Hokusai
     end
   end
 end
+              module Hokusai
+                VOICE = true
+              end
