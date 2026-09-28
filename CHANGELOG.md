@@ -4,7 +4,15 @@
 
 ### Added
 
-Adds accessiblity support
+* Adds entry level accessiblity support via TTS and ASR
+* Adds paste support for `Hokusai::Blocks::Input`
+
+## Modified
+
+* Rewrite of Input/Text/Selectable blocks and `Hokusai::Util::Selection`
+* Clicks on z-indexed blocks will blur any blocks underneath
+
+## Modified
 
 ## 0.7.3
 

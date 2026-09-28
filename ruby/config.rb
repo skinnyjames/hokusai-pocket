@@ -193,11 +193,12 @@ module Hokusai
       attr_accessor :voice_accessibility_hot_key
 
       # Public: Accessor to set accessibility hot key type (default: toggle)
+      #         Note: Only :toggle is currently supported.
       #
       # value - one of the following symbols :toggle | :hold
       attr_accessor :voice_accessibility_hot_key_type
 
-      # Public: Accessor to set any hot key modifiers
+      # Public: Accessor to set any hot key modifiers. (Not implemented)
       # 
       # value - an array containing one or more of the following values (:control, :shift, :super, :alt)
       attr_accessor :voice_accessibility_hot_key_modifiers
@@ -235,6 +236,16 @@ module Hokusai
       #         Automatically sets voice and audio to `true`
       #    
       # block - a callback to set the following props [:model_path, :hot_key, :hot_key_type, :hot_key_modifiers]
+      # 
+      # Examples
+      #   
+      #   Hokusai::Backend.run(App) do |config|
+      #     config.accessibility do |aconig|
+      #       aconfig.model_path = "assets/models/ggml-tiny.bin"
+      #       aconfig.hot_key = :space
+      #     end
+      #   end
+      #
       def accessibility(&block)
         config = Struct.new('AccessibilityConfig', :model_path, :hot_key, :hot_key_type, :hot_key_modifiers).new
         block.call(config)

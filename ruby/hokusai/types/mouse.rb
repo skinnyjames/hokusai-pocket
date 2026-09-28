@@ -8,15 +8,39 @@ module Hokusai
   #   input.mouse.left.down # => true
   #   input.mouse.left.clicked # => true
   #   input.mouse.left.released # => false
+  #   input.mouse.left.click_count # => 1
   #   
   class MouseButton
     attr_accessor :up, :down, :clicked, :released
+    
+    # Public: accessor for click count
+    #
+    # val - times this button was clicked
+    # 
+    # Returns 2 for double click, 3 for triple click, etc
+    attr_accessor :click_count
 
     def initialize
       @up = false
       @down = false
       @clicked = false
       @released = false
+      @click_count = 0
+      @time = nil
+    end
+
+    def clicked=(val)
+      @clicked = val
+      if val
+        @time ||= Hokusai.monotonic
+        if Hokusai.monotonic - @time < 0.5
+          @click_count += 1
+          @time = Hokusai.monotonic
+        else
+          @click_count = 1
+          @time = Hokusai.monotonic
+        end
+      end
     end
   end
 

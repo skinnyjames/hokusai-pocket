@@ -445,15 +445,39 @@ module Hokusai
   #   input.mouse.left.down # => true
   #   input.mouse.left.clicked # => true
   #   input.mouse.left.released # => false
+  #   input.mouse.left.click_count # => 1
   #   
   class MouseButton
     attr_accessor :up, :down, :clicked, :released
+    
+    # Public: accessor for click count
+    #
+    # val - times this button was clicked
+    # 
+    # Returns 2 for double click, 3 for triple click, etc
+    attr_accessor :click_count
 
     def initialize
       @up = false
       @down = false
       @clicked = false
       @released = false
+      @click_count = 0
+      @time = nil
+    end
+
+    def clicked=(val)
+      @clicked = val
+      if val
+        @time ||= Hokusai.monotonic
+        if Hokusai.monotonic - @time < 0.5
+          @click_count += 1
+          @time = Hokusai.monotonic
+        else
+          @click_count = 1
+          @time = Hokusai.monotonic
+        end
+      end
     end
   end
 
@@ -521,18 +545,20 @@ module Hokusai
     attr_reader :keys, :pressed, :released, :down
 
     # Public: Is the pressed key printable?
-    # 
+    #
+    # type - one of the following symbols (:pressed, :down)  (default :pressed)
+    #
     # Returns boolean
-    def printable?
+    def printable?(type = :pressed)
       [
-        :space, :tab, :apostrophe, :comma, :minus, :period,
-        :slash,
+        :space, :apostrophe, :comma, :minus, :period,
+        :slash, :right_bracket, :left_bracket, :grave, :equal,
         :zero, :one, :two, :three, :four, :five, :six, 
         :seven, :eight, :nine, :semicolon, 
         :a, :b, :c, :d, :e, :f, :g, :h,
         :i, :j, :k, :l, :m, :n, :o, :p, :q, :r, 
         :s, :t, :u, :v, :w, :x, :y, :z,
-      ].include?(symbol)
+      ].include?(symbol(type))
     end
 
     def initialize
@@ -559,8 +585,13 @@ module Hokusai
     #   #=> :enter
     #   
     # Returns Symbol
-    def symbol
-      pressed[0]&.[](:symbol)
+    def symbol(type = :pressed)
+      case type
+      when :pressed
+        pressed[0]&.[](:symbol)
+      when :down
+        down[0]&.[](:symbol)
+      end
     end
 
     # Internal: The integer code form of the pressed key
@@ -1991,22 +2022,14 @@ module Hokusai
       @props[name]
     end
 
-    # Public: Set this node and chlidren to focused
+    # Public: Set this node to focused
     def focus
       @focused = true
-
-      children?&.each do |child|
-        child.node.meta.focus
-      end
     end
 
-    # Public: Unfocus this node and children
+    # Public: Unfocus this node
     def blur
       @focused = false
-
-      children?&.each do |child|
-        child.node.meta.blur
-      end
     end
 
     # Internal: Set on update callback.  Used by [Hokusai::NodeMounter](/api/Hokusai/NodeMounter) and the like
@@ -2942,7 +2965,7 @@ module Hokusai
     # 
     # Examples
     # 
-    #   fetch("https://https://jsonplaceholder.typicode.com/todos/1", { method: "GET" }) do |res|
+    #   fetch("https://jsonplaceholder.typicode.com/todos/1", { method: "GET" }) do |res|
     #     # get the response code
     #     p res.code
     #     # get a JSON response as a ruby object
@@ -4104,8 +4127,8 @@ module Hokusai
     # Public: is the key printable to the screen?
     # 
     # Returns boolean
-    def printable?
-      @keyboard.printable?
+    def printable?(type = :pressed)
+      @keyboard.printable?(type)
     end
     
     # Public: array of pressed keys
@@ -4235,7 +4258,7 @@ module Hokusai
     # Public: The key in symbol from
     #
     # Returns Symbol
-    def key
+    def symbol
       down[0]&.[](:symbol)
     end
 
@@ -4406,21 +4429,13 @@ module Hokusai
     # Internal: Captured if the block is listening for @click 
     #           and the left mouse clicks the block geometry
     def capture(block, canvas)
-      if left.clicked && clicked(canvas)
-        block.node.meta.focus
-
+      if left.clicked || middle.clicked || right.clicked 
         add_evented_styles(block) if hovered(canvas)
 
         if matches(block)
           add_capture(block)
         end
-      elsif left.clicked
-        block.node.meta.blur
       end
-    end
-
-    def clicked(canvas)
-      left.clicked && input.hovered?(canvas)
     end
   end
 
@@ -4431,7 +4446,7 @@ module Hokusai
     def capture(block, canvas)
       add_evented_styles(block) if left.up && hovered(canvas)
 
-      if left.up && matches(block)
+      if (left.up || middle.up || right.up) && matches(block)
         add_capture(block)
       end
     end
@@ -4442,9 +4457,9 @@ module Hokusai
     name "mousedown"
 
     def capture(block, canvas)
-      add_evented_styles(block) if left.down && hovered(canvas)
+      add_evented_styles(block) if (left.down || middle.down || right.down) && hovered(canvas)
 
-      if left.down && matches(block)
+      if (left.down || middle.down || right.down) && matches(block)
         add_capture(block)
       end
     end
@@ -4503,14 +4518,6 @@ module Hokusai
 
     def capture(block, canvas)
       add_capture(block) if matches(block)
-
-      if left.clicked && !clicked(canvas)
-        block.node.meta.blur
-      end
-    end
-
-    def clicked(canvas)
-      left.clicked && input.hovered?(canvas)
     end
   end
 end
@@ -4732,6 +4739,7 @@ module Hokusai
     end
   end
 end
+
 module Hokusai
   # Internal: Describes a Block with layout coordinates for rendering
   class PainterEntry
@@ -4828,7 +4836,6 @@ module Hokusai
 
       before_render&.call([root, nil], canvas, input)
 
-      # root_children = (canvas.reverse? ? root.children?&.reverse.dup : root.children?&.dup) || []
       groups = []
       root_entry = PainterEntry.new(root, canvas.x, canvas.y, canvas.width, canvas.height)
       groups << [root_entry, measure([root], canvas)]
@@ -4871,6 +4878,12 @@ module Hokusai
 
           before_render&.call([group.block, group.parent], canvas, input)
 
+          if capture && !input.touch && input.hovered?(canvas)
+            if target = group.block.node.meta.target
+              group.block.node.add_evented_styles(target.class, "hover")
+            end
+          end
+
           if resize
             group.block.on_resize(canvas)
           end
@@ -4880,12 +4893,8 @@ module Hokusai
           group.block.render(canvas) do |local_canvas|
             # defer capture for zindexed items so they can stop propagation.
             if capture && (zindex_counter.zero? && z.zero?)
-              capture_events(group.block, local_canvas, hovered: hovered)
-            # since evented styles happens during capture and z-index skips capture, well add some
-            elsif capture && !input.touch && input.hovered?(local_canvas)
-              if target = group.block.node.meta.target
-                group.block.node.add_evented_styles(target.class, "hover")
-              end
+              capture_events(group.block, local_canvas, z: 0, hovered: hovered)
+              # since evented styles happens during capture and z-index skips capture, well add some
             end
 
             local_children = (local_canvas.reverse? ? group.block.children?&.reverse : group.block.children?)
@@ -4917,7 +4926,6 @@ module Hokusai
             group.block.execute_draw
           end
 
-
           break if breaked
         end
       end
@@ -4925,7 +4933,8 @@ module Hokusai
       zindexed.sort.each do |z, groups|
         groups.each do |group|
           canvas.reset(group.x, group.y, group.w, group.h)
-          capture_events(group.block, canvas)
+          capture_events(group.block, canvas, z: z || zindex_counter)
+
           group.block.execute_draw
         end
       end
@@ -5039,12 +5048,31 @@ module Hokusai
       entries
     end
 
-    def capture_events(block, canvas, hovered: false)
+    def capture_events(block, canvas, z: 0, hovered: false)
       if block.node.portal.nil?
         return
       end
+
+      @focused ||= []
       
       events[:keydown].capture(block, canvas)
+
+      # handle focusing
+      if input.hovered?(canvas) && input.mouse.left.clicked
+        block.node.meta.focus
+        if z > 0
+          # reblur anything underneath this block.
+          @focused.reject! do |fz, fblock, fcanvas|
+            if fz < z && input.hovered?(fcanvas)
+              fblock.node.meta.blur
+            end
+          end
+        end
+
+        @focused << [z, block, canvas]
+      elsif input.mouse.left.clicked
+        block.node.meta.blur
+      end
 
       if !input.touch
         if input.hovered?(canvas)
@@ -5251,136 +5279,196 @@ module Hokusai
 end
 
 module Hokusai::Util
+  # Public: Represents a selectable area with coordinates.
+  #         Used from with [Util::Selection](/api/Hokusai/Util/Selection)
+  #
+  # Examples
+  #
+  #   geom = Hokusai::Util::GeometrySelection.new
+  #   geom.start(0.0, 0.0)
+  #   geom.stop(100.0, 100.0)
+  #   geom.down? # true
+  #   geom.selected(20.0, 20.0, 20.0, 20.0) # true
+  #
   class GeometrySelection
-    attr_accessor :start_x, :start_y, :stop_x, :stop_y,
-                  :type, :cursor, :diff, :click_pos, :parent
-
+    attr_reader :parent, :direction
+    attr_accessor :start_x, :start_y, :stop_x, :stop_y, :click_pos, :modified, 
+                  :changed_direction, :original_direction, :resized, :state
+    
     def initialize(parent)
       @parent = parent
-      @type = :none         # state for the geometry selection (active/frozen/etc)
-      @start_x = 0.0        # the x coordinate for the geometry
-      @start_y = 0.0        # the y coordinate for the geometry 
+      @state = :none
+      @start_x = 0.0
+      @start_y = 0.0
       @stop_x = 0.0
       @stop_y = 0.0
-      @diff = 0.0
-      @cursor = nil
       @click_pos = nil
+      @modified = false
+      @original_direction = nil
+      @resized = false
     end
 
-    def set_click_pos(x, y)
-      @click_pos = [x, y]
-    end
-
-    def none?
-      type == :none
-    end
-
-    def ready?
-      type == :none || type == :frozen
-    end
-
-    def clear
-      self.start_x = 0.0
-      self.start_y = 0.0
-      self.stop_x = 0.0
-      self.stop_y = 0.0
-      self.cursor = nil
-    end
-
-    def changed_direction?
-      @changed_direction
-    end
-
-    def active?
-      type == :active
-    end
-
-    def frozen?
-      type == :frozen
-    end
-
-    def activate!
-      self.type = :active
-    end
-
-    def freeze!
-      self.type = :frozen
-    end
-
-    def coords
-      [start_x, stop_x, start_y, stop_y]
-    end
-
+    # Public: Starts a selection
+    #
+    # x - the x coordinate selected (Float)
+    # y - the y coordinate selected (Float)
+    #
+    # Returns nothing
     def start(x, y)
       self.start_x = x
-      self.start_y = y
+      self.start_y = y + parent.offset_y
       self.stop_x = x
-      self.stop_y = y
-      self.cursor = nil
-
-      activate!
+      self.stop_y = y + parent.offset_y
+      self.click_pos = nil
+      self.state = :selecting
+      parent.cursor = nil
     end
 
-    def stop(x, y)
-      self.stop_x = x
-      self.stop_y = y
+    # Public: Moves the stop y coordinate up by (height)
+    #
+    # height - the amount to move up (Float)
+    #
+    # Returns nothing
+    def move_up(height)
+      self.stop_y -= height
 
-      if up? && @direction == :down || down? && @direction == :up
+      if (up? && @direction == :down) || (down? && @direction == :up)
         @changed_direction = true
-      else
-        @changed_direction = false
       end
 
       @direction = up? ? :up : :down
     end
 
+
+    # Public: Moves the stop y coordinate down by (height)
+    #
+    # height - the amount to move down (Float)
+    #
+    # Returns nothing
+    def move_down(height)
+      self.stop_y += height
+
+      if (up? && @direction == :down) || (down? && @direction == :up)
+        @changed_direction = true
+      end
+
+      @direction = up? ? :up : :down
+    end
+
+    # Public: Stops the selection
+    #
+    # x - the stop x coordinate (Float)
+    # y - the stop y coordinate (Float)
+    #
+    # Returns nothing
+    def stop(x, y)
+      self.stop_x = x
+      self.stop_y = y + parent.offset_y
+      self.modified = true
+      self.original_direction ||= up? ? :up : :down
+
+      if (up? && @direction == :down) || (down? && @direction == :up)
+        @changed_direction = true
+      end
+
+      @direction = up? ? :up : :down
+    end
+
+    def commit!
+      parent.pos!
+    end
+
+    # Public: Is the selection going upward?
+    #
+    # Returns boolean
     def up?(height = 0)
       stop_y < start_y - height
     end
 
+    # Public: Is the selection going downward?
+    #
+    # Returns boolean
     def down?(height = 0)
       start_y <= stop_y - height
     end
 
+    # Public: Is the selection going left?
+    #
+    # Returns boolean
     def left?
       stop_x < start_x
     end
 
+    # Public: Is the selection going right?
+    #
+    # Returns boolean
     def right?
       start_x <= stop_x
     end
 
-    def cursor
-      return nil unless @cursor
-
-      return [@cursor[0], @cursor[1] - parent.offset_y, @cursor[2], @cursor[3]] if frozen?
-
-      @cursor
+    # Public: Did the selection change direction?
+    #         (ie: selecting down but now going up)
+    #
+    # Returns boolean
+    def changed_direction?
+      @changed_direction
     end
 
+    # Public: Resets the selection state
+    #
+    # Returns nothing
+    def clear
+      self.start_x = 0.0
+      self.start_y = 0.0
+      self.stop_x = 0.0
+      self.stop_y = 0.0
+      self.state = :none
+      parent.cursor = nil
+    end
+    
     def rect_selected(rect)
       selected(rect[0], rect[1], rect[2], rect[3])
     end
 
+
+    def clicked_on_line(x, y, w, h)
+      return false if click_pos.nil?
+
+      click_pos[0] > x + w && click_pos[1] > y - parent.offset_y && click_pos[1] <= y - parent.offset_y + h  && click_pos[0] > w
+    end
+
+    # Public: Is this region clicked?
+    #         Note: need to set `click_pos` to use this.
+    #
+    # x - start x of the region (Float)
+    # y - start y of the region (Float)
+    # w - width of the region (Float)
+    # h - height of the region (Float)
+    #
+    # Returns boolean
     def clicked(x,y,w,h)
       return false if click_pos.nil?
 
-      pos = Hokusai::Rect.new(x, y, w, h)
-      # pos.move_x_left
+      pos = Hokusai::Rect.new(x, y - parent.offset_y, w, h)
       pos.includes_x?(click_pos[0]) && pos.includes_y?(click_pos[1])
     end
 
-    def selected(x, y, width, height)
-      return false if none?
+    # Public: Is this region selected?
+    #
+    # x - start x of the region (Float)
+    # y - start y of the region (Float)
+    # w - width of the region (Float)
+    # h - height of the region (Float)
+    #
+    # Returns boolean
+    def selected(x, ty, width, height)
+      return false if parent.pos?
 
-      if frozen?
-        y -= parent.offset_y
-      end
-
+      y = ty - parent.offset_y
+      sy = @start_y - parent.offset_y
+      ey = @stop_y - parent.offset_y
       sx = @start_x
-      sy = @start_y
       ex = @stop_x
-      ey = @stop_y
 
       down = sy <= ey
       up = ey < sy
@@ -5411,51 +5499,78 @@ module Hokusai::Util
         ((rect.includes_y?(sy) && rect.includes_y?(ey)) &&
           ((left && x_shifted_right < sx && x_shifted_right > ex) || (right && x_shifted_right > sx && x_shifted_right < ex)))
       )
-
       a
-    end
+    end 
   end
 end
 module Hokusai::Util
+  # Public: Represents a selectable area using offsets. Designed for text/char selection.
+  #         Used from with [Util::Selection](/api/Hokusai/Util/Selection)
+  #         Depends on Util::GeometrySelection and also [Hokusai::Util::Wrapped](/api/Hokusai/Util/Wrapped)
+  #
   class PositionSelection
-    attr_accessor :positions, :cursor_index, :direction, :active
+    attr_reader :parent
 
-    def initialize
+    # Public: get/set the cursor offset
+    #
+    # index - an integer representing the current offset
+    #
+    # Returns the cursor ofset
+    attr_accessor :cursor_index
+
+    # Public: get/set the selected positions
+    #
+    # range - a range denoting the start..end selection
+    #
+    # Returns the positions
+    attr_accessor :positions
+
+    attr_accessor :state, :offset, :direction
+
+    def initialize(parent)
+      @parent = parent
+      @positions = nil
       @cursor_index = nil
-      @positions = []
-      @direction = :right
-      @active = false
+      @state = :none
+      @offset = 0
+      @direction = nil
     end
 
-    def move(to, selecting)
-      self.active = selecting
-  
-      return if cursor_index.nil?
+    # Public: Moves cursor to (index)
+    #
+    # to - the offset to move the cursor to
+    # selecting - a boolean to denote that the move should adjust the selectable region
+    #
+    # Returns nothing
+    def move(to, selecting, times = 1)
+      return if cursor_index.nil? || (selecting && positions.nil?)
 
-      # puts ["before", to, cursor_index, positions].inspect
-      
       case to
       when :right
-        self.cursor_index += 1
-        if selecting && !positions.empty? && cursor_index <= positions.last
-          positions.shift
+        self.cursor_index += times
+
+        if positions && cursor_index == positions.last
+          self.positions = cursor_index..cursor_index
+        elsif selecting && !positions.nil? && cursor_index <= positions.last
+          self.positions = (positions.first + 1)...positions.last
         elsif selecting
-          positions << cursor_index 
+          self.positions = positions.first..cursor_index 
         end
 
       when :left
-        if selecting && !positions.empty? && cursor_index >= positions.last
-          positions.pop
+        if selecting && !positions.nil? && cursor_index >= positions.last
+          if positions.last - 1 < positions.first
+            self.positions = positions.last - 1...positions.first
+            @moved_left = true
+          else
+            self.positions = positions.first...positions.last - 1
+          end
         elsif selecting
-          positions.unshift cursor_index
+          self.positions = cursor_index...positions.last
         end
-  
-        self.cursor_index -= 1 unless cursor_index == -1
-      end
-    end
+        self.cursor_index -= times unless cursor_index == -1
 
-    def active?
-      @active
+      end
     end
 
     def left?
@@ -5466,91 +5581,215 @@ module Hokusai::Util
       direction == :right
     end
 
-    def clear
-      self.cursor_index = nil
-      positions.clear
+    # Public: Is this selection frozen?
+    #
+    # Returns boolean
+    def frozen?
+      state == :frozen
     end
 
+    # Public: Freeze the selection to prevent modifications
+
+    def freeze!
+      self.state = :frozen
+    end  
+
+    # Public: merges the geometry selection into the existing positions
+    #
+    # arr - the tokens: _Array(Hokusai::Util::Wrapped)_ that are currently selected on the screen.
+    #       Note: if the selection is out of the viewport, this will be missing tokens.
+    #
+    # Returns nothing
+    def concat(arr)
+      return if arr.nil?
+
+      if @positions.nil?
+        @positions = arr.first..arr.last
+
+        return
+      end
+
+      if parent.geom.down? && parent.geom.changed_direction?
+        max = [positions.first, arr.first].max
+        if max == arr.last
+          @positions = nil
+          return
+        end
+
+        @positions = max..arr.last
+        parent.geom.changed_direction = false # TEST: WIP
+      elsif parent.geom.down?
+
+        max = arr.last
+        min = positions.first
+
+        if min == max
+          @positions = nil
+          return
+        end
+
+        @positions = min..max
+      elsif parent.geom.up? && parent.geom.changed_direction?
+        min = [positions.first, arr.first].min
+        max = [positions.first, arr.last].max
+
+        if min == max
+          @positions = nil
+          return
+        end
+
+        if positions.first > arr.last
+          max -= 1
+        end
+
+        @positions = min...max
+        parent.geom.changed_direction = false #test WIP
+      elsif parent.geom.up?
+        if arr.first == positions.last || arr.first > positions.last
+          @positions = nil
+          return
+        end
+
+        min = []
+
+        @positions = arr.first...positions.last
+      else
+        @positions = arr.first..arr.last
+      end
+    end
+
+    # Public: Is this offset selected?
+    #
+    # offset - An index (Integer) to test
+    #
+    # Returns boolean
     def selected(index)
-      active && (positions.first..positions.last).include?(index)
+      return false if positions.nil?
+
+      (positions.first..positions.last).include?(index)
     end
 
-    def select(range)
-      self.positions = range.to_a
+    # Public: Reset this selection
+    #
+    # Returns nothing
+    def clear
+      self.offset = 0
+      self.cursor_index = nil
+      self.positions = nil
+      self.state = :none
     end
   end
 end
 
 module Hokusai::Util
+  # Public: A utility to help coordinate selections.
+  #         Currently used for text selection and in [Hokusai::Blocks::Selectable](/api/Hokusai/Blocks/Selectable)
   class Selection
-    attr_reader :geom, :pos
-    attr_accessor :type, :offset_y, :diff, :cursor
+    attr_reader :pos, :geom
+    attr_accessor :offset_y, :offset_x, :offset_pos, :cursor, 
+                  :action, :state, :use_focus, :focus_id, :top, :column,
+                  :insert
 
     def initialize
+      @pos = PositionSelection.new(self)
       @geom = GeometrySelection.new(self)
-      @pos = PositionSelection.new
-      @type = :geom
       @offset_y = 0.0
-      @diff = 0.0
+      @offset_x = 0.0
+      @offset_pos = 0
       @cursor = nil
+      @action = nil
+      @state = :geom
+      @use_focus = false
+      @focus_id = nil
+      @top = 0.0
+      @column = nil
+      @insert = false
     end
 
-    def clear
-      pos.clear
-      geom.clear
+    # Public: Set the current cursor position
+    #
+    # arr - an array of 4 floats (start_x, stop_x, cursor_width, cursor_height)
+    #
+    # Returns nothing
+    def cursor=(arr)
+      return if (geom? && !geom.modified)
+
+      @cursor = arr
+    ensure
+      geom.modified = false
+    end
+
+    # Public: Returns the selection y offset
+    #
+    # Returns a float
+    def offset_y
+      @top + @offset_y
     end
 
     def cursor
-      geom.cursor
+      return nil unless @cursor
+
+      return [@cursor[0], @cursor[1] - offset_y, @cursor[2], @cursor[3]]
     end
 
-    def geom!
-      pos.clear
-      pos.cursor_index = nil
-
-      self.type = :geom
-    end
-
-    def pos!
-      geom.clear
-
-      self.type = :pos
-    end
-
+    # Public: Is the selection in geometry mode?
+    #
+    # Returns boolean
     def geom?
-      type == :geom
+      state == :geom
     end
 
+    # Public: Use geometry mode
+    #
+    # clear - (boolean) should the positions be cleared? (default true)
+    #
+    # Returns nothing
+    def geom!(pclear = true)
+      pos.clear if pclear
+
+      self.state = :geom
+    end
+
+    # Public: Is the selection in positional mode?
+    #
+    # Returns boolean
     def pos?
-      type == :pos
+      state == :pos
     end
 
-    def left?
-      geom? ? geom.left? : pos.left?
+    # Public: Use positional mode
+    #
+    # clear - (boolean) should the geometry be cleared? (default false)
+    #
+    # Returns nothing
+    def pos!(gclear = false)
+      geom.clear if gclear
+      geom.changed_direction = false
+      geom.click_pos = nil
+
+      self.state = :pos
     end
 
-    def right?
-      geom? ? geom.right? : pos.right?
+    # Public: Clear all selections and start in geometry mode.
+    #
+    # Returns nothing
+    def clear
+      geom.clear
+      pos.clear
+      self.cursor = nil
+
+      geom!
     end
 
-    def up?
-      geom? && geom.up?
-    end
-
-    def down?
-      geom? && geom.down?
-    end
-
+    # Public: Are we actively selecting?
+    #
+    # Returns boolean
     def selecting?
-      !(geom.type == :none && geom.click_pos.nil?)
-    end
-
-    # should we show the cursor?
-    def active?
-      !cursor.nil?
+      (geom? && geom.state == :selecting) || (pos? && !pos.cursor_index.nil?)
     end
   end
 end
+
 module Hokusai::Util
   class PieceTable
     attr_accessor :buffer, :buffer_add, :last_piece_index
@@ -5694,50 +5933,119 @@ module Hokusai::Util
   #         Utiltiy methods are provided to quickly fetch a subset of tokens
   #         Based on a given window's coordinates (canvas)
   class WrapCache
-    attr_accessor :tokens
+    attr_accessor :tokens, :diff_y
 
-    # Public: returns range denoting the index of the changed lines
-    #         from 2 different strings.
-    #         NOTE: the change must be consecutive
-    def self.diff(first, second)
-      arr = (0..first.length).to_a
+    def diff(new_content)
+      return nil if tokens.empty? 
+      old_len = tokens.last.positions.last + 1
+      delta = new_content.length - old_len
 
-      v = arr.bsearch do |i|
-        first.rindex(second[0..i]) != 0
+      sidx = 0
+      while sidx < tokens.size
+        t = tokens[sidx]
+        start = t.positions.first
+        break unless new_content[start, t.text.length] == t.text
+        sidx += 1
       end
+      
+      return nil if sidx == tokens.size && delta.zero? # truly identical
 
-      # bounds checks
-      v = first.size if v.nil?
-      v -= 1 if first[v] == "\n"
-
-      a = 0
-      while true
-        if first[v] == "\n"
-          a = v + 1
-          break
-        elsif v.zero?
-          a = v
+      eidx = tokens.size - 1
+      while eidx > sidx
+        t = tokens[eidx]
+        new_start = t.positions.first + delta
+        unless new_start >= 0 && new_content[new_start, t.text.length] == t.text
           break
         end
-        v -= 1
+
+        eidx -= 1
       end
 
-      b = a
-      while true
-        if first[b].nil?
-          b = first.size - 1
-          break
-        elsif first[b] == "\n"
-          break
-        end
-        b += 1
-      end
+      eidx += 1 if delta.negative?
+      eidx = tokens.size - 1 if eidx >= tokens.size
+      sidx = eidx if sidx >= eidx
 
-      a..b
+      old_first = tokens[sidx].positions.first
+      old_last  = tokens[eidx].positions.last + 1
+      new_first = old_first
+      new_last  = old_last + delta
+
+      [sidx, eidx, (old_first...old_last), (new_first...new_last)]
     end
 
+    def splice(stream, new_content, selection: nil)
+      sidx, eidx, oldrange, newrange = diff(new_content)
+      return if sidx.nil? # no change
+
+      new_data = new_content[newrange]
+      old_text_callback = stream.on_text_cb
+      newtokens = []
+      newheight = 0.0
+      diff = newrange.size - oldrange.size
+
+      yold = tokens[sidx].y
+      stream.on_text do |wrapped|
+        unless wrapped.positions.empty?
+          newheight += wrapped.height
+          wrapped.y += yold
+          wrapped.positions.map! { |pos| pos + oldrange.first }
+          newtokens << wrapped
+        end
+      end
+
+      stream.wrap(new_data, nil)
+      stream.flush
+
+      oldheight = tokens[sidx..eidx].reduce(0.0) { |memo, token| memo + token.height }
+      heightdiff = newheight - oldheight #+ tokens.last.height
+
+      tokens[eidx + 1..].each do |token|
+        token.y += heightdiff
+        token.positions.map! { |pos| pos + diff }
+      end
+
+      if newtokens.empty?
+        tokens[sidx..eidx] = nil
+        tokens.reject!(&:nil?)
+      else
+        tokens[sidx..eidx] = newtokens
+      end
+
+      stream.on_text(&old_text_callback)
+      tokens.last.y
+    end
+
+    attr_accessor :offset_pos
+
     def initialize
+      @diff_y = 0.0
       @tokens = []
+    end
+
+    def selected_text(compare, selection)
+      return "" if selection.pos.positions.nil?
+
+      posrange = selection.pos.positions.first..selection.pos.positions.last
+      tokenrange = tokens.first.positions.first..tokens.last.positions.last
+
+      if tokenrange.first > posrange.first
+        min = tokenrange.first
+      else
+        min = posrange.first
+      end
+
+      if tokenrange.last < posrange.last
+        max = tokenrange.last
+      else
+        max = posrange.last
+      end
+
+      range = (min)..(max)
+      if range.begin > range.end
+        range = range.end..range.begin
+      end
+
+      compare[range].dup
     end
 
     # Public: Adds a token
@@ -5746,109 +6054,14 @@ module Hokusai::Util
     # 
     # Returns nothing
     def <<(element)
-      @tokens << element
-    end
-
-    def splice(stream, last_content, new_content, selection: nil)
-      change_line_indicies = WrapCache.diff(last_content, new_content)
-      new_changed_line_indicies = WrapCache.diff(new_content, last_content)
-
-      new_data = new_content[new_changed_line_indicies]
-      old_text_callback = stream.on_text_cb
-      records = []
-      # the height of the new records
-      records_height = 0.0
-
-      stream.on_text do |wrapped|
-        unless wrapped.positions.empty?
-          records_height += wrapped.height
-          wrapped.positions.map! do |pos|
-            pos + change_line_indicies.begin
-          end
-          records << wrapped
-        end
-      end
-
-      stream.wrap(new_data, nil)
-      stream.flush
-
-      # puts ["original.tokens.last.y", tokens.last.y].inspect
-
-      # splice in new tokens
-      #
-      # update the new positions
-      # NOTE: still need to udpate the y positions with the 
-      # records.each do |record|
-      #   records_height += record.height
-      #   record.positions.map! do |pos|
-      #     pos + change_line_indicies.begin
-      #   end
-      # end
-
-      diff_pos = (new_changed_line_indicies.end - change_line_indicies.end)
-      new_tokens = []
-      found = false
-      last_token = nil
-      new_last_tokens_height = 0.0
-      last_tokens_height = 0.0
-      insert_index = 0
-
-      while token = tokens.shift
-        next if token.positions.empty?
-        if token.range.begin >= change_line_indicies.begin && token.range.end <= change_line_indicies.end
-          # this is a match
-          # we want to remove these tokens from the list...and then sub in our new tokens.
-          last_token = token
-          last_tokens_height += token.height
-          found = true
-          next
-        end
-
-        if found
-          token.y += (records_height - last_tokens_height)
-
-          token.positions.map! do |pos|
-            pos + diff_pos
-          end
-        else
-          insert_index += 1
-          new_last_tokens_height += token.height
-        end
-
-        new_tokens << token
-      end
-
-      records.each do |record|
-        record.y += new_last_tokens_height
-      end
-
-      # puts ["insert", records.first.y, records.map(&:height).sum, insert_index, new_last_tokens_height].inspect
-
-      new_tokens.insert(insert_index, *records)
-      self.tokens = new_tokens
-      
-
-      # i = 0
-      # tokens.each do |token|
-      #   # puts ["token", token].inspect
-      #   token.positions.each do |n|
-      #     if n != i
-      #       puts ["Mismatch token", token, i, n].inspect
-      #     end
-
-      #     i += 1
-      #   end
-      # end
-
-      # restore callback
-      stream.on_text(&old_text_callback)
-      # return y
-      tokens.last.y + tokens.last.height
+      @tokens << element unless element.positions.empty?
     end
 
     def bsearch(canvas)
       low = 0
       high = tokens.size - 1
+
+      return 0 if high.zero?
 
       while low <= high
         mid = low + (high - low) / 2
@@ -5857,11 +6070,11 @@ module Hokusai::Util
           return mid
         end
 
-        if tokens[mid].y > canvas.y
+        if tokens[mid].y + diff_y > canvas.y
           high = mid - 1
         end
 
-        if tokens[mid].y < canvas.y
+        if tokens[mid].y + diff_y < canvas.y
           low = mid + 1
         end
       end
@@ -5870,58 +6083,150 @@ module Hokusai::Util
     end
 
     def matches(wrapped, canvas)
-      wrapped.y >= canvas.y && wrapped.y <= canvas.y + canvas.height
+      wrapped.y + diff_y >= canvas.y && wrapped.y + diff_y <= canvas.y + canvas.height
     end
 
-    # Public: Gets the area coordinates for a selection
-    #         to draw a text selection background.
-    # 
-    # tokens - the result of WrapCache#tokens_for
-    # selector - a [Hokusai::Util::Selection](/api/Hokusai/Util/Selection) object
-    # options - kwargs options
-    #           copy - boolean to copy selected tokens
-    #           padding - a Hokusai::Padding object
-    #           
-    # Returns Hokusai::Util::WrapCachePayload
-    def selected_area_for_tokens(tokens, selector, copy: false, padding: Hokusai::Padding.default)
-      return if selector.nil? || !selector.selecting?
+    # Public: Populate the selection positions from geometry and yield selection areas
+    #
+    # target_tokens - an Array(Hokusai::Util::Wrapped)
+    # selector - a Hokusai::Util::Selection
+    # block - a callback which takes a param of Hokusai::Rect
+    #
+    # Returns nothing
+    def selected_area_for_tokens(target_tokens, selector, padding: Hokusai::Padding.default)
+      return if selector.nil? || !selector.selecting? || target_tokens.size.zero?
 
-      copy_buffer = ""
       x = nil
       tw = 0.0
       cy = nil
-      position_buffer = []
       cursor = nil
       pcursor = nil
+      lcursor = nil
+      lpcursor = nil
+      position_buffer = nil
+      required_range = target_tokens.first.positions.first..target_tokens.last.positions.last
 
-      tokens.each do |token|
+      # each token should represent a wrapped line of text
+      # each token has a array of widths that repesent each char width in that line
+      if selector.action == :all
+        selector.pos.positions = tokens.first.positions.first..tokens.last.positions.last
+        selector.pos.cursor_index = tokens.last.positions.last
+        selector.action = :collect
+        return
+      end
+
+      tokens.each_with_index do |token, ti|
+        next unless required_range.cover?(token.positions.first..token.positions.last) || selector.action == :collect || (required_range.include?(token.positions.first) && required_range.include?(token.positions.last))
+
+        if (selector.action == :up || selector.action == :down) && (token.positions.first..token.positions.last).include?(selector.pos.cursor_index)
+          selector.column ||= token.positions.index(selector.pos.cursor_index)
+
+          case selector.action
+          when :up
+            if ntoken = ti > 0 && tokens[ti  - 1]
+              ci = ntoken.positions[selector.column] || ntoken.positions.last
+              selector.pos.concat (ci..selector.pos.cursor_index)
+              selector.pos.cursor_index = ci
+              selector.geom.move_up(token.height)
+            end
+          when :down
+            if ntoken = tokens[ti + 1]
+              ci = ntoken.positions[selector.column] || ntoken.positions.last
+              selector.pos.concat (selector.pos.cursor_index..ci)
+              selector.pos.cursor_index = ci
+              selector.geom.move_down(token.height)
+            end
+          end
+
+          selector.action = nil
+          return
+        end
+
         tx = token.x + padding.left
-        ty = token.y + padding.top
+        ty = token.y + padding.top + diff_y
 
         if token.y != cy
           x = nil
           cy = token.y
           tw = 0.0
         end
-
+        
         token.widths.each_with_index do |w, i|
-          by = selector.geom.frozen? ? ty : ty - selector.offset_y
-          sy = ty
+          if selector.pos.cursor_index
+            case selector.action
+            when :word
+              if (selector.pos.cursor_index == token.positions[i])
+                min = i
+                max = i
 
-          if (selector.geom? && selector.geom.selected(tx, by, w, token.height))
-            if (selector.geom.left? || selector.geom.up?)
-              cursor ||= [tx, sy, 0.5, token.height]
+                loop do
+                  # go backward until word boundary
+                  break if min <= 0
+                  break if token.text[min - 1].nil?
+                  break if token.text[min - 1] =~ /[^A-Za-z0-9]/
+                  min -= 1
+                end
+
+                loop do
+                  break if token.text[max + 1].nil?
+                  break if token.text[max + 1] =~ /[^A-Za-z0-9]/
+                  max += 1
+                end
+
+                position_buffer = token.positions[min]..token.positions[max]
+                ay = cy + padding.top - selector.offset_y
+                sumx = token.x + padding.left
+                if min > 1
+                  sumx += token.widths[0...min].reduce(&:+)
+                end
+                sumwidth = token.widths[min..max].reduce(&:+)
+
+                yield Hokusai::Rect.new(sumx, ay, sumwidth, token.height)
+
+                # selector.pos!
+                selector.pos.cursor_index = token.positions[max]
+                selector.cursor = [sumx + sumwidth, cy + padding.top, 0.5, token.height]
+                selector.geom.click_pos = nil
+                selector.pos.positions = position_buffer.first..position_buffer.last if position_buffer 
+                selector.pos.freeze!
+                selector.action = nil
+                return
+              end
+            when :line
+              if selector.pos.cursor_index == token.positions[i] #|| selector.geom? && selector.geom.clicked(tx, by, (w / 2), token.height)
+                # line selected
+                position_buffer = token.positions.first..token.positions.last
+                ay = cy + padding.top - selector.offset_y
+                sum = token.widths.sum
+                yield Hokusai::Rect.new(token.x + padding.left, ay, sum, token.height)
+
+                # selector.pos!
+                selector.pos.cursor_index = token.positions.last
+                selector.cursor = [token.x + padding.left + sum, cy + padding.top, 0.5, token.height]
+                selector.pos.positions = position_buffer.first..position_buffer.last if position_buffer
+                selector.geom.click_pos = nil
+                selector.pos.freeze!
+                selector.action = nil
+                return
+              end
+            end
+          end
+
+          # if we are currently selecting by geometry, we need to populate the widths
+          # cursor, and cursor_index, so that we can switch over.
+          if selector.geom? && selector.geom.selected(tx, ty, w, token.height)
+            if (selector.geom.up?)
+              cursor ||= [tx, ty, 0.5, token.height]
               pcursor ||= token.positions[i]
             else
-              # puts ["set selection cursor: #{sy}"]
-              cursor = [tx + w, sy, 0.5, token.height]
+              cursor = [tx + w, ty, 0.5, token.height]
               pcursor = token.positions[i]
             end
 
-            position_buffer << token.positions[i]
-
-            if copy
-              copy_buffer += token.text[i]
+            if position_buffer.nil? 
+              position_buffer = token.positions[i]..token.positions[i]
+            else
+              position_buffer = position_buffer.first..token.positions[i]
             end
 
             if x.nil?
@@ -5929,23 +6234,24 @@ module Hokusai::Util
             end
 
             tw += w
+          # we are now selecting by position.
           elsif selector.pos? && selector.pos.selected(token.positions[i])
-            # puts ["pos 1"]
             if selector.pos.cursor_index == selector.pos.positions.first
-              cursor ||= [tx, sy, 0.5, token.height]
+              cursor ||= [tx, ty, 0.5, token.height]
               pcursor ||= token.positions[i]
             elsif selector.pos.cursor_index == selector.pos.positions.last
-              cursor = [tx + w, sy, 0.5, token.height]
+              cursor = [tx + w, ty, 0.5, token.height]
               pcursor = token.positions[i]
+
             elsif selector.pos.cursor_index + 1 == token.positions[i]
-              cursor = [tx, sy, 0.5, token.height]
+              cursor = [tx, ty, 0.5, token.height]
               pcursor = token.positions[i] - 1
             end
 
-            position_buffer << token.positions[i]
-
-            if copy
-              copy_buffer += token.text[i]
+            if position_buffer.nil? 
+              position_buffer = token.positions[i]..token.positions[i]
+            else
+              position_buffer = position_buffer.first..token.positions[i]
             end
 
             if x.nil?
@@ -5954,49 +6260,63 @@ module Hokusai::Util
 
             tw += w
 
-          # [0, [0]]
+          # cursor handling when there is no selection
           elsif selector.pos? && selector.pos.cursor_index && selector.pos.cursor_index + 1 == token.positions[i]
-            # puts "pos 2"
-            cursor = [tx, sy, 0.5, token.height]
-            pcursor = token.positions[i] - 1
-            # position_buffer = selector.pos.positions
-
-            # if copy
-            #   copy_buffer += token.text[i]
-            # end
-
-          elsif selector.pos? && selector.pos.cursor_index && selector.pos.cursor_index == token.positions[i]
-            # puts "pos 3"
-            cursor = [tx + w, sy, 0.5, token.height]
+            cursor = [tx, ty, 0.5, token.height]
             pcursor = selector.pos.cursor_index
-            # position_buffer = selector.pos.positions
-          elsif selector.geom? && selector.geom.clicked(tx, by, (w / 2), token.height)
-            cursor = [tx, sy, 0.5, token.height]
-            pcursor = token.positions[i] - 1
-            # puts "setting cursor #{sy}"
-
-          elsif selector.geom? && selector.geom.clicked(tx + (w/2.0), by, (w/2.0), token.height)
-            # puts "geom click 2"
-            cursor = [tx + w, sy, 0.5, token.height]
+          elsif selector.pos? && selector.pos.cursor_index && selector.pos.cursor_index - 1 == token.positions[i]
+            cursor = [tx + w, ty, 0.5, token.height]
+            pcursor = selector.pos.cursor_index
+          elsif selector.pos? && selector.pos.cursor_index && selector.pos.cursor_index == token.positions[i]
+            if token.text[i] == "\n"
+              cursor = [token.x + padding.left, ty + token.height, 0.5, token.height]
+            else
+              cursor = [tx + w, ty, 0.5, token.height]
+            end
+            pcursor = selector.pos.cursor_index
+            #selector.pos.offset += 1
+          elsif selector.geom? && selector.pos.cursor_index.nil? && selector.geom.clicked(tx + (w/2.0), ty, (w/2.0), token.height)
+            cursor ||= [tx + w, ty, 0.5, token.height]
             pcursor = token.positions[i]
+          elsif selector.geom? && selector.pos.cursor_index.nil? && selector.geom.clicked(tx, ty, (w / 2), token.height)
+            cursor ||= [tx, ty, 0.5, token.height]
+            if token.positions[i]
+              pcursor ||= token.positions[i] - 1
+            else
+              pcursor ||= token.positions[i]
+            end
+          elsif selector.geom? && selector.pos.cursor_index.nil? && selector.pos.positions.nil? && selector.geom.clicked_on_line(token.x, ty, token.width, token.height)
+            pcursor = token.positions[i].zero? ? 0 : token.positions[i]
+            cursor = [tx, ty + w, 0.5, token.height]
+          else
+            lpcursor = token.positions[i]
+            lcursor = [tx, ty + w, 0.5, token.height]
           end
-          
+
+          # move the current x forward
           tx += w
         end
-
+        
         if !x.nil?
-          ay = cy + padding.top - selector.offset_y
+          # if we have a selection, yield it.
+          ay = cy + padding.top - selector.offset_y + diff_y
           yield Hokusai::Rect.new(x, ay, tw, token.height)
 
           tw = 0.0
+          x = nil
         end
       end
 
-      selector.pos.cursor_index = pcursor
-      selector.pos.positions = position_buffer
-      selector.geom.cursor = cursor
+      # we have cursors
+      if pcursor
+        selector.pos.cursor_index = pcursor unless selector.pos.frozen?
+        selector.cursor = cursor
+      end
 
-      WrapCachePayload.new(copy_buffer, position_buffer, pcursor)
+      # we have a position array
+      if !position_buffer.nil? && !selector.pos.frozen?
+        selector.pos.concat position_buffer 
+      end
     end
 
     # Public: Get cached tokens for a given Hokusai::Canvas
@@ -6006,7 +6326,9 @@ module Hokusai::Util
     # Return Array(Hokusai::Util::Wrapped)
     def tokens_for(canvas)
       index = bsearch(canvas)
+
       return [] if index.nil?
+  
       lindex = index.zero? ? index : index - 1
       rindex = index + 1
 
@@ -6053,7 +6375,9 @@ module Hokusai::Util
   #   stream.y
   #
   class WrapStream
-    attr_accessor :buffer, :x, :y, :origin_y, :current_width, :stack, :widths, :current_position, :positions, :on_text_cb
+    attr_accessor :buffer, :x, :y, :origin_y, :current_width, :stack, 
+                  :widths, :offset_pos, :current_position, :positions, 
+                  :last_size, :on_text_cb
     attr_reader :width, :origin_x, :on_text_cb
 
     # Public: constructor for WrapStream
@@ -6062,7 +6386,7 @@ module Hokusai::Util
     # origin_x - where the x value starts (default: 0.0)
     # origin_y - where the y value starts (default: 0.0)
     # block - a callback to measure a given string.  Callback must return an array containing the width and height of the string
-    def initialize(width, origin_x = 0.0, origin_y = 0.0, &measure)
+    def initialize(width, origin_x = 0.0, origin_y = 0.0, origin_offset = 0, &measure)
       @width = width            # the width of the container for this wrap
       @measure_cb = measure     # a measure callback that returns the width/height of a given char (takes 2 params: a char and an token payload)
       @on_text_cb = ->(_) {}    # a callback that receives a wrapped token for a given line.  (takes a Hokusai::Util::Wrapped paramter)
@@ -6074,9 +6398,12 @@ module Hokusai::Util
       @stack = []               # a stack storing buffer offsets with their respective token payloads.
       @buffer = ""              # the current buffer that the stack represents.
       
+      @offset_pos = origin_offset
       @current_position = 0     # the current char index
       @positions = []           # a stack of char positions, used for editing
       @widths = []              # a stack of char widths, used later in selection
+
+      @last_size = 0.0
     end
 
     NEW_LINE_REGEX = /\n/
@@ -6099,7 +6426,7 @@ module Hokusai::Util
       # char-by-char processing.
       while offset < size
         char = text[offset]
-        self.current_position = offset
+        self.current_position = offset_pos
 
         w, h = measure(char, extra)
 
@@ -6115,6 +6442,7 @@ module Hokusai::Util
           self.y += h
           self.x = origin_x
           offset += 1
+          self.offset_pos += 1
 
           next
         end
@@ -6192,7 +6520,7 @@ module Hokusai::Util
             self.buffer = text[offset]
             self.widths = [w]
             self.positions = [current_position]
-            stack << [(0...(text.size - offset)), xtra]
+            stack << [(0...(text.size - offset)), extra]
           end
         # append this char does NOT extend beyond the width
         else
@@ -6203,6 +6531,7 @@ module Hokusai::Util
         end
 
         offset += 1
+        self.offset_pos += 1
       end
     end
 
@@ -6213,9 +6542,10 @@ module Hokusai::Util
         size = content.size
         content_width, content_height = measure(content, extra)
 
-        wrap_and_call(content, content_width, content_height, extra)
+        wrap_and_call(content, content_width, content_height, extra, widths[range], positions[range])
         self.x += content_width
       end
+
 
       self.buffer = ""
       self.current_width = 0.0
@@ -6236,9 +6566,9 @@ module Hokusai::Util
 
     private
 
-    def wrap_and_call(text, width, height, extra)
+    def wrap_and_call(text, width, height, extra, item_widths, item_positions)
       rect = Hokusai::Rect.new(x, y, width, height)
-      @on_text_cb.call Wrapped.new(text.dup, rect, extra, widths: widths.dup, positions: positions.dup)
+      @on_text_cb.call Wrapped.new(text.dup, rect, extra, widths: item_widths.dup, positions: item_positions.dup)
     end
 
     def measure(string, extra)
@@ -6247,6 +6577,42 @@ module Hokusai::Util
   end
 end
 
+module Hokusai::Util
+  # Public:  A timer utility to test for passed time.
+  #          Useful for debounce operations or animations
+  #
+  # Examples
+  #
+  #   timer = Hokusai::Util::Timer.new
+  #   timer.elapsed(1.0) # false
+  #   Hokusai.sleep(1.2)
+  #   timer.elapsed(1.0) # true
+  #   timer.reset
+  #
+  class Timer
+    attr_accessor :start
+
+    def initialize
+      @start = Hokusai.monotonic
+    end
+
+    # Public: Check for elapsed time
+    #
+    # seconds - Number of seconds to check for (Integer)
+    #
+    # Returns boolean
+    def elapsed(seconds)
+      Hokusai.monotonic - @start > seconds
+    end
+
+    # Public: Reset the timer
+    #
+    # Returns nothing
+    def reset
+      @start = Hokusai.monotonic
+    end
+  end
+end
 # Flags to pass to Hokusai::Backend::Config
 # Example:
 # ```ruby
@@ -6442,11 +6808,12 @@ module Hokusai
       attr_accessor :voice_accessibility_hot_key
 
       # Public: Accessor to set accessibility hot key type (default: toggle)
+      #         Note: Only :toggle is currently supported.
       #
       # value - one of the following symbols :toggle | :hold
       attr_accessor :voice_accessibility_hot_key_type
 
-      # Public: Accessor to set any hot key modifiers
+      # Public: Accessor to set any hot key modifiers. (Not implemented)
       # 
       # value - an array containing one or more of the following values (:control, :shift, :super, :alt)
       attr_accessor :voice_accessibility_hot_key_modifiers
@@ -6484,6 +6851,16 @@ module Hokusai
       #         Automatically sets voice and audio to `true`
       #    
       # block - a callback to set the following props [:model_path, :hot_key, :hot_key_type, :hot_key_modifiers]
+      # 
+      # Examples
+      #   
+      #   Hokusai::Backend.run(App) do |config|
+      #     config.accessibility do |aconig|
+      #       aconfig.model_path = "assets/models/ggml-tiny.bin"
+      #       aconfig.hot_key = :space
+      #     end
+      #   end
+      #
       def accessibility(&block)
         config = Struct.new('AccessibilityConfig', :model_path, :hot_key, :hot_key_type, :hot_key_modifiers).new
         block.call(config)
@@ -6590,38 +6967,7 @@ end
 
 
 module Hokusai
-  # hp top
-  # hp next
-  # hp down
-  # hp focus
-  # hp help
-  # hp focus
-
-  # Public: Accessibilty api class
-  # 
-  # Example
-  # 
-  # register_voice do |voice|
-  #   voice.description "Echo"
-  #   voice.focus = /.*/
-  #   #
-  #   voice.build_action :echo do |action|
-  #     action.trigger = /echo/
-  #     action.description "Echos your speech back"
-  #     action.build_param :speech do |param|
-  #       param.description = "The text to echo back"
-  #       param.type = :string
-  #       param.match = /.*/
-  #     end
-  #   end
-  #   #
-  #   voice.on_action do |action|
-  #     case action.type
-  #     when :echo
-  #       Hokusai.speak(action.value)
-  #     end
-  #   end
-  # end
+  # Internal: Accessibilty api class
   class Voice
     def self.walk(block)
       stack = [block]
@@ -6633,34 +6979,6 @@ module Hokusai
         stack.concat block.children
       end
     end
-
-    # def self.tree(block)
-    #   @tree ||= begin
-    #     tree_stack = [root]
-    #     stack = [[block, block.children]]
-
-    #     while group = stack.pop
-    #       if group == :break
-    #         tree_stack.pop
-    #         next
-    #       end
-
-    #       parent, children = group
-
-    #       if !!parent.class.voice
-    #         tree_stack.last.children << parent.class.voice
-    #         tree_stack << parent.class.voice
-    #         stack << :break
-    #       end
-
-    #       children.each do |child|
-    #         stack << [child, child.children]
-    #       end
-    #     end
-
-    #     root
-    #   end
-    # end
 
     def self.map
       @map ||= {}
@@ -6745,6 +7063,31 @@ module Hokusai
   end
 
   class Block
+    # Public: An experimental DSL for handling voice commands
+    # 
+    # Examples
+    # 
+    #   register_voice "some-component" do
+    #     # This block listens for the word 'zoom'
+    #     voice.build_action "zoom" do |builder|
+    #       builder.description do
+    #         "say zoom in or zoom out to zoom"
+    #       end
+    #       # when 'zoom' is matched, the callback will be invoked with
+    #       # the full string
+    #       builder.on_match do |str|
+    #         case str
+    #         when /in/
+    #           control.set_zoom(control.zoom + 20)
+    #         when /out/
+    #           control.set_zoom(control.zoom - 20)
+    #         end
+    #         # on_match should return a string that will be spoken through TTS
+    #         "Zoom at #{control.zoom} percent"
+    #       end
+    #     end
+    #   end
+    #   
     def self.register_voice(prefix, &block)
       api = Voice.new(prefix)
       block.call(api)
@@ -7106,6 +7449,7 @@ class Hokusai::Blocks::Checkbox < Hokusai::Block
   end
 end
 
+
 # Public: Starts a clipping region with everything
 #         inside being clipped to the canvas dimensions
 #         Last child should be [Hokusai::Blocks::ScissorEnd](/api/Hokusai/Blocks/ScissorEnd)
@@ -7125,20 +7469,27 @@ class Hokusai::Blocks::ScissorBegin < Hokusai::Block
     slot
   EOF
 
+  inject :panel_top
+  inject :panel_offset
   computed :offset, default: 0.0, convert: proc(&:to_f)
   computed :auto, default: true
+
+  def off
+    panel_offset || offset
+  end
 
   def render(canvas)
     draw do
       scissor_begin(canvas.x, canvas.y, canvas.width, canvas.height)
     end
 
-    canvas.y -= offset if auto
-    canvas.offset_y = offset
+    canvas.y -= off.dup if auto
+    canvas.offset_y = off
 
     yield canvas
   end
 end
+
 # Public: Stops clipping region
 class Hokusai::Blocks::ScissorEnd < Hokusai::Block
   template <<~EOF
@@ -7192,11 +7543,9 @@ class Hokusai::Blocks::Cursor < Hokusai::Block
   computed :y, default: 0.0
   computed :show, default: false
   computed :speed, default: 0.5
-  computed :cursor_width, default: 2.0
+  computed :cursor_width, default: 5.0
   computed :cursor_height, default: 0.0
   computed :color, default: DEFAULT_COLOR, convert: Hokusai::Color
-
-  inject :selection
 
   def initialize(**args)
     @active = false
@@ -7217,13 +7566,11 @@ class Hokusai::Blocks::Cursor < Hokusai::Block
     end
   end
 
-  def render(canvas)
-    diff = selection&.diff || 0.0
-    
+  def render(canvas)  
     if show
       draw do
         if @active
-          rect(x, y + diff, cursor_width, cursor_height) do |command|
+          rect(x, y, cursor_width, cursor_height) do |command|
             command.color = color
           end
         end
@@ -7233,6 +7580,7 @@ class Hokusai::Blocks::Cursor < Hokusai::Block
     yield canvas
   end
 end
+
 # Public: Renders an image in Hokusai.images
 class Hokusai::Blocks::Image < Hokusai::Block
   template <<~EOF
@@ -7323,7 +7671,7 @@ class Hokusai::Blocks::Scrollbar < Hokusai::Block
     [template]
       vblock.scrollbar {
         ...scrollbar
-        @mousedown="scroll_start"
+        @click="scroll_start"
         @mousemove="scroll_handle"
         :background="background"
       }
@@ -7357,6 +7705,10 @@ class Hokusai::Blocks::Scrollbar < Hokusai::Block
   computed :control_padding, default: 2.0, convert: proc(&:to_f)
 
   attr_accessor :scroll_y, :scrolling, :height, :offset
+
+  def stop(event)
+    event.stop
+  end
 
   def scroll_start(event)
     self.scrolling = true
@@ -7426,6 +7778,7 @@ class Hokusai::Blocks::Scrollbar < Hokusai::Block
     yield(canvas)
   end
 end
+
 # Public: Measures it's children and emits the width and height
 class Hokusai::Blocks::Dynamic < Hokusai::Block
   template <<~EOF
@@ -7434,6 +7787,7 @@ class Hokusai::Blocks::Dynamic < Hokusai::Block
   EOF
 
   computed :reverse, default: false
+  computed :vertical, default: true
 
   def before_updated
     width, height = compute_size
@@ -7453,9 +7807,17 @@ class Hokusai::Blocks::Dynamic < Hokusai::Block
     h = 0.0
     w = 0.0
 
-    children.each do |block|
-      h += block.node.meta.get_prop?(:height)&.to_f || 0.0
-      w += block.node.meta.get_prop?(:width)&.to_f || 0.0
+    if vertical
+      children.each do |block|
+        h += block.node.meta.get_prop?(:height)&.to_f || 0.0
+        w += block.node.meta.get_prop?(:width)&.to_f || 0.0
+      end
+    else
+      h = children.map {|block| block.node.meta.get_prop?(:height)&.to_f || 0.0 }.max
+    end
+
+    if @last && h < @last.height
+      h = @last.height
     end
 
     node.meta.set_prop(:height, h)
@@ -7464,8 +7826,9 @@ class Hokusai::Blocks::Dynamic < Hokusai::Block
   end
 
   def render(canvas)
-    canvas.vertical = true
+    canvas.vertical = vertical
     canvas.reverse = (reverse == true || reverse == "true")
+    @last = canvas
 
     yield canvas
   end
@@ -7477,6 +7840,10 @@ class Hokusai::Blocks::Panel < Hokusai::Block
       hblock {
         :background="background"
         @wheel="wheel_handle"
+        @click="drag_start"
+        @mousemove="drag_update"
+        @mouseup="drag_stop"
+        @keypress="on_keypress"
       }
         clipped { :auto="autoclip" :offset="offset" }
           dynamic { @size_updated="set_size" }
@@ -7500,24 +7867,26 @@ class Hokusai::Blocks::Panel < Hokusai::Block
     scrollbar: Hokusai::Blocks::Scrollbar
   )
 
-  # computed :padding, default: [0, 0, 0, 0], convert: Hokusai::Padding
   computed :align, default: "top", convert: proc(&:to_s)
   computed :scroll_goto, default: nil
+  computed :scroll_wheel_speed, default: 10.0, convert: proc(&:to_f)
   computed :scroll_width, default: 14.0, convert: proc(&:to_f)
   computed :scroll_background, default: nil, convert: Hokusai::Color
   computed :scroll_color, default: nil, convert: Hokusai::Color
+  computed :scroll_page_buffer, default: 2.0, convert: proc(&:to_f)
   computed :background, default: nil, convert: Hokusai::Color
   computed :autoclip, default: true
+  computed :autoscroll, default: true
 
-  provide :panel_offset, :offset
+  provide :panel_offset, :display_offset
   provide :panel_content_height, :content_height
   provide :panel_height, :panel_height
   provide :panel_top, :panel_top
-
-  inject :selection
+  provide :panel_control, :panel_control
+  provide :panel_autoclip, :autoclip
 
   attr_accessor :top, :panel_height, :scroll_y, :scroll_percent,
-                :scroll_goto_y, :clipped_offset, :clipped_content_height
+                :scroll_goto_y, :clipped_offset, :clipped_content_height, :display_offset
 
   def initialize(**args)
     @top = nil
@@ -7527,48 +7896,137 @@ class Hokusai::Blocks::Panel < Hokusai::Block
     @scroll_goto_y = nil
     @clipped_offset = 0.0
     @clipped_content_height = 0.0
-
+    @display_offset = 0.0
+    
     super
   end
 
-  def local_percent_scrolled(y)
-    return 0 if y === 0
-
-    a = y / (panel_height - scroll_control_height)
+  def panel_control
+    self
+  end
   
-    if a < 0.0
-      0.0
-    elsif a > 1.0
-      1.0
-    else
-      a
+  def on_keypress(event)
+    return unless [:home, :end, :page_up, :page_down].include?(event.symbol)
+
+    case event.symbol
+    when :home
+      self.scroll_y = 0.0
+    when :end
+      self.scroll_y = panel_height - scroll_control_height
+    when :page_up
+      if scroll_y > scroll_control_height
+        self.scroll_y -= (scroll_control_height - scroll_page_buffer)
+      else
+        self.scroll_y = 0.0
+      end
+    when :page_down
+      if scroll_y < panel_height
+        
+        self.scroll_y += (scroll_control_height - scroll_page_buffer)
+      else
+        self.scroll_y = panel_height
+      end
     end
+
+    self.scroll_goto_y = scroll_y
+    self.scroll_percent = local_percent_scrolled
+  end
+
+  def drag_start(event)
+    return unless autoscroll
+
+    if event.left.down && !@dragging
+      @dragging = true
+    end
+  end
+
+  def drag_update(event)
+    return unless autoscroll
+
+    if @dragging && event.left.down && (event.pos.y < panel_top || event.pos.y > panel_top + panel_height)
+      if event.pos.y < panel_top
+        self.scroll_y -= scroll_wheel_speed
+      else
+        self.scroll_y += scroll_wheel_speed
+      end
+      self.scroll_goto_y = scroll_y
+      self.scroll_percent = local_percent_scrolled
+    end
+  end
+
+  def drag_stop(event)
+    return unless autoscroll
+    if event.left.up
+      @dragging = false
+    end
+  end
+
+  def on_resize(canvas)
+    # transpose scroll_y to new position
+    self.scroll_goto_y = panel_height * scroll_y / canvas.height
+    self.top = canvas.y
+    self.panel_height = canvas.height
+  end
+
+  def scroll_top_height
+    start = scroll_y
+    control_middle = (scroll_control_height / 2)
+
+    if start <= panel_top 
+      return 0.0
+    elsif start <= panel_top + control_middle
+      return scroll_y
+    elsif start >= panel_top + panel_height
+      return panel_height - scroll_control_height
+    elsif start >= panel_top + panel_height - control_middle
+      return panel_height
+    else
+      return scroll_y - panel_top
+    end
+
+    0.0
+  end
+
+  def local_percent_scrolled
+    return 0.0 if scroll_top_height.zero?
+
+    if scroll_top_height + scroll_control_height >= panel_height
+      return 1.0
+    end
+
+    scroll_top_height / (panel_height - scroll_control_height)
   end
 
   def wheel_handle(event)
     @wheel = true
+
     return if clipped_content_height <= panel_height
 
-    new_scroll_y = scroll_y + event.scroll * 20
+    new_scroll_y = scroll_y + (event.scroll * (scroll_wheel_speed))
 
     if y = top
       # percent is 0.0
-      if new_scroll_y < y
+      if new_scroll_y < panel_top
         self.scroll_y = y
         self.scroll_percent = 0.0
         self.scroll_goto_y = y
       # percent is 1.0
-      elsif new_scroll_y - top >= panel_height
-        if scroll_percent != 1.0
-          self.scroll_y = panel_height
-          self.scroll_goto_y = panel_height
-          self.scroll_percent = 1.0
-        end
+      elsif event.scroll > 0.0 && new_scroll_y + scroll_control_height >= panel_top + panel_height
+        self.scroll_y = panel_top + panel_height
+        self.scroll_goto_y = panel_top + panel_height
+        self.scroll_percent = 1.0
+      elsif new_scroll_y >= panel_top + panel_height
+        self.scroll_y = panel_top + panel_height
+        self.scroll_goto_y = panel_top + panel_height
+        self.scroll_percent = 1.0
+      elsif event.scroll <= 0.0 && new_scroll_y > panel_top + panel_height - scroll_control_height && new_scroll_y > (panel_height / 2.0)
+        self.scroll_goto_y = panel_top + panel_height - scroll_control_height
+        self.scroll_y = panel_top + panel_height - scroll_control_height
+        self.scroll_percent = local_percent_scrolled
       else
-        # percent is in between
-        self.scroll_goto_y = new_scroll_y
+        self.scroll_goto_y = new_scroll_y 
         self.scroll_y = new_scroll_y
-        self.scroll_percent = local_percent_scrolled(new_scroll_y)
+        self.scroll_percent = local_percent_scrolled
       end
     end
   end
@@ -7578,9 +8036,11 @@ class Hokusai::Blocks::Panel < Hokusai::Block
   end
 
   def set_size(_, height)
-    if panel_height != clipped_content_height || clipped_content_height.zero?
+    if height < panel_height
+      self.clipped_content_height = panel_height
+    else
+    # if panel_height != clipped_content_height || clipped_content_height.zero? || (height > clipped_content_height || height > 0)
       self.clipped_content_height = height
-      # self.scroll_goto_y = self.scroll_y unless scroll_y == top
     end
   end
 
@@ -7607,7 +8067,6 @@ class Hokusai::Blocks::Panel < Hokusai::Block
     end
 
     self.scroll_goto_y = nil
-    # todo handle selection
 
     emit("scroll", y, percent: percent)
   end
@@ -7624,344 +8083,504 @@ class Hokusai::Blocks::Panel < Hokusai::Block
   end
 
   def render(canvas)
-    self.top = canvas.y
+    self.top ||= canvas.y
     self.panel_height = canvas.height
+
+    target = offset
+    self.display_offset += (target - display_offset) * 0.5
 
     yield canvas
   end
 end
 
-module Hokusai::Blocks
-  # Public: A text rendering component
-  class Text < Hokusai::Block
-    template <<-EOF
-    [template]
-      virtual
-    EOF
+# Public: A text rendering component
+module Hokusai
+  module Blocks
+    class Text < Hokusai::Block
+      template <<-EOF
+      [template]
+        virtual
+      EOF
 
-    computed! :content
-    computed :static, default: false
-    computed :font, default: nil
-    computed :size, default: 20, convert: proc(&:to_i)
-    computed :color, default: [22, 22, 22], convert: Hokusai::Color
-    computed :padding, default: [0.0, 0.0, 0.0, 0.0], convert: Hokusai::Padding
-    computed :selection_color, default: [183, 201, 229], convert: Hokusai::Color
-    computed :selection_color_to, default: [183, 225, 229], convert: Hokusai::Color
-    computed :animate_selection, default: true
-    computed :copy_text, default: false
-    
-    inject :panel_offset
-    inject :panel_height
-    inject :panel_top
-    inject :selection
-  
-    attr_accessor :counter, :copying
+      uses(empty: Hokusai::Blocks::Empty)
 
-    def initialize(**args)
-      @counter = 0
-      @last_content = nil
-      @copying = false
-      @progress = 0
-      
-      super
-    end
+      computed! :content
+      computed :static, default: false
+      computed :font, default: nil
+      computed :size, default: 20, convert: proc(&:to_i)
+      computed :color, default: [22, 22, 22], convert: Hokusai::Color
+      computed :padding, default: [0.0, 0.0, 0.0, 0.0], convert: Hokusai::Padding
+      computed :selection_color, default: [183, 201, 229], convert: Hokusai::Color
+      computed :selection_color_to, default: [183, 225, 229], convert: Hokusai::Color
+      computed :animate_selection, default: true
+      computed :copy_text, default: false
+      computed :min_height, default: nil
+      computed :max_height, default: nil
 
-    def on_resize(canvas)
-      @counter = 0
-      @cache = nil
-      @last_content = nil
+      inject :panel_offset
+      inject :panel_height
+      inject :panel_top
+      inject :panel_autoclip
+      inject :selection
 
-      if selection
-        selection.geom.cursor = nil
+      attr_accessor :counter, :copying, :last_width
+
+      def initialize(**args)
+        @counter = 0
+        @last_width = 0.0
+        @last_content = nil
+        @copying = false
+        @progress = 0
+        
+        super
       end
-    end
 
-    def panel?
-      !panel_offset.nil?
-    end
+      def on_resize(canvas)
+        @counter = 0
+        @cache = nil
+        @last_content = nil
+        @last_width = 0.0
 
-    def user_font
-      font ? Hokusai.fonts.get(font) : Hokusai.fonts.active
-    end
+        if selection
+          p ["resize"]
+          selection.cursor = nil
+        end
+      end
 
-    def top(canvas)
-      canvas.y + (panel_offset || 0.0) + padding.top
-    end
+      def panel?
+        !panel_offset.nil?
+      end
 
-    def panel_height_or_canvas_height(canvas)
-      panel_height || canvas.height
-    end
+      def user_font
+        font ? Hokusai.fonts.get(font) : Hokusai.fonts.active
+      end
 
-    def cache(canvas)
-      return @cache if counter >= 2 && static
+      def start_top(canvas)
+        t = canvas.y + padding.top
+        t += offset if panel_autoclip
+        t += panel_top || 0.0
+        t
+      end
 
-      @cache = begin
-        cache = Hokusai::Util::WrapCache.new
-        y = top(canvas)
+      def top
+        offset + padding.top + (panel_top || 0.0)
+      end
 
-        stream = Hokusai::Util::WrapStream.new(canvas.width - padding.width, canvas.x, y) do |string, extra|
-          if w = user_font.measure_char(string, size)
-            [w, size]
+      def panel_height_or_canvas_height(canvas)
+        panel_height || canvas.height
+      end
+
+      def cache(canvas)
+        return @cache if counter >= 2 && (static || @last_content == content && @last_width == canvas.width)
+
+        if @last_width != canvas.width
+          self.counter = 0
+          
+          @last_width = canvas.width
+        elsif @last_content != content && @cache
+          # splicing in content
+          y = start_top(canvas)
+
+          stream = Hokusai::Util::WrapStream.new(canvas.width - padding.width, canvas.x, 0.0) do |string, extra|
+            if w = user_font.measure_char(string, size)
+              [w, size]
+            else
+              [user_font.measure(string, size).first, size]
+            end
+          end
+
+          new_y = @cache.splice(stream, content, selection: selection)
+          if (new_y - y - padding.top).zero?
+            height = size
           else
-            [user_font.measure(string, size).first, size]
+            height = (new_y - y - padding.top + size).ceil
+          end
+
+          if content.end_with?("\n")
+            height += self.size
+          end
+          
+          if min_height && height < min_height
+            height = min_height
+          elsif max_height && height > max_height
+            height = max_height
+          end
+          
+          node.meta.set_prop(:height, height + padding.height)
+          emit("height_updated", height + padding.height)
+          @last_content = content.dup
+
+          return @cache
+        end
+        
+        @cache = begin
+          cache = Hokusai::Util::WrapCache.new
+          y = start_top(canvas)
+          stream = Hokusai::Util::WrapStream.new(canvas.width - padding.width, canvas.x, y) do |string, extra|
+            if w = user_font.measure_char(string, size)
+              [w, size]
+            else
+              [user_font.measure(string, size).first, size]
+            end
+          end
+
+          stream.on_text do |wrapped|
+            cache << wrapped
+          end
+          stream.wrap(content, nil)
+          stream.flush
+
+          if (stream.y - y - padding.top).zero?
+            height = size
+          else
+            height = (stream.y - y - padding.top + size).ceil
+          end
+
+          if content.end_with?("\n")
+            height += self.size
+          end
+          
+          if min_height && height < min_height
+            height = min_height
+          elsif max_height && height > max_height
+            height = max_height
+          end
+
+          node.meta.set_prop(:height, height + padding.height)
+          emit("height_updated", height + padding.height)
+          @last_content = content.dup
+
+          cache
+        end
+      end
+
+      def offset
+        panel_offset || 0.0
+      end
+
+      def height(canvas)
+        panel_height || canvas.height
+      end
+
+      def fshader
+        <<-EOF
+        #version 330
+        in vec4 fragColor;
+        in vec2 fragTexCoord;
+        out vec4 finalColor;
+        uniform sampler2D texture0;
+        uniform vec4 from;
+        uniform vec4 to;
+        uniform float progress;
+
+        void main() {
+          vec4 texelColor = texture(texture0, fragTexCoord) * fragColor;
+
+          finalColor.a = texelColor.a;
+          finalColor.rgb = mix(from, to, progress).rgb;
+        }
+        EOF
+      end
+
+      def render(canvas)
+        # @min_height = canvas.height
+        if content.nil? || content.size.zero?
+
+          height = min_height || size
+          node.meta.set_prop(:height, height)
+          emit("height_updated", height)
+          if selection && node.meta.focused
+            
+
+            selection.focus_id = node.uuid
+            selection.pos.cursor_index = 0
+            selection.pos.positions = nil
+            # p ["setting cursor to", canvas.y.round(2) + offset.round(2) + padding.top]
+            #           selection.geom!
+            # p ["before cursor", selection.cursor]
+            selection.state = :geom
+            selection.geom.modified = true
+            selection.offset_y = offset
+            selection.cursor = [canvas.x + padding.left, canvas.y.round(2) + offset.round(2), 3.5, size].dup
+            selection.pos!(false)
+            # p ["after cursor", content[0..20], selection.cursor]
+          end
+
+          yield canvas
+          return
+        end
+
+        token_cache = cache(canvas)
+        # if content is removed or added from a previous sibling text node, the y offset of this node will change.
+        # we need to calculate and persist the diff.
+        diff = canvas.y.round(2) + offset.round(2) - token_cache.tokens.first.y.round(2)
+        token_cache.diff_y = diff
+        tokens = token_cache.tokens_for(Hokusai::Canvas.new(canvas.width, height(canvas), canvas.x, top))
+
+        # token selection
+        if selection && (node.meta.focused || node.uuid == selection.focus_id)
+          if selection.focus_id != node.uuid && !node.meta.focused
+            selection.clear
+          end
+
+          selection.cursor = nil unless node.meta.focused
+          selection.focus_id = node.uuid
+          selection.offset_y = offset
+
+          if animate_selection && selection.geom?
+            shader_begin do |command|
+              command.fragment_shader = fshader
+              command.uniforms = {
+                "from" => [selection_color.to_shader_value, HP_SHADER_UNIFORM_VEC4], 
+                "to" => [selection_color_to.to_shader_value, HP_SHADER_UNIFORM_VEC4],
+                "progress" => [@progress, HP_SHADER_UNIFORM_FLOAT]
+              }
+            end
+          end
+
+          token_cache.selected_area_for_tokens(tokens, selection, padding: padding) do |rect|
+            rect(rect.x, rect.y, rect.width, rect.height) do |command|
+              command.color = selection_color
+            end
+          end
+
+          if copy_text
+            copystuff = token_cache.selected_text(content, selection)
+
+            Hokusai.copy(copystuff)
+            emit("copy", copystuff)
+          end
+
+          if animate_selection && selection.geom?
+            shader_end
           end
         end
 
-        stream.on_text do |wrapped|
-          cache << wrapped
+        tokens.each do |wrapped|
+          # draw text
+          text(wrapped.text, wrapped.x + padding.left, wrapped.y + diff + padding.top - offset || 0.0) do |command|
+            command.color = color
+            command.size = size
+            if font
+              command.font = user_font
+            end
+          end
         end
-        stream.wrap(content, nil)
-        stream.flush
 
-        if (stream.y - canvas.y).zero?
-          height = size
+        self.counter += 1 if counter < 2
+
+        if @back
+          @progress -= 0.02
         else
-          height = (stream.y - canvas.y - offset + size).ceil
+          @progress += 0.02
         end
 
-        node.meta.set_prop(:height, height + padding.height)
-        emit("height_updated", height + padding.height)
-        @last_content = content
+        if @progress >= 1 && !@back
+          @back = true
+        elsif @progress <= 0 && @back
+          @progress = 0
+          @back = false
+        end
 
-        cache
-      end
-    end
-
-    def offset
-      panel_offset || 0.0
-    end
-
-    def height(canvas)
-      panel_height || canvas.height
-    end
-
-    def fshader
-      <<-EOF
-      #version 330
-      in vec4 fragColor;
-      in vec2 fragTexCoord;
-      out vec4 finalColor;
-      uniform sampler2D texture0;
-      uniform vec4 from;
-      uniform vec4 to;
-      uniform float progress;
-
-      void main() {
-        vec4 texelColor = texture(texture0, fragTexCoord) * fragColor;
-
-        finalColor.a = texelColor.a;
-        finalColor.rgb = mix(from, to, progress).rgb;
-      }
-      EOF
-    end
-
-    def render(canvas)
-      if content.empty? || content.nil?
         yield canvas
       end
-
-      token_cache = cache(canvas) 
-      tokens = token_cache.tokens_for(Hokusai::Canvas.new(canvas.width, height(canvas), canvas.x, top(canvas)))
-
-      # token selection
-      if selection
-        # set up for offset tracking
-        selection.offset_y = (panel_offset || 0.0) if selection.geom.active?
-        diff = selection.offset_y - (panel_offset || 0.0)
-        selection.diff = diff
-
-        if animate_selection
-          shader_begin do |command|
-            command.fragment_shader = fshader
-            command.uniforms = {
-              "from" => [selection_color.to_shader_value, HP_SHADER_UNIFORM_VEC4], 
-              "to" => [selection_color_to.to_shader_value, HP_SHADER_UNIFORM_VEC4],
-              "progress" => [@progress, HP_SHADER_UNIFORM_FLOAT]
-            }
-          end
-        end
-
-        copied = token_cache.selected_area_for_tokens(tokens, selection, copy: copying || copy_text, padding: padding) do |rect|
-          y = rect.y + selection.diff
-          rect(rect.x, y, rect.width, rect.height) do |command|
-            command.color = selection_color
-          end
-        end
-
-        emit("selected", copied) unless copied.nil?
-
-        if copy_text
-          Hokusai.copy(copied.copy)
-          emit("copy", copied.copy)
-        end
-
-        if animate_selection
-          shader_end
-        end
-      end
-
-      tokens.each do |wrapped|
-        # draw text
-        text(wrapped.text, wrapped.x + padding.left, wrapped.y + padding.top - offset || 0.0) do |command|
-          command.color = color
-          command.size = size
-          if font
-            command.font = user_font
-          end
-        end
-      end
-
-      self.counter += 1 if counter < 2
-
-      if @back
-        @progress -= 0.02
-      else
-        @progress += 0.02
-      end
-
-      if @progress >= 1 && !@back
-        @back = true
-      elsif @progress <= 0 && @back
-        @progress = 0
-        @back = false
-      end
-
-      yield canvas
     end
   end
 end
 
-module Hokusai::Util
-  class GeometrySelection
-    attr_accessor :start_x, :start_y, :stop_x, :stop_y,
-                  :type, :cursor, :diff, :click_pos, :parent
 
+
+module Hokusai::Util
+  # Public: Represents a selectable area with coordinates.
+  #         Used from with [Util::Selection](/api/Hokusai/Util/Selection)
+  #
+  # Examples
+  #
+  #   geom = Hokusai::Util::GeometrySelection.new
+  #   geom.start(0.0, 0.0)
+  #   geom.stop(100.0, 100.0)
+  #   geom.down? # true
+  #   geom.selected(20.0, 20.0, 20.0, 20.0) # true
+  #
+  class GeometrySelection
+    attr_reader :parent, :direction
+    attr_accessor :start_x, :start_y, :stop_x, :stop_y, :click_pos, :modified, 
+                  :changed_direction, :original_direction, :resized, :state
+    
     def initialize(parent)
       @parent = parent
-      @type = :none         # state for the geometry selection (active/frozen/etc)
-      @start_x = 0.0        # the x coordinate for the geometry
-      @start_y = 0.0        # the y coordinate for the geometry 
+      @state = :none
+      @start_x = 0.0
+      @start_y = 0.0
       @stop_x = 0.0
       @stop_y = 0.0
-      @diff = 0.0
-      @cursor = nil
       @click_pos = nil
+      @modified = false
+      @original_direction = nil
+      @resized = false
     end
 
-    def set_click_pos(x, y)
-      @click_pos = [x, y]
-    end
-
-    def none?
-      type == :none
-    end
-
-    def ready?
-      type == :none || type == :frozen
-    end
-
-    def clear
-      self.start_x = 0.0
-      self.start_y = 0.0
-      self.stop_x = 0.0
-      self.stop_y = 0.0
-      self.cursor = nil
-    end
-
-    def changed_direction?
-      @changed_direction
-    end
-
-    def active?
-      type == :active
-    end
-
-    def frozen?
-      type == :frozen
-    end
-
-    def activate!
-      self.type = :active
-    end
-
-    def freeze!
-      self.type = :frozen
-    end
-
-    def coords
-      [start_x, stop_x, start_y, stop_y]
-    end
-
+    # Public: Starts a selection
+    #
+    # x - the x coordinate selected (Float)
+    # y - the y coordinate selected (Float)
+    #
+    # Returns nothing
     def start(x, y)
       self.start_x = x
-      self.start_y = y
+      self.start_y = y + parent.offset_y
       self.stop_x = x
-      self.stop_y = y
-      self.cursor = nil
-
-      activate!
+      self.stop_y = y + parent.offset_y
+      self.click_pos = nil
+      self.state = :selecting
+      parent.cursor = nil
     end
 
-    def stop(x, y)
-      self.stop_x = x
-      self.stop_y = y
+    # Public: Moves the stop y coordinate up by (height)
+    #
+    # height - the amount to move up (Float)
+    #
+    # Returns nothing
+    def move_up(height)
+      self.stop_y -= height
 
-      if up? && @direction == :down || down? && @direction == :up
+      if (up? && @direction == :down) || (down? && @direction == :up)
         @changed_direction = true
-      else
-        @changed_direction = false
       end
 
       @direction = up? ? :up : :down
     end
 
+
+    # Public: Moves the stop y coordinate down by (height)
+    #
+    # height - the amount to move down (Float)
+    #
+    # Returns nothing
+    def move_down(height)
+      self.stop_y += height
+
+      if (up? && @direction == :down) || (down? && @direction == :up)
+        @changed_direction = true
+      end
+
+      @direction = up? ? :up : :down
+    end
+
+    # Public: Stops the selection
+    #
+    # x - the stop x coordinate (Float)
+    # y - the stop y coordinate (Float)
+    #
+    # Returns nothing
+    def stop(x, y)
+      self.stop_x = x
+      self.stop_y = y + parent.offset_y
+      self.modified = true
+      self.original_direction ||= up? ? :up : :down
+
+      if (up? && @direction == :down) || (down? && @direction == :up)
+        @changed_direction = true
+      end
+
+      @direction = up? ? :up : :down
+    end
+
+    def commit!
+      parent.pos!
+    end
+
+    # Public: Is the selection going upward?
+    #
+    # Returns boolean
     def up?(height = 0)
       stop_y < start_y - height
     end
 
+    # Public: Is the selection going downward?
+    #
+    # Returns boolean
     def down?(height = 0)
       start_y <= stop_y - height
     end
 
+    # Public: Is the selection going left?
+    #
+    # Returns boolean
     def left?
       stop_x < start_x
     end
 
+    # Public: Is the selection going right?
+    #
+    # Returns boolean
     def right?
       start_x <= stop_x
     end
 
-    def cursor
-      return nil unless @cursor
-
-      return [@cursor[0], @cursor[1] - parent.offset_y, @cursor[2], @cursor[3]] if frozen?
-
-      @cursor
+    # Public: Did the selection change direction?
+    #         (ie: selecting down but now going up)
+    #
+    # Returns boolean
+    def changed_direction?
+      @changed_direction
     end
 
+    # Public: Resets the selection state
+    #
+    # Returns nothing
+    def clear
+      self.start_x = 0.0
+      self.start_y = 0.0
+      self.stop_x = 0.0
+      self.stop_y = 0.0
+      self.state = :none
+      parent.cursor = nil
+    end
+    
     def rect_selected(rect)
       selected(rect[0], rect[1], rect[2], rect[3])
     end
 
+
+    def clicked_on_line(x, y, w, h)
+      return false if click_pos.nil?
+
+      click_pos[0] > x + w && click_pos[1] > y - parent.offset_y && click_pos[1] <= y - parent.offset_y + h  && click_pos[0] > w
+    end
+
+    # Public: Is this region clicked?
+    #         Note: need to set `click_pos` to use this.
+    #
+    # x - start x of the region (Float)
+    # y - start y of the region (Float)
+    # w - width of the region (Float)
+    # h - height of the region (Float)
+    #
+    # Returns boolean
     def clicked(x,y,w,h)
       return false if click_pos.nil?
 
-      pos = Hokusai::Rect.new(x, y, w, h)
-      # pos.move_x_left
+      pos = Hokusai::Rect.new(x, y - parent.offset_y, w, h)
       pos.includes_x?(click_pos[0]) && pos.includes_y?(click_pos[1])
     end
 
-    def selected(x, y, width, height)
-      return false if none?
+    # Public: Is this region selected?
+    #
+    # x - start x of the region (Float)
+    # y - start y of the region (Float)
+    # w - width of the region (Float)
+    # h - height of the region (Float)
+    #
+    # Returns boolean
+    def selected(x, ty, width, height)
+      return false if parent.pos?
 
-      if frozen?
-        y -= parent.offset_y
-      end
-
+      y = ty - parent.offset_y
+      sy = @start_y - parent.offset_y
+      ey = @stop_y - parent.offset_y
       sx = @start_x
-      sy = @start_y
       ex = @stop_x
-      ey = @stop_y
 
       down = sy <= ey
       up = ey < sy
@@ -7992,51 +8611,78 @@ module Hokusai::Util
         ((rect.includes_y?(sy) && rect.includes_y?(ey)) &&
           ((left && x_shifted_right < sx && x_shifted_right > ex) || (right && x_shifted_right > sx && x_shifted_right < ex)))
       )
-
       a
-    end
+    end 
   end
 end
 module Hokusai::Util
+  # Public: Represents a selectable area using offsets. Designed for text/char selection.
+  #         Used from with [Util::Selection](/api/Hokusai/Util/Selection)
+  #         Depends on Util::GeometrySelection and also [Hokusai::Util::Wrapped](/api/Hokusai/Util/Wrapped)
+  #
   class PositionSelection
-    attr_accessor :positions, :cursor_index, :direction, :active
+    attr_reader :parent
 
-    def initialize
+    # Public: get/set the cursor offset
+    #
+    # index - an integer representing the current offset
+    #
+    # Returns the cursor ofset
+    attr_accessor :cursor_index
+
+    # Public: get/set the selected positions
+    #
+    # range - a range denoting the start..end selection
+    #
+    # Returns the positions
+    attr_accessor :positions
+
+    attr_accessor :state, :offset, :direction
+
+    def initialize(parent)
+      @parent = parent
+      @positions = nil
       @cursor_index = nil
-      @positions = []
-      @direction = :right
-      @active = false
+      @state = :none
+      @offset = 0
+      @direction = nil
     end
 
-    def move(to, selecting)
-      self.active = selecting
-  
-      return if cursor_index.nil?
+    # Public: Moves cursor to (index)
+    #
+    # to - the offset to move the cursor to
+    # selecting - a boolean to denote that the move should adjust the selectable region
+    #
+    # Returns nothing
+    def move(to, selecting, times = 1)
+      return if cursor_index.nil? || (selecting && positions.nil?)
 
-      # puts ["before", to, cursor_index, positions].inspect
-      
       case to
       when :right
-        self.cursor_index += 1
-        if selecting && !positions.empty? && cursor_index <= positions.last
-          positions.shift
+        self.cursor_index += times
+
+        if positions && cursor_index == positions.last
+          self.positions = cursor_index..cursor_index
+        elsif selecting && !positions.nil? && cursor_index <= positions.last
+          self.positions = (positions.first + 1)...positions.last
         elsif selecting
-          positions << cursor_index 
+          self.positions = positions.first..cursor_index 
         end
 
       when :left
-        if selecting && !positions.empty? && cursor_index >= positions.last
-          positions.pop
+        if selecting && !positions.nil? && cursor_index >= positions.last
+          if positions.last - 1 < positions.first
+            self.positions = positions.last - 1...positions.first
+            @moved_left = true
+          else
+            self.positions = positions.first...positions.last - 1
+          end
         elsif selecting
-          positions.unshift cursor_index
+          self.positions = cursor_index...positions.last
         end
-  
-        self.cursor_index -= 1 unless cursor_index == -1
-      end
-    end
+        self.cursor_index -= times unless cursor_index == -1
 
-    def active?
-      @active
+      end
     end
 
     def left?
@@ -8047,91 +8693,215 @@ module Hokusai::Util
       direction == :right
     end
 
-    def clear
-      self.cursor_index = nil
-      positions.clear
+    # Public: Is this selection frozen?
+    #
+    # Returns boolean
+    def frozen?
+      state == :frozen
     end
 
+    # Public: Freeze the selection to prevent modifications
+
+    def freeze!
+      self.state = :frozen
+    end  
+
+    # Public: merges the geometry selection into the existing positions
+    #
+    # arr - the tokens: _Array(Hokusai::Util::Wrapped)_ that are currently selected on the screen.
+    #       Note: if the selection is out of the viewport, this will be missing tokens.
+    #
+    # Returns nothing
+    def concat(arr)
+      return if arr.nil?
+
+      if @positions.nil?
+        @positions = arr.first..arr.last
+
+        return
+      end
+
+      if parent.geom.down? && parent.geom.changed_direction?
+        max = [positions.first, arr.first].max
+        if max == arr.last
+          @positions = nil
+          return
+        end
+
+        @positions = max..arr.last
+        parent.geom.changed_direction = false # TEST: WIP
+      elsif parent.geom.down?
+
+        max = arr.last
+        min = positions.first
+
+        if min == max
+          @positions = nil
+          return
+        end
+
+        @positions = min..max
+      elsif parent.geom.up? && parent.geom.changed_direction?
+        min = [positions.first, arr.first].min
+        max = [positions.first, arr.last].max
+
+        if min == max
+          @positions = nil
+          return
+        end
+
+        if positions.first > arr.last
+          max -= 1
+        end
+
+        @positions = min...max
+        parent.geom.changed_direction = false #test WIP
+      elsif parent.geom.up?
+        if arr.first == positions.last || arr.first > positions.last
+          @positions = nil
+          return
+        end
+
+        min = []
+
+        @positions = arr.first...positions.last
+      else
+        @positions = arr.first..arr.last
+      end
+    end
+
+    # Public: Is this offset selected?
+    #
+    # offset - An index (Integer) to test
+    #
+    # Returns boolean
     def selected(index)
-      active && (positions.first..positions.last).include?(index)
+      return false if positions.nil?
+
+      (positions.first..positions.last).include?(index)
     end
 
-    def select(range)
-      self.positions = range.to_a
+    # Public: Reset this selection
+    #
+    # Returns nothing
+    def clear
+      self.offset = 0
+      self.cursor_index = nil
+      self.positions = nil
+      self.state = :none
     end
   end
 end
 
 module Hokusai::Util
+  # Public: A utility to help coordinate selections.
+  #         Currently used for text selection and in [Hokusai::Blocks::Selectable](/api/Hokusai/Blocks/Selectable)
   class Selection
-    attr_reader :geom, :pos
-    attr_accessor :type, :offset_y, :diff, :cursor
+    attr_reader :pos, :geom
+    attr_accessor :offset_y, :offset_x, :offset_pos, :cursor, 
+                  :action, :state, :use_focus, :focus_id, :top, :column,
+                  :insert
 
     def initialize
+      @pos = PositionSelection.new(self)
       @geom = GeometrySelection.new(self)
-      @pos = PositionSelection.new
-      @type = :geom
       @offset_y = 0.0
-      @diff = 0.0
+      @offset_x = 0.0
+      @offset_pos = 0
       @cursor = nil
+      @action = nil
+      @state = :geom
+      @use_focus = false
+      @focus_id = nil
+      @top = 0.0
+      @column = nil
+      @insert = false
     end
 
-    def clear
-      pos.clear
-      geom.clear
+    # Public: Set the current cursor position
+    #
+    # arr - an array of 4 floats (start_x, stop_x, cursor_width, cursor_height)
+    #
+    # Returns nothing
+    def cursor=(arr)
+      return if (geom? && !geom.modified)
+
+      @cursor = arr
+    ensure
+      geom.modified = false
+    end
+
+    # Public: Returns the selection y offset
+    #
+    # Returns a float
+    def offset_y
+      @top + @offset_y
     end
 
     def cursor
-      geom.cursor
+      return nil unless @cursor
+
+      return [@cursor[0], @cursor[1] - offset_y, @cursor[2], @cursor[3]]
     end
 
-    def geom!
-      pos.clear
-      pos.cursor_index = nil
-
-      self.type = :geom
-    end
-
-    def pos!
-      geom.clear
-
-      self.type = :pos
-    end
-
+    # Public: Is the selection in geometry mode?
+    #
+    # Returns boolean
     def geom?
-      type == :geom
+      state == :geom
     end
 
+    # Public: Use geometry mode
+    #
+    # clear - (boolean) should the positions be cleared? (default true)
+    #
+    # Returns nothing
+    def geom!(pclear = true)
+      pos.clear if pclear
+
+      self.state = :geom
+    end
+
+    # Public: Is the selection in positional mode?
+    #
+    # Returns boolean
     def pos?
-      type == :pos
+      state == :pos
     end
 
-    def left?
-      geom? ? geom.left? : pos.left?
+    # Public: Use positional mode
+    #
+    # clear - (boolean) should the geometry be cleared? (default false)
+    #
+    # Returns nothing
+    def pos!(gclear = false)
+      geom.clear if gclear
+      geom.changed_direction = false
+      geom.click_pos = nil
+
+      self.state = :pos
     end
 
-    def right?
-      geom? ? geom.right? : pos.right?
+    # Public: Clear all selections and start in geometry mode.
+    #
+    # Returns nothing
+    def clear
+      geom.clear
+      pos.clear
+      self.cursor = nil
+
+      geom!
     end
 
-    def up?
-      geom? && geom.up?
-    end
-
-    def down?
-      geom? && geom.down?
-    end
-
+    # Public: Are we actively selecting?
+    #
+    # Returns boolean
     def selecting?
-      !(geom.type == :none && geom.click_pos.nil?)
-    end
-
-    # should we show the cursor?
-    def active?
-      !cursor.nil?
+      (geom? && geom.state == :selecting) || (pos? && !pos.cursor_index.nil?)
     end
   end
 end
+
 
 # Public: slotted block which provides text selection information
 #         to descendants
@@ -8139,12 +8909,19 @@ module Hokusai::Blocks
   class Selectable < Hokusai::Block
     template <<~EOF
       [template]
-        vblock {
-          @click="start_selection"
-          @hover="update_selection"
+        dynamic {
+          :vertical="vertical"
+          @keypress="on_keypress"
+          @keyup="on_keyup"
+          @keydown="on_keydown"
+          @hover="on_hover"
+          @mouseup="on_mouseup"
+          @click="on_click"
+          @size_updated="update_height"
         }
           slot
           cursor {
+            width="0"
             height="0"
             :color="cursor_color"
             :x="cursor_x"
@@ -8155,42 +8932,168 @@ module Hokusai::Blocks
     EOF
 
     uses(
-      vblock: Hokusai::Blocks::Vblock,
+      dynamic: Hokusai::Blocks::Dynamic,
       cursor: Hokusai::Blocks::Cursor
     )
 
     computed :cursor_color, default: [255,22,22], convert: Hokusai::Color
+    computed :vertical, default: true
+    computed :focus_mode, default: true
+    computed :selection_override, default: nil
 
     provide :selection, :selection
+    inject :panel_control
 
-    attr_reader :selection
+    attr_reader :timer
+    attr_accessor :shift, :nav_target, :page_target
+
+    def update_height(w, h)
+      node.meta.set_prop(:height, h)
+    end
 
     def initialize(**args)
+      # our selection object
       @selection = Hokusai::Util::Selection.new
+      # debounce timer for keydown
+      @timer = Hokusai::Util::Timer.new
+      @shift = false
+      @nav_target = nil
+      @page_target = nil
+      @top = nil
 
       super
     end
 
-    def start_selection(event)
-      if event.left.down && !selection.active?
-        selection.pos.cursor_index = nil
-        selection.geom!
+    # we can override the selection object
+    def selection
+      selection_override || @selection
+    end
 
-        selection.geom.clear
-        selection.geom.start(event.pos.x, event.pos.y)
-        selection.geom.set_click_pos(event.pos.x, event.pos.y)
-      elsif selection.geom.frozen?
-        selection.geom.click_pos = nil
-        selection.geom.clear
+    def on_keypress(event)
+      self.shift = true if event.shift
+      timer.reset
+
+      if [:left, :right, :up, :down].include?(event.symbol)
+        self.nav_target = event.symbol
+      elsif [:home, :end, :page_up, :page_down].include?(event.symbol)
+        self.page_target = true
+      end
+    end
+    
+    def on_keydown(event)  
+      return unless timer.elapsed(0.2)
+      selection.action = nav_target if nav_target 
+      case nav_target
+      when :left
+        selection.pos.move(:left, true)
+      when :right
+        selection.pos.move(:right, true)
+      when :up
+        if selection.geom.stop_y - panel_control.offset < 70
+          navheight = panel_control.scroll_y - 5
+          panel_control.scroll_y = navheight
+          panel_control.scroll_goto_y = navheight
+          panel_control.scroll_percent = panel_control.local_percent_scrolled
+        end
+        selection.action = :up
+      when :down
+        if (panel_control.offset + panel_control.panel_height) - selection.geom.stop_y < 70
+          navheight = panel_control.scroll_y + 5
+          panel_control.scroll_y = navheight
+          panel_control.scroll_goto_y = navheight
+          panel_control.scroll_percent = panel_control.local_percent_scrolled
+        end
+        selection.action = :down
       end
     end
 
-    def update_selection(event)
-      return unless selection.active?
-      
+    def on_keyup(event)
+      if nav_target && shift
+        case nav_target
+        when :left
+          selection.pos.move(:left, true)
+        when :right
+          selection.pos.move(:right, true)
+        when :up
+          if selection.geom.stop_y - panel_control.offset < 70
+            navheight = panel_control.scroll_y - 5
+            panel_control.scroll_y = navheight
+            panel_control.scroll_goto_y = navheight
+            panel_control.scroll_percent = panel_control.local_percent_scrolled
+          end
+          selection.action = :up
+        when :down
+          if (panel_control.offset + panel_control.panel_height) - selection.geom.stop_y < 70
+            navheight = panel_control.scroll_y + 5
+            panel_control.scroll_y = navheight
+            panel_control.scroll_goto_y = navheight
+            panel_control.scroll_percent = panel_control.local_percent_scrolled
+          end
+          selection.action = :down
+        end
+      end
+
+      if page_target && shift
+        x = event.input.mouse.pos.x
+        y = event.input.mouse.pos.y
+        selection.geom.stop(x, y)
+        selection.geom!
+        selection.action = :collect
+      end
+
+      self.nav_target = nil
+      self.page_target = nil
+      self.shift = false unless event.shift
+    end
+
+    def on_resize(canvas)
+      # resizing triggers a click event. >:(
+      @resizing = true
+
+      # ok, preserving the selection on resize is fine, but
+      # the geometry is corrupted, so we have to clear it.
+      # 
+      # this makes shift + click fail intermittently after a resize.
+      # work has been done, but the most stable thing to do is clear the selection.
+      selection.clear
+    end
+
+    def on_click(event)
+      if event.right.clicked
+        p selection.inspect
+        return
+      end
+
+      selection.action = { 2 => :word, 3 => :line, 4 => :all }[event.left.click_count]
+
+      # if this is a fresh click
+      # clear all selections
+      if !shift && event.left.clicked && !@resizing
+        selection.clear
+        selection.geom.start(event.pos.x, event.pos.y)
+        selection.geom.click_pos = [event.pos.x, event.pos.y]
+      elsif shift && event.left.down && !@resizing
+        selection.geom.stop(event.pos.x, event.pos.y)
+        selection.geom!
+        selection.action = :collect
+      end
+    end
+
+    def on_mouseup(event)
+      if event.left.released && !shift
+        selection.column = nil
+      end
+    end
+
+    def on_hover(event)
+      return unless selection.geom?
+
       if event.left.up
-        selection.geom.freeze!
-      elsif event.left.down
+        selection.action = nil
+        # by the time we switch to pos, positions should already be populated.
+        selection.pos!(false)
+        selection.pos.freeze!
+      elsif event.left.down && !event.input.keyboard.shift
         selection.geom.stop(event.pos.x, event.pos.y)
       end
     end
@@ -8216,378 +9119,231 @@ module Hokusai::Blocks
 
       selection.cursor[index]
     end
-  end
-end
-module Hokusai::Blocks
-  # Public: A text rendering component
-  class Text < Hokusai::Block
-    template <<-EOF
-    [template]
-      virtual
-    EOF
-
-    computed! :content
-    computed :static, default: false
-    computed :font, default: nil
-    computed :size, default: 20, convert: proc(&:to_i)
-    computed :color, default: [22, 22, 22], convert: Hokusai::Color
-    computed :padding, default: [0.0, 0.0, 0.0, 0.0], convert: Hokusai::Padding
-    computed :selection_color, default: [183, 201, 229], convert: Hokusai::Color
-    computed :selection_color_to, default: [183, 225, 229], convert: Hokusai::Color
-    computed :animate_selection, default: true
-    computed :copy_text, default: false
-    
-    inject :panel_offset
-    inject :panel_height
-    inject :panel_top
-    inject :selection
-  
-    attr_accessor :counter, :copying
-
-    def initialize(**args)
-      @counter = 0
-      @last_content = nil
-      @copying = false
-      @progress = 0
-      
-      super
-    end
-
-    def on_resize(canvas)
-      @counter = 0
-      @cache = nil
-      @last_content = nil
-
-      if selection
-        selection.geom.cursor = nil
-      end
-    end
-
-    def panel?
-      !panel_offset.nil?
-    end
-
-    def user_font
-      font ? Hokusai.fonts.get(font) : Hokusai.fonts.active
-    end
-
-    def top(canvas)
-      canvas.y + (panel_offset || 0.0) + padding.top
-    end
-
-    def panel_height_or_canvas_height(canvas)
-      panel_height || canvas.height
-    end
-
-    def cache(canvas)
-      return @cache if counter >= 2 && static
-
-      @cache = begin
-        cache = Hokusai::Util::WrapCache.new
-        y = top(canvas)
-
-        stream = Hokusai::Util::WrapStream.new(canvas.width - padding.width, canvas.x, y) do |string, extra|
-          if w = user_font.measure_char(string, size)
-            [w, size]
-          else
-            [user_font.measure(string, size).first, size]
-          end
-        end
-
-        stream.on_text do |wrapped|
-          cache << wrapped
-        end
-        stream.wrap(content, nil)
-        stream.flush
-
-        if (stream.y - canvas.y).zero?
-          height = size
-        else
-          height = (stream.y - canvas.y - offset + size).ceil
-        end
-
-        node.meta.set_prop(:height, height + padding.height)
-        emit("height_updated", height + padding.height)
-        @last_content = content
-
-        cache
-      end
-    end
-
-    def offset
-      panel_offset || 0.0
-    end
-
-    def height(canvas)
-      panel_height || canvas.height
-    end
-
-    def fshader
-      <<-EOF
-      #version 330
-      in vec4 fragColor;
-      in vec2 fragTexCoord;
-      out vec4 finalColor;
-      uniform sampler2D texture0;
-      uniform vec4 from;
-      uniform vec4 to;
-      uniform float progress;
-
-      void main() {
-        vec4 texelColor = texture(texture0, fragTexCoord) * fragColor;
-
-        finalColor.a = texelColor.a;
-        finalColor.rgb = mix(from, to, progress).rgb;
-      }
-      EOF
-    end
 
     def render(canvas)
-      if content.empty? || content.nil?
-        yield canvas
-      end
-
-      token_cache = cache(canvas) 
-      tokens = token_cache.tokens_for(Hokusai::Canvas.new(canvas.width, height(canvas), canvas.x, top(canvas)))
-
-      # token selection
-      if selection
-        # set up for offset tracking
-        selection.offset_y = (panel_offset || 0.0) if selection.geom.active?
-        diff = selection.offset_y - (panel_offset || 0.0)
-        selection.diff = diff
-
-        if animate_selection
-          shader_begin do |command|
-            command.fragment_shader = fshader
-            command.uniforms = {
-              "from" => [selection_color.to_shader_value, HP_SHADER_UNIFORM_VEC4], 
-              "to" => [selection_color_to.to_shader_value, HP_SHADER_UNIFORM_VEC4],
-              "progress" => [@progress, HP_SHADER_UNIFORM_FLOAT]
-            }
-          end
-        end
-
-        copied = token_cache.selected_area_for_tokens(tokens, selection, copy: copying || copy_text, padding: padding) do |rect|
-          y = rect.y + selection.diff
-          rect(rect.x, y, rect.width, rect.height) do |command|
-            command.color = selection_color
-          end
-        end
-
-        emit("selected", copied) unless copied.nil?
-
-        if copy_text
-          Hokusai.copy(copied.copy)
-          emit("copy", copied.copy)
-        end
-
-        if animate_selection
-          shader_end
-        end
-      end
-
-      tokens.each do |wrapped|
-        # draw text
-        text(wrapped.text, wrapped.x + padding.left, wrapped.y + padding.top - offset || 0.0) do |command|
-          command.color = color
-          command.size = size
-          if font
-            command.font = user_font
-          end
-        end
-      end
-
-      self.counter += 1 if counter < 2
-
-      if @back
-        @progress -= 0.02
-      else
-        @progress += 0.02
-      end
-
-      if @progress >= 1 && !@back
-        @back = true
-      elsif @progress <= 0 && @back
-        @progress = 0
-        @back = false
-      end
+      @top = canvas.y
+      @resizing = false
 
       yield canvas
     end
   end
 end
 
-
-# Public: Input block, needs work
+# Public: Input block
 class Hokusai::Blocks::Input < Hokusai::Block
   template <<~EOF
   [template]
-    panel {
-      @click="start_selection"
-      @hover="update_selection"
-      :autoclip="true"
+    vblock {
+      @click="focus"
+      :background="background"
+      :padding="padding"
     }
       text {
+        :color="color"
         :content="model"
         :size="size"
-        :padding="padding"
-        :selection_color="text_selection_color"
-        :selection_color_to="text_selection_color_to"
+        :selection_color="selection_color"
+        :selection_color_to="selection_color_to"
         :animate_selection="animate_selection"
+        :copy_text="copy"
+        :min_height="min_height"
+        :max_height="max_height"
+        @copy="on_copy"
         @selected="handle_selection"
         @keypress="handle_keypress"
-        @click="update_click_position"
-      }
-      cursor {
-        height="0"
-        :color="cursor_color"
-        :x="cursor_x"
-        :y="cursor_y"
-        :cursor_height="cursor_height"
-        :show="cursor_show"
+        @keydown="handle_keydown"
+        @height_updated="update_content_height"
       }
   EOF
 
   uses(
+    clipped: Hokusai::Blocks::Clipped,
+    scissor_end: Hokusai::Blocks::ScissorEnd,
     panel: Hokusai::Blocks::Panel,
     cursor: Hokusai::Blocks::Cursor,
     selectable: Hokusai::Blocks::Selectable,
     text: Hokusai::Blocks::Text,
+    vblock: Hokusai::Blocks::Vblock,
   )
 
   computed! :model
 
-  computed :text_color, default: [33,33,33], convert: Hokusai::Color
-  computed :text_selection_color, default: [233,233,233], convert: Hokusai::Color
-  computed :text_selection_color_to, default: [0, 33, 233], convert: Hokusai::Color
+  computed :background, default: nil, convert: Hokusai::Color
+  computed :color, default: [33,33,33], convert: Hokusai::Color
+  computed :selection_color, default: [233,233,233], convert: Hokusai::Color
+  computed :selection_color_to, default: [0, 33, 233], convert: Hokusai::Color
   computed :animate_selection, default: false
   computed :cursor_color, default: [244,22,22], convert: Hokusai::Color
   computed :growable, default: false
   computed :size, default: 34, convert: proc(&:to_i)
-  computed :padding, default: Hokusai::Padding.new(20.0, 20.0, 20.0, 20.0), convert: Hokusai::Padding
+  computed :tabsize, default: 2, convert: proc(&:to_i)
+  computed :padding, default: Hokusai::Padding.new(0.0, 0.0, 0.0, 0.0), convert: Hokusai::Padding
+  computed :min_height, default: nil
+  computed :max_height, default: nil
 
-  attr_reader :selection
-  attr_accessor :content, :buffer, :positions
+  inject :selection
+  
+  attr_reader :timer
+  attr_accessor :content, :buffer, :positions, :content_height, :shift, :copy
+  
+  def before_updated
+    # if model == "" && node.meta.focused
+    #   selection.clear
+    #   selection.pos.cursor_index = 0
+    #   # selection.pos.cursor_index = nil
+    # end
+  end
 
-  provide :selection, :selection
+  def focus(event)
+    # node.meta.focus
+  end
 
   def initialize(**args)
     super
 
+    @copy = false
+    @shift = false
+    @content_height = 0.0
     @buffer = ""
-    @cursor = nil
-    @selection = Hokusai::Util::Selection.new
+    @timer = Hokusai::Util::Timer.new
   end
 
-  def update_click_position(event)
-    selection.geom!
-    selection.geom.set_click_pos(event.pos.x, event.pos.y)
+  def on_copy(text)
+    Hokusai.copy(text)
+    self.copy = false
   end
 
-  def update_height(value)
-    # node.meta.set_prop(:height, value)
-
-    # emit("height_updated", value)
+  def update_content_height(height)
+    self.content_height = height
+    node.meta.set_prop(:height, height)
   end
 
-  def handle_selection(copy)
-    # puts [copy.inspect]
-    # return if copy.nil?
-
-    # @cursor = copy.cursor
+  def increment_cursor(selecting, times: 1)
+    selection.pos.move :right, selecting, times 
   end
 
-  def increment_cursor(selecting)
-    selection.pos!
-
-    selection.pos.move :right, selecting
+  def decrement_cursor(selecting, times: 1)
+    selection.pos.move :left, selecting, times
   end
 
-  def decrement_cursor(selecting)
-    selection.pos!
+  def handle_keydown(event)
+    return unless timer.elapsed(0.2)
 
-    selection.pos.move :left, selecting
+    keypress_logic(event, :down)
   end
 
   def handle_keypress(event)
-    range = (selection.pos.positions.first..selection.pos.positions.last)
+    return if selection.pos.cursor_index.nil?
+    
+    keypress_logic(event)
+    
+    timer.reset
+  end
 
-    if event.printable? && !event.super && !event.ctrl
-      if selection.pos.positions.size > 0
-        model[range] = event.char
-        selection.pos.positions = []
+  def keypress_logic(event, type = :pressed)
+    return unless node.meta.focused
+
+    idx = selection.pos.cursor_index || 0
+    insertidx = model.empty? ? 0 : idx + 1
+
+    if selection.pos.cursor_index.nil?
+      deleteidx = nil
+    elsif selection.pos.cursor_index <= 0 && model.size.zero?
+      deleteidx = nil
+    elsif selection.pos.cursor_index <= 0
+      deleteidx = -1
+    elsif selection.pos.cursor_index.zero?
+      deleteidx = -1
+    else
+      deleteidx = selection.pos.cursor_index - 1
+    end
+    
+    if selection.pos.positions
+      range = selection.pos.positions(false)
+    else
+      range = nil
+    end
+  
+    self.shift = event.shift
+
+    if event.printable?(type) && !event.super && !event.ctrl
+      if range
+        if model[range][-1] == "\n"
+          model[range] = event.char + "\n"
+        else
+          model[range] = event.char
+        end
+        selection.pos.positions = nil
+        selection.geom.clear
+        selection.pos.cursor_index = range.begin
+      elsif selection.pos.cursor_index
+        model.insert(insertidx, event.char)
+        selection.pos.cursor_index += 1 unless idx.zero? && model.size == 1
+      end
+    elsif event.symbol == :c && (event.ctrl || event.super)
+      self.copy = true
+    elsif event.symbol == :v && (event.ctrl || event.super)
+      if text = Hokusai.paste
+        if range
+          model[range] = text
+          selection.pos.positions = nil
+          selection.geom.clear
+          selection.pos.cursor_index = range.begin + text.size - 1
+
+        elsif selection.pos.cursor_index
+          model.insert(insertidx, text)
+          increment_cursor(false, times: text.size)
+        end
+      end
+    elsif event.symbol == :tab
+      chr = " " * tabsize
+
+      if range
+        if model[range][-1] == "\n"
+          model[range] = chr + "\n"
+        else
+          model[range] = chr
+        end
+        selection.pos.positions = nil
+        selection.geom.clear
+        selection.pos.cursor_index = range.last
+      elsif selection.pos.cursor_index
+        model.insert(insertidx, chr)
+        selection.pos.cursor_index += tabsize unless idx.zero? && model.size == 1
+      end
+    elsif event.symbol == :a && (event.ctrl || event.super)
+      selection.action = :all
+    elsif event.symbol == :enter
+      if range
+        model[range] = "\n"
+        selection.pos.positions = nil
         selection.geom.clear
         selection.pos.cursor_index = range.begin + 1
-        # increment_cursor(false)
       elsif selection.pos.cursor_index
-        model.insert(selection.pos.cursor_index + 1, event.char)
+        model.insert(insertidx, "\n")
         increment_cursor(false)
       end
     elsif event.symbol == :backspace
-      if selection.pos.positions.size > 0
-
+      if range
         model[range] = ""
-        selection.pos.positions = []
+        selection.pos.positions = nil
         selection.geom.clear
-        selection.pos.cursor_index = range.begin + 1
-
-        decrement_cursor(false) if selection.pos.cursor_index >= model.size
-  
+        if range.begin  - 1 <= 0
+          selection.pos.cursor_index = -1
+        else
+          selection.pos.cursor_index = range.begin - 1
+        end  
       elsif selection.pos.cursor_index
-        model[selection.pos.cursor_index] = ""
-        decrement_cursor(false)
+        if selection.pos.cursor_index >= 0
+          model[selection.pos.cursor_index] = ""
+          selection.pos.cursor_index = deleteidx
+        end
       end
     elsif event.symbol == :right && selection.pos.cursor_index < model.size - 1
       increment_cursor(event.shift)
-    elsif event.symbol == :left
+    elsif event.symbol == :left && selection.pos.cursor_index > -1
       decrement_cursor(event.shift)
     end
-
-    # puts ["model", model, selection.pos.cursor_index].inspect
-  end
-
-  # selection methods
-  def start_selection(event)
-    if event.left.down && !selection.geom.active?
-      selection.pos.cursor_index = nil
-      selection.geom!
-
-      selection.geom.clear
-      selection.geom.start(event.pos.x, event.pos.y)
-    end
-  end
-
-  def update_selection(event)
-    return unless selection.geom.active?
-
-    if event.left.up
-      selection.geom.freeze!
-    elsif event.left.down
-      selection.geom.stop(event.pos.x, event.pos.y)
-    end
-  end
-
-  def cursor_x
-    cursor(0)
-  end
-
-  def cursor_y
-    cursor(1)
-  end
-
-  def cursor_height
-    cursor(3)
-  end
-
-  def cursor_show
-    !selection.cursor.nil?
-  end
-
-  def cursor(index)
-    return if selection.cursor.nil?
-    
-    selection.cursor[index]
   end
 end
 
@@ -10235,206 +10991,6 @@ module Hokusai::Blocks
   end
 end
 
-module Hokusai::Blocks
-  # Public: A text rendering component
-  class Text < Hokusai::Block
-    template <<-EOF
-    [template]
-      virtual
-    EOF
-
-    computed! :content
-    computed :static, default: false
-    computed :font, default: nil
-    computed :size, default: 20, convert: proc(&:to_i)
-    computed :color, default: [22, 22, 22], convert: Hokusai::Color
-    computed :padding, default: [0.0, 0.0, 0.0, 0.0], convert: Hokusai::Padding
-    computed :selection_color, default: [183, 201, 229], convert: Hokusai::Color
-    computed :selection_color_to, default: [183, 225, 229], convert: Hokusai::Color
-    computed :animate_selection, default: true
-    computed :copy_text, default: false
-    
-    inject :panel_offset
-    inject :panel_height
-    inject :panel_top
-    inject :selection
-  
-    attr_accessor :counter, :copying
-
-    def initialize(**args)
-      @counter = 0
-      @last_content = nil
-      @copying = false
-      @progress = 0
-      
-      super
-    end
-
-    def on_resize(canvas)
-      @counter = 0
-      @cache = nil
-      @last_content = nil
-
-      if selection
-        selection.geom.cursor = nil
-      end
-    end
-
-    def panel?
-      !panel_offset.nil?
-    end
-
-    def user_font
-      font ? Hokusai.fonts.get(font) : Hokusai.fonts.active
-    end
-
-    def top(canvas)
-      canvas.y + (panel_offset || 0.0) + padding.top
-    end
-
-    def panel_height_or_canvas_height(canvas)
-      panel_height || canvas.height
-    end
-
-    def cache(canvas)
-      return @cache if counter >= 2 && static
-
-      @cache = begin
-        cache = Hokusai::Util::WrapCache.new
-        y = top(canvas)
-
-        stream = Hokusai::Util::WrapStream.new(canvas.width - padding.width, canvas.x, y) do |string, extra|
-          if w = user_font.measure_char(string, size)
-            [w, size]
-          else
-            [user_font.measure(string, size).first, size]
-          end
-        end
-
-        stream.on_text do |wrapped|
-          cache << wrapped
-        end
-        stream.wrap(content, nil)
-        stream.flush
-
-        if (stream.y - canvas.y).zero?
-          height = size
-        else
-          height = (stream.y - canvas.y - offset + size).ceil
-        end
-
-        node.meta.set_prop(:height, height + padding.height)
-        emit("height_updated", height + padding.height)
-        @last_content = content
-
-        cache
-      end
-    end
-
-    def offset
-      panel_offset || 0.0
-    end
-
-    def height(canvas)
-      panel_height || canvas.height
-    end
-
-    def fshader
-      <<-EOF
-      #version 330
-      in vec4 fragColor;
-      in vec2 fragTexCoord;
-      out vec4 finalColor;
-      uniform sampler2D texture0;
-      uniform vec4 from;
-      uniform vec4 to;
-      uniform float progress;
-
-      void main() {
-        vec4 texelColor = texture(texture0, fragTexCoord) * fragColor;
-
-        finalColor.a = texelColor.a;
-        finalColor.rgb = mix(from, to, progress).rgb;
-      }
-      EOF
-    end
-
-    def render(canvas)
-      if content.empty? || content.nil?
-        yield canvas
-      end
-
-      token_cache = cache(canvas) 
-      tokens = token_cache.tokens_for(Hokusai::Canvas.new(canvas.width, height(canvas), canvas.x, top(canvas)))
-
-      # token selection
-      if selection
-        # set up for offset tracking
-        selection.offset_y = (panel_offset || 0.0) if selection.geom.active?
-        diff = selection.offset_y - (panel_offset || 0.0)
-        selection.diff = diff
-
-        if animate_selection
-          shader_begin do |command|
-            command.fragment_shader = fshader
-            command.uniforms = {
-              "from" => [selection_color.to_shader_value, HP_SHADER_UNIFORM_VEC4], 
-              "to" => [selection_color_to.to_shader_value, HP_SHADER_UNIFORM_VEC4],
-              "progress" => [@progress, HP_SHADER_UNIFORM_FLOAT]
-            }
-          end
-        end
-
-        copied = token_cache.selected_area_for_tokens(tokens, selection, copy: copying || copy_text, padding: padding) do |rect|
-          y = rect.y + selection.diff
-          rect(rect.x, y, rect.width, rect.height) do |command|
-            command.color = selection_color
-          end
-        end
-
-        emit("selected", copied) unless copied.nil?
-
-        if copy_text
-          Hokusai.copy(copied.copy)
-          emit("copy", copied.copy)
-        end
-
-        if animate_selection
-          shader_end
-        end
-      end
-
-      tokens.each do |wrapped|
-        # draw text
-        text(wrapped.text, wrapped.x + padding.left, wrapped.y + padding.top - offset || 0.0) do |command|
-          command.color = color
-          command.size = size
-          if font
-            command.font = user_font
-          end
-        end
-      end
-
-      self.counter += 1 if counter < 2
-
-      if @back
-        @progress -= 0.02
-      else
-        @progress += 0.02
-      end
-
-      if @progress >= 1 && !@back
-        @back = true
-      elsif @progress <= 0 && @back
-        @progress = 0
-        @back = false
-      end
-
-      yield canvas
-    end
-  end
-end
-
 # Public: Centers immediate descendants (slot)
 class Hokusai::Blocks::Center < Hokusai::Block
   template <<~EOF
@@ -10669,7 +11225,7 @@ class Hokusai::Blocks::DropdownItem < Hokusai::Block
           command.padding = padding
         end
 
-        cy = canvas.y + (canvas.height / 2.0) - (size / 2)
+        cy = canvas.y + (canvas.height / 2.0) - (size / 4.0)
         text(content, canvas.x + padding.left, cy) do |command|
           if font
             command.font = Hokusai.fonts.get(font)
@@ -10678,10 +11234,10 @@ class Hokusai::Blocks::DropdownItem < Hokusai::Block
           command.color = color
           command.padding = padding
         end
-        
-        yield canvas
       end
     end
+
+    yield canvas
   end
 end
 
@@ -10691,10 +11247,10 @@ class Hokusai::Blocks::Dropdown < Hokusai::Block
   style <<~EOF
   [style]
   dropText {
+    padding: padding(10.0, 5.0, 10.0, 20.0);
     color: rgb(222,222,222);
     content: "Choose your destiny";
     outline: outline(0.0, 0.0, 1.0, 0.0);
-    padding: padding(0.0, 0.0, 0.0, 20.0);
     outline_color: rgb(43, 43, 43);
   }
 
@@ -10744,7 +11300,7 @@ class Hokusai::Blocks::Dropdown < Hokusai::Block
   [template]
     vblock { @keypress="autocomplete" @click="prevent" @mousedown="prevent" @hover="prevent" @wheel="prevent" }
       hblock { ...dropContainer }
-        text { ...dropText :padding="text_padding" :size="size" :content="active_content" }
+        text { ...dropText :size="size" :content="active_content" }
         icon { ...dropIcon :size="size" @click="open"}
       [if="opened"]
         panel.panel {
@@ -10793,13 +11349,6 @@ class Hokusai::Blocks::Dropdown < Hokusai::Block
 
   def prevent(event)
     event.stop
-  end
-
-  def text_padding
-    mheight = ((@height || 0.0) / 2.0)
-    msize = (size / 2.0)
-    top = mheight - msize
-    Hokusai::Padding.new(top, 0.0, 0.0, 20.0)
   end
 
   def filtered_options
@@ -11305,10 +11854,13 @@ WORKDIR /app
 
 RUN git clone --branch 5.5 --depth 1 https://github.com/raysan5/raylib.git vendor/raylib
 RUN git clone --depth 1 https://github.com/tree-sitter/tree-sitter.git vendor/tree-sitter
-RUN git clone --branch stable --depth 1 https://github.com/mruby/mruby.git vendor/mruby
-RUN git clone --branch main --depth 1 https://github.com/skinnyjames/hokusai-pocket.git vendor/hp
+RUN git clone --branch 3.4.0 --depth 1 https://github.com/mruby/mruby.git vendor/mruby
+RUN git clone --branch feature/accessibility --depth 1 https://github.com/skinnyjames/hokusai-pocket.git vendor/hp
 RUN git clone https://github.com/mlabbe/nativefiledialog.git vendor/nfd
 RUN git clone https://github.com/libuv/libuv vendor/libuv
+RUN git clone --depth 1 http://github.com/festvox/flite vendor/flite
+RUN git clone --depth 1 --branch v1.7.1 https://github.com/ggml-org/whisper.cpp.git vendor/whisper
+RUN git clone --depth 1 https://github.com/mackron/miniaudio.git vendor/miniaudio
 
 # fetch http deps
 RUN wget -O vendor/llhttp.tar.gz https://github.com/nodejs/llhttp/archive/refs/tags/release/v9.3.1.tar.gz && \
@@ -11540,6 +12092,37 @@ RUN cd build/gmake_macosx && make config=release_x64
 RUN cd build/gmake_linux_zenity && make config=release_x64
 <% end %>
 
+# build flite
+WORKDIR /app/vendor/flite
+<% if os == "windows" %>
+ENV CC=x86_64-w64-mingw32-gcc-posix
+ENV AR=x86_64-w64-mingw32-gcc-ar
+RUN CFLAGS='-DCST_AUDIO_NONE -DCST_NO_SOCKETS -fgnu89-inline' ./configure --with-audio="none" --host=x86_64-w64-mingw32 --target=x86_64-unknown-linux-gnu
+<% elsif os == "osx" %>
+ENV CC=x86_64-apple-darwin20.4-clang
+ENV AR=x86_64-apple-darwin20.4-ar
+ENV RANLIB=x86_64-apple-darwin20.4-ranlib
+ENV ARFLAGS=rc
+RUN CFLAGS='-DCST_AUDIO_NONE -DCST_NO_SOCKETS' ./configure --with-audio="none" --host=x86_64-apple-darwin
+<% else %>
+ENV CC=gcc
+ENV AR=ar
+RUN CFLAGS='-DCST_AUDIO_NONE -DCST_NO_SOCKETS' ./configure --with-audio="none" --host=x86_64-unknown-linux-gnu
+<% end %>
+
+RUN CFLAGS='-DCST_AUDIO_NONE -DCST_NO_SOCKETS' make -j 1
+
+# build whisper
+WORKDIR /app/vendor/whisper
+<% if os == "linux" %>
+RUN cmake-wrap -S . -B build -DCMAKE_BUILD_TYPE=Release -DGGML_NATIVE=OFF -DGGML_AVX2=OFF -DGGML_FMA=OFF -DWHISPER_BUILD_TESTS=OFF -DGGML_OPENMP=OFF -DWHISPER_OPENMP=OFF -DBUILD_SHARED_LIBS=OFF -DWHISPER_BUILD_EXAMPLES=OFF -DWHISPER_BUILD_SERVER=OFF
+<% elsif os == "osx" %>
+RUN cmake-wrap -S . -B build -DCMAKE_BUILD_TYPE=Release -DGGML_NATIVE=OFF -DWHISPER_BUILD_TESTS=OFF -DGGML_OPENMP=OFF -DWHISPER_OPENMP=OFF -DBUILD_SHARED_LIBS=OFF -DWHISPER_BUILD_EXAMPLES=OFF -DWHISPER_BUILD_SERVER=OFF -DGGML_METAL=OFF
+<% else %>
+RUN cmake-wrap -S . -B build -DCMAKE_BUILD_TYPE=Release -DGGML_NATIVE=OFF -DWHISPER_BUILD_TESTS=OFF -DGGML_OPENMP=OFF -DWHISPER_OPENMP=OFF -DBUILD_SHARED_LIBS=OFF -DWHISPER_BUILD_EXAMPLES=OFF -DWHISPER_BUILD_SERVER=OFF
+<% end %>
+WORKDIR /app/vendor/whisper/build
+RUN make -j 5 all
 
 # build libuv
 WORKDIR /app/vendor/libuv
@@ -11627,23 +12210,27 @@ spec("hokusai-pocket-app") do
 
 <% if os.eql?("windows") %>
     def libs
-      "-lws2_32 -lgdi32 -lwinmm -lcomctl32 -lcomdlg32 -lole32 -luuid -ldbghelp -liphlpapi -luserenv -lbcrypt -lcrypt32 -static -lwinpthread  -lsynchronization"
+      "-lws2_32 -lgdi32 -lwinmm -lcomctl32 -lcomdlg32 -lole32 -luuid -ldbghelp -liphlpapi -luserenv -lbcrypt -lcrypt32 -static -lwinpthread  -lsynchronization -lstdc++"
     end
 <% elsif os.eql?("osx") %>
     def libs
-      "-framework CoreVideo -framework Security -framework CoreAudio -framework AppKit -framework IOKit -framework Cocoa -framework GLUT -framework OpenGL"
+      "-framework CoreVideo -framework Security -framework CoreAudio -framework AppKit -framework IOKit -framework Cocoa -framework GLUT -framework OpenGL -framework Metal -framework Foundation -framework MetalKit -framework Accelerate -lc++"
     end
 <% else %>
     def libs
-      "-lGL -lm -lpthread -ldl -lrt -lX11"
+      "-lGL -lm -lpthread -ldl -lrt -lX11 -lstdc++"
     end
 <% end %>
     def includes
       %w[
           vendor/tree-sitter/build/include 
           vendor/raylib/src 
+          vendor/miniaudio
           vendor/mruby/include
           vendor/mruby/build/host/include
+          vendor/whisper/include
+          vendor/whisper/ggml/include
+          vendor/flite/include
           vendor/hp/grammar/tree_sitter
           vendor/hp/src
           vendor/hp/src/mruby-uv
@@ -11670,8 +12257,20 @@ spec("hokusai-pocket-app") do
         vendor/mruby/build/platform/lib/libmruby.a 
         vendor/raylib/src/libraylib.a
         vendor/tree-sitter/build/lib/libtree-sitter.a
-        vendor/libuv/build/dist/lib/libuv.a
       ] + ["vendor/nfd/build/lib/Release/x64/\#{nfd}"]
+
+      ln << "vendor/whisper/build/src/libwhisper.a"
+      ln << "vendor/whisper/build/ggml/src/libggml.a"
+
+      %w[libflite_cmu_us_slt.a libflite_usenglish.a libflite_cmulex.a libflite.a].each do |lib|
+        <% if os == "windows" %>
+          ln << "vendor/flite/build/x86_64-linux-gnu/lib/#\{lib}"
+        <% elsif os == "osx" %>
+          ln << "vendor/flite/build/x86_64-darwin/lib/\#{lib}"
+        <% else %>
+          ln << "vendor/flite/build/x86_64-linux-gnu/lib/\#{lib}"
+        <% end %>
+      end
 
       ln << "vendor/tlsuv/build/libtlsuv.a"
       ln << "vendor/llhttp/dist/lib/libllhttp.a"
@@ -11681,6 +12280,7 @@ spec("hokusai-pocket-app") do
       end
 
       ln << "vendor/zlib/build/\#{zlib}"
+      ln << "vendor/libuv/build/dist/lib/libuv.a"
       ln.join(" ")
     end
 
@@ -11709,7 +12309,7 @@ spec("hokusai-pocket-app") do
       File.open("vendor/hp/mrblib/hokusai.rb", "w") { |io| io << ruby_file("vendor/hp/ruby/hokusai.rb") }
       mkdir("vendor/hokusai-pocket")
 
-      command("\#{mrbc} -o vendor/hp/src/pocket.c -Bpocket ./vendor/hp/mrblib/hokusai.rb")
+      command("\#{mrbc} -g -o vendor/hp/src/pocket.c -Bpocket ./vendor/hp/mrblib/hokusai.rb")
 
       ruby do
         code = File.read("vendor/hp/src/pocket.c")
@@ -11735,20 +12335,19 @@ spec("hokusai-pocket-app") do
       end
 
       # ugh, need separate libuv/raylib compilation units because of windows.h collisions
-      loop_includes = %w[
-        vendor/mruby/include
-        vendor/mruby/build/host/include
-        vendor/libuv/include
-        vendor/tree-sitter/build/include
-        vendor/hp/src
-        vendor/hp/grammar/tree_sitter
-      ].map { |inc| "-I../../\#{inc}" }.join(" ")
+      loop_includes = includes.map { |inc| "-I../../\#{inc}" }.join(" ")
 
       command("${CC:-gcc} -O3 -Wall \#{loop_includes} -c ../../vendor/hp/src/mruby-uv/loop.c", chdir: "vendor/hokusai-pocket")
       # end building loop.o
+      # build http.c
+      command("${CC:-gcc} -O3 -Wall -DNOGDI -DWIN32_LEAN_AND_MEAN -DNOUSER  \#{loop_includes} -c ../../vendor/hp/src/http/http.c", chdir: "vendor/hokusai-pocket")
+      command("${CC:-gcc} -O3 -Wall -DNOGDI -DWIN32_LEAN_AND_MEAN -DNOUSER  \#{loop_includes} -c ../../vendor/hp/src/voice/voice.c", chdir: "vendor/hokusai-pocket")
+      command("${CC:-gcc} -O3 -Wall -DNOGDI -DWIN32_LEAN_AND_MEAN -DNOUSER  \#{loop_includes} -c ../../vendor/hp/src/voice/speech.c", chdir: "vendor/hokusai-pocket")
+
+      # build voice/speech.c
 
       ruby do
-        command("${CC:-gcc} -O3 -Wall \#{h_includes} -c #\{h_sources}", chdir: "vendor/hokusai-pocket")
+        command("${CC:-gcc} -O3 -Wall -DHP_HTTP -DHP_VOICE \#{h_includes} -c #\{h_sources}", chdir: "vendor/hokusai-pocket")
         .forward_output(&on_output)
         .execute
 
@@ -11758,7 +12357,7 @@ spec("hokusai-pocket-app") do
       end
 
       # build the app
-      command("\#{mrbc} -o pocket-app.h -Bpocket_app pocket-app.rb")
+      command("\#{mrbc} -g -o pocket-app.h -Bpocket_app pocket-app.rb")
       ruby do
         File.open("<%= outfile %>.c", "w") do |io|
           str = <<~C          
@@ -11804,6 +12403,8 @@ spec("hokusai-pocket-app") do
         .
         vendor/hokusai-pocket
         vendor/hp/src
+        vendor/hp/src/http
+        vendor/hp/src/voice
         vendor/hp/src/mruby-uv
         vendor/nfd/src/include
         vendor/libuv/include
@@ -12066,7 +12667,7 @@ module Hokusai
     @on_renderable&.call(canvas)
   end
 
-  # **Backend** Provides set mouse cursor callback
+  # Internal: Provides set mouse cursor callback
   def self.on_set_mouse_cursor(&block)
     @on_set_mouse_cursor = block
   end
@@ -12080,7 +12681,7 @@ module Hokusai
     @on_set_mouse_cursor&.call(type)
   end
 
-  # **Backend** Provides copy callback
+  # Internal: Provides copy callback
   def self.on_copy(&block)
     @on_copy = block
   end
@@ -12092,6 +12693,18 @@ module Hokusai
   # Returns nothing
   def self.copy(text)
     @on_copy&.call(text)
+  end
+
+  # Internal: Sets the on paste callback
+  def self.on_paste(&block)
+    @on_paste = block
+  end
+
+  # Public: Get text from clipboard
+  #
+  # Returns a String or Nil
+  def self.paste
+    @on_paste&.call
   end
 
   # Mobile support
@@ -12123,6 +12736,11 @@ module Hokusai
     @on_speak_words ||= []
   end
 
+  # Public: Routes (words) through TTS
+  #
+  # words - a string to speak
+  # 
+  # Returns nothing
   def self.speak(words)
     on_speak_words << words
   end

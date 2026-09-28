@@ -27,18 +27,20 @@ module Hokusai
     attr_reader :keys, :pressed, :released, :down
 
     # Public: Is the pressed key printable?
-    # 
+    #
+    # type - one of the following symbols (:pressed, :down)  (default :pressed)
+    #
     # Returns boolean
-    def printable?
+    def printable?(type = :pressed)
       [
-        :space, :tab, :apostrophe, :comma, :minus, :period,
-        :slash,
+        :space, :apostrophe, :comma, :minus, :period,
+        :slash, :right_bracket, :left_bracket, :grave, :equal,
         :zero, :one, :two, :three, :four, :five, :six, 
         :seven, :eight, :nine, :semicolon, 
         :a, :b, :c, :d, :e, :f, :g, :h,
         :i, :j, :k, :l, :m, :n, :o, :p, :q, :r, 
         :s, :t, :u, :v, :w, :x, :y, :z,
-      ].include?(symbol)
+      ].include?(symbol(type))
     end
 
     def initialize
@@ -65,8 +67,13 @@ module Hokusai
     #   #=> :enter
     #   
     # Returns Symbol
-    def symbol
-      pressed[0]&.[](:symbol)
+    def symbol(type = :pressed)
+      case type
+      when :pressed
+        pressed[0]&.[](:symbol)
+      when :down
+        down[0]&.[](:symbol)
+      end
     end
 
     # Internal: The integer code form of the pressed key

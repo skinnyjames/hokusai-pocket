@@ -471,7 +471,7 @@ Same as draw but yields a [Hokusai::Commands](/api/Hokusai/Commands) as the call
 ### Examples
 
 ```ruby
-fetch("https://https://jsonplaceholder.typicode.com/todos/1", { method: "GET" }) do |res|
+fetch("https://jsonplaceholder.typicode.com/todos/1", { method: "GET" }) do |res|
   # get the response code
   p res.code
   # get a JSON response as a ruby object
@@ -527,5 +527,35 @@ Returns nothing
 ### Returns
 
 Returns String
+
+
+## .register_voice <Badge type="info" text="public" />
+
+<p>An experimental DSL for handling voice commands</p>
+
+### Examples
+
+```ruby
+register_voice "some-component" do
+  # This block listens for the word 'zoom'
+  voice.build_action "zoom" do |builder|
+    builder.description do
+      "say zoom in or zoom out to zoom"
+    end
+    # when 'zoom' is matched, the callback will be invoked with
+    # the full string
+    builder.on_match do |str|
+      case str
+      when /in/
+        control.set_zoom(control.zoom + 20)
+      when /out/
+        control.set_zoom(control.zoom - 20)
+      end
+      # on_match should return a string that will be spoken through TTS
+      "Zoom at #{control.zoom} percent"
+    end
+  end
+end
+```
 
 

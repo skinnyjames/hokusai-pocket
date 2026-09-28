@@ -12,8 +12,8 @@ module Hokusai
     # Public: is the key printable to the screen?
     # 
     # Returns boolean
-    def printable?
-      @keyboard.printable?
+    def printable?(type = :pressed)
+      @keyboard.printable?(type)
     end
     
     # Public: array of pressed keys
@@ -143,7 +143,7 @@ module Hokusai
     # Public: The key in symbol from
     #
     # Returns Symbol
-    def key
+    def symbol
       down[0]&.[](:symbol)
     end
 

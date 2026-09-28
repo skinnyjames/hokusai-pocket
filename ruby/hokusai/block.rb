@@ -485,7 +485,7 @@ module Hokusai
     # 
     # Examples
     # 
-    #   fetch("https://https://jsonplaceholder.typicode.com/todos/1", { method: "GET" }) do |res|
+    #   fetch("https://jsonplaceholder.typicode.com/todos/1", { method: "GET" }) do |res|
     #     # get the response code
     #     p res.code
     #     # get a JSON response as a ruby object

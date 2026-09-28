@@ -918,7 +918,7 @@ spec("hokusai-pocket") do |config|
     def build
       mkdir("vendor/cli") unless Dir.exists?("vendor/cli")
       mkdir("bin") unless Dir.exists?("bin")
-      command("#{mrbc} -o vendor/cli/pocket-cli.h -Bpocket_cli #{brewfile(args)}")
+      command("#{mrbc} -g -o vendor/cli/pocket-cli.h -Bpocket_cli #{brewfile(args)}")
 
       ruby do
         File.open("vendor/cli/hokusai-pocket.c", "w") do |io|
@@ -1077,7 +1077,7 @@ spec("hokusai-pocket") do |config|
             puts "#{func}"
             puts "#{lines[(lineno.to_i)]}"
             if idx.zero?
-              puts "#{lines[(lineno.to_i + 1)..(lineno.to_i + 5)].join("\n")}"
+              puts "#{lines[(lineno.to_i-2)..(lineno.to_i + 15)].join("\n")}"
             end
           end
         end

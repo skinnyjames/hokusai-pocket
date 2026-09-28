@@ -736,6 +736,17 @@ mrb_value on_copy(mrb_state* mrb, mrb_value self)
   return mrb_nil_value();
 }
 
+mrb_value on_paste(mrb_state* mrb, mrb_value self)
+{
+  char* text = GetClipboardText();
+  if (text)
+  {
+    return mrb_str_new_cstr(mrb, text);
+  }
+
+  return mrb_nil_value();
+}
+
 mrb_value on_can_render(mrb_state* mrb, mrb_value self)
 {
   mrb_value canvas;
@@ -863,6 +874,9 @@ void hp_backend_render_callbacks(mrb_state* mrb, struct RClass* module)
 
   struct RProc* copy_proc = mrb_proc_new_cfunc(mrb, on_copy);
   mrb_funcall_with_block(mrb, mrb_obj_value(module), mrb_intern_lit(mrb, "on_copy"), 0, NULL, mrb_obj_value(copy_proc));
+
+  struct RProc* paste_proc = mrb_proc_new_cfunc(mrb, on_paste);
+  mrb_funcall_with_block(mrb, mrb_obj_value(module), mrb_intern_lit(mrb, "on_paste"), 0, NULL, mrb_obj_value(paste_proc));
 
   struct RProc* can_render_proc = mrb_proc_new_cfunc(mrb, on_can_render);
   mrb_funcall_with_block(mrb, mrb_obj_value(module), mrb_intern_lit(mrb, "on_can_render"), 0, NULL, mrb_obj_value(can_render_proc));
@@ -1169,10 +1183,10 @@ void hp_process_speech(mrb_state* mrb, hp_speech* speech)
   }
 }
 
-void hp_process_voice(mrb_state* mrb, hp_voice* voice, mrb_value app)
+void hp_process_voice(mrb_state* mrb, hp_voice* voice, mrb_value app, int voicekey)
 {
   // handle voice
-  int ptt_key = KEY_RIGHT_SHIFT;
+  int ptt_key = voicekey;
 
   if (IsKeyPressed(ptt_key)) {
     f_log(F_LOG_INFO, "Toggle Record");
@@ -1224,6 +1238,7 @@ int hp_backend_run(mrb_state* mrb, struct RClass* hokusai_module, mrb_value back
   struct RClass* input_class = mrb_class_get_under(mrb, hokusai_module, "Input");
   struct RClass* painter_class = mrb_class_get_under(mrb, hokusai_module, "Painter");
   struct RClass* canvas_class = mrb_class_get_under(mrb, hokusai_module, "Canvas");
+
   mrb_value input = mrb_obj_new(mrb, input_class, 0, NULL);
 
   if (mrb->exc) mrb_print_error(mrb);
@@ -1244,6 +1259,11 @@ int hp_backend_run(mrb_state* mrb, struct RClass* hokusai_module, mrb_value back
   if (use_touch) mrb_funcall(mrb, input, "support_touch!", 0, NULL);
 
 #if defined(HP_VOICE)
+mrb_value key_codes = mrb_const_get(mrb, mrb_obj_value(hokusai_module), mrb_intern_lit(mrb, "KEY_CODES"));
+mrb_value hot_key = mrb_funcall(mrb, config, "voice_accessibility_hot_key", 0, NULL);
+mrb_value voice_trigger = mrb_hash_get(mrb, key_codes, hot_key);
+int rl_voice_key = mrb_int(mrb, voice_trigger); 
+
 char* voice_model_path = NULL;
 hp_voice* voice = NULL;
 
@@ -1301,7 +1321,7 @@ if (use_speech)
     // audio frame
     f_log(F_LOG_DEBUG, "processing audio frame");
 #if defined(HP_VOICE)
-    if (voice) hp_process_voice(mrb, voice, block);
+    if (voice) hp_process_voice(mrb, voice, block, rl_voice_key);
     if (speech) hp_process_speech(mrb, speech);
 #endif
     f_log(F_LOG_DEBUG, "processed audio frame");

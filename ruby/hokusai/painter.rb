@@ -1,3 +1,4 @@
+
 module Hokusai
   # Internal: Describes a Block with layout coordinates for rendering
   class PainterEntry
@@ -94,7 +95,6 @@ module Hokusai
 
       before_render&.call([root, nil], canvas, input)
 
-      # root_children = (canvas.reverse? ? root.children?&.reverse.dup : root.children?&.dup) || []
       groups = []
       root_entry = PainterEntry.new(root, canvas.x, canvas.y, canvas.width, canvas.height)
       groups << [root_entry, measure([root], canvas)]
@@ -137,6 +137,12 @@ module Hokusai
 
           before_render&.call([group.block, group.parent], canvas, input)
 
+          if capture && !input.touch && input.hovered?(canvas)
+            if target = group.block.node.meta.target
+              group.block.node.add_evented_styles(target.class, "hover")
+            end
+          end
+
           if resize
             group.block.on_resize(canvas)
           end
@@ -146,12 +152,8 @@ module Hokusai
           group.block.render(canvas) do |local_canvas|
             # defer capture for zindexed items so they can stop propagation.
             if capture && (zindex_counter.zero? && z.zero?)
-              capture_events(group.block, local_canvas, hovered: hovered)
-            # since evented styles happens during capture and z-index skips capture, well add some
-            elsif capture && !input.touch && input.hovered?(local_canvas)
-              if target = group.block.node.meta.target
-                group.block.node.add_evented_styles(target.class, "hover")
-              end
+              capture_events(group.block, local_canvas, z: 0, hovered: hovered)
+              # since evented styles happens during capture and z-index skips capture, well add some
             end
 
             local_children = (local_canvas.reverse? ? group.block.children?&.reverse : group.block.children?)
@@ -183,7 +185,6 @@ module Hokusai
             group.block.execute_draw
           end
 
-
           break if breaked
         end
       end
@@ -191,7 +192,8 @@ module Hokusai
       zindexed.sort.each do |z, groups|
         groups.each do |group|
           canvas.reset(group.x, group.y, group.w, group.h)
-          capture_events(group.block, canvas)
+          capture_events(group.block, canvas, z: z || zindex_counter)
+
           group.block.execute_draw
         end
       end
@@ -305,12 +307,31 @@ module Hokusai
       entries
     end
 
-    def capture_events(block, canvas, hovered: false)
+    def capture_events(block, canvas, z: 0, hovered: false)
       if block.node.portal.nil?
         return
       end
+
+      @focused ||= []
       
       events[:keydown].capture(block, canvas)
+
+      # handle focusing
+      if input.hovered?(canvas) && input.mouse.left.clicked
+        block.node.meta.focus
+        if z > 0
+          # reblur anything underneath this block.
+          @focused.reject! do |fz, fblock, fcanvas|
+            if fz < z && input.hovered?(fcanvas)
+              fblock.node.meta.blur
+            end
+          end
+        end
+
+        @focused << [z, block, canvas]
+      elsif input.mouse.left.clicked
+        block.node.meta.blur
+      end
 
       if !input.touch
         if input.hovered?(canvas)

@@ -112,21 +112,13 @@ module Hokusai
     # Internal: Captured if the block is listening for @click 
     #           and the left mouse clicks the block geometry
     def capture(block, canvas)
-      if left.clicked && clicked(canvas)
-        block.node.meta.focus
-
+      if left.clicked || middle.clicked || right.clicked 
         add_evented_styles(block) if hovered(canvas)
 
         if matches(block)
           add_capture(block)
         end
-      elsif left.clicked
-        block.node.meta.blur
       end
-    end
-
-    def clicked(canvas)
-      left.clicked && input.hovered?(canvas)
     end
   end
 
@@ -137,7 +129,7 @@ module Hokusai
     def capture(block, canvas)
       add_evented_styles(block) if left.up && hovered(canvas)
 
-      if left.up && matches(block)
+      if (left.up || middle.up || right.up) && matches(block)
         add_capture(block)
       end
     end
@@ -148,9 +140,9 @@ module Hokusai
     name "mousedown"
 
     def capture(block, canvas)
-      add_evented_styles(block) if left.down && hovered(canvas)
+      add_evented_styles(block) if (left.down || middle.down || right.down) && hovered(canvas)
 
-      if left.down && matches(block)
+      if (left.down || middle.down || right.down) && matches(block)
         add_capture(block)
       end
     end
@@ -209,14 +201,6 @@ module Hokusai
 
     def capture(block, canvas)
       add_capture(block) if matches(block)
-
-      if left.clicked && !clicked(canvas)
-        block.node.meta.blur
-      end
-    end
-
-    def clicked(canvas)
-      left.clicked && input.hovered?(canvas)
     end
   end
 end

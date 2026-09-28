@@ -130,22 +130,14 @@ module Hokusai
       @props[name]
     end
 
-    # Public: Set this node and chlidren to focused
+    # Public: Set this node to focused
     def focus
       @focused = true
-
-      children?&.each do |child|
-        child.node.meta.focus
-      end
     end
 
-    # Public: Unfocus this node and children
+    # Public: Unfocus this node
     def blur
       @focused = false
-
-      children?&.each do |child|
-        child.node.meta.blur
-      end
     end
 
     # Internal: Set on update callback.  Used by [Hokusai::NodeMounter](/api/Hokusai/NodeMounter) and the like
