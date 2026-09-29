@@ -1,134 +1,194 @@
 module Hokusai::Util
+  # Public: Represents a selectable area with coordinates.
+  #         Used from with [Util::Selection](/api/Hokusai/Util/Selection)
+  #
+  # Examples
+  #
+  #   geom = Hokusai::Util::GeometrySelection.new
+  #   geom.start(0.0, 0.0)
+  #   geom.stop(100.0, 100.0)
+  #   geom.down? # true
+  #   geom.selected(20.0, 20.0, 20.0, 20.0) # true
+  #
   class GeometrySelection
-    attr_accessor :start_x, :start_y, :stop_x, :stop_y,
-                  :type, :cursor, :diff, :click_pos, :parent
-
+    attr_reader :parent, :direction
+    attr_accessor :start_x, :start_y, :stop_x, :stop_y, :click_pos, :modified, 
+                  :changed_direction, :original_direction, :resized, :state
+    
     def initialize(parent)
       @parent = parent
-      @type = :none         # state for the geometry selection (active/frozen/etc)
-      @start_x = 0.0        # the x coordinate for the geometry
-      @start_y = 0.0        # the y coordinate for the geometry 
+      @state = :none
+      @start_x = 0.0
+      @start_y = 0.0
       @stop_x = 0.0
       @stop_y = 0.0
-      @diff = 0.0
-      @cursor = nil
       @click_pos = nil
+      @modified = false
+      @original_direction = nil
+      @resized = false
     end
 
-    def set_click_pos(x, y)
-      @click_pos = [x, y]
-    end
-
-    def none?
-      type == :none
-    end
-
-    def ready?
-      type == :none || type == :frozen
-    end
-
-    def clear
-      self.start_x = 0.0
-      self.start_y = 0.0
-      self.stop_x = 0.0
-      self.stop_y = 0.0
-      self.cursor = nil
-    end
-
-    def changed_direction?
-      @changed_direction
-    end
-
-    def active?
-      type == :active
-    end
-
-    def frozen?
-      type == :frozen
-    end
-
-    def activate!
-      self.type = :active
-    end
-
-    def freeze!
-      self.type = :frozen
-    end
-
-    def coords
-      [start_x, stop_x, start_y, stop_y]
-    end
-
+    # Public: Starts a selection
+    #
+    # x - the x coordinate selected (Float)
+    # y - the y coordinate selected (Float)
+    #
+    # Returns nothing
     def start(x, y)
       self.start_x = x
-      self.start_y = y
+      self.start_y = y + parent.offset_y
       self.stop_x = x
-      self.stop_y = y
-      self.cursor = nil
-
-      activate!
+      self.stop_y = y + parent.offset_y
+      self.click_pos = nil
+      self.state = :selecting
+      parent.cursor = nil
     end
 
-    def stop(x, y)
-      self.stop_x = x
-      self.stop_y = y
+    # Public: Moves the stop y coordinate up by (height)
+    #
+    # height - the amount to move up (Float)
+    #
+    # Returns nothing
+    def move_up(height)
+      self.stop_y -= height
 
-      if up? && @direction == :down || down? && @direction == :up
+      if (up? && @direction == :down) || (down? && @direction == :up)
         @changed_direction = true
-      else
-        @changed_direction = false
       end
 
       @direction = up? ? :up : :down
     end
 
+
+    # Public: Moves the stop y coordinate down by (height)
+    #
+    # height - the amount to move down (Float)
+    #
+    # Returns nothing
+    def move_down(height)
+      self.stop_y += height
+
+      if (up? && @direction == :down) || (down? && @direction == :up)
+        @changed_direction = true
+      end
+
+      @direction = up? ? :up : :down
+    end
+
+    # Public: Stops the selection
+    #
+    # x - the stop x coordinate (Float)
+    # y - the stop y coordinate (Float)
+    #
+    # Returns nothing
+    def stop(x, y)
+      self.stop_x = x
+      self.stop_y = y + parent.offset_y
+      self.modified = true
+      self.original_direction ||= up? ? :up : :down
+
+      if (up? && @direction == :down) || (down? && @direction == :up)
+        @changed_direction = true
+      end
+
+      @direction = up? ? :up : :down
+    end
+
+    def commit!
+      parent.pos!
+    end
+
+    # Public: Is the selection going upward?
+    #
+    # Returns boolean
     def up?(height = 0)
       stop_y < start_y - height
     end
 
+    # Public: Is the selection going downward?
+    #
+    # Returns boolean
     def down?(height = 0)
       start_y <= stop_y - height
     end
 
+    # Public: Is the selection going left?
+    #
+    # Returns boolean
     def left?
       stop_x < start_x
     end
 
+    # Public: Is the selection going right?
+    #
+    # Returns boolean
     def right?
       start_x <= stop_x
     end
 
-    def cursor
-      return nil unless @cursor
-
-      return [@cursor[0], @cursor[1] - parent.offset_y, @cursor[2], @cursor[3]] if frozen?
-
-      @cursor
+    # Public: Did the selection change direction?
+    #         (ie: selecting down but now going up)
+    #
+    # Returns boolean
+    def changed_direction?
+      @changed_direction
     end
 
+    # Public: Resets the selection state
+    #
+    # Returns nothing
+    def clear
+      self.start_x = 0.0
+      self.start_y = 0.0
+      self.stop_x = 0.0
+      self.stop_y = 0.0
+      self.state = :none
+      parent.cursor = nil
+    end
+    
     def rect_selected(rect)
       selected(rect[0], rect[1], rect[2], rect[3])
     end
 
+
+    def clicked_on_line(x, y, w, h)
+      return false if click_pos.nil?
+
+      click_pos[0] > x + w && click_pos[1] > y - parent.offset_y && click_pos[1] <= y - parent.offset_y + h  && click_pos[0] > w
+    end
+
+    # Public: Is this region clicked?
+    #         Note: need to set `click_pos` to use this.
+    #
+    # x - start x of the region (Float)
+    # y - start y of the region (Float)
+    # w - width of the region (Float)
+    # h - height of the region (Float)
+    #
+    # Returns boolean
     def clicked(x,y,w,h)
       return false if click_pos.nil?
 
-      pos = Hokusai::Rect.new(x, y, w, h)
-      # pos.move_x_left
+      pos = Hokusai::Rect.new(x, y - parent.offset_y, w, h)
       pos.includes_x?(click_pos[0]) && pos.includes_y?(click_pos[1])
     end
 
-    def selected(x, y, width, height)
-      return false if none?
+    # Public: Is this region selected?
+    #
+    # x - start x of the region (Float)
+    # y - start y of the region (Float)
+    # w - width of the region (Float)
+    # h - height of the region (Float)
+    #
+    # Returns boolean
+    def selected(x, ty, width, height)
+      return false if parent.pos?
 
-      if frozen?
-        y -= parent.offset_y
-      end
-
+      y = ty - parent.offset_y
+      sy = @start_y - parent.offset_y
+      ey = @stop_y - parent.offset_y
       sx = @start_x
-      sy = @start_y
       ex = @stop_x
-      ey = @stop_y
 
       down = sy <= ey
       up = ey < sy
@@ -159,8 +219,7 @@ module Hokusai::Util
         ((rect.includes_y?(sy) && rect.includes_y?(ey)) &&
           ((left && x_shifted_right < sx && x_shifted_right > ex) || (right && x_shifted_right > sx && x_shifted_right < ex)))
       )
-
       a
-    end
+    end 
   end
 end

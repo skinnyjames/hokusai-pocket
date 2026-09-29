@@ -14,7 +14,10 @@ require_relative './hokusai/texture_painter'
 require_relative './hokusai/util/selection'
 require_relative './hokusai/util/piece_table'
 require_relative './hokusai/util/wrap_stream'
+require_relative './hokusai/util/timer'
 require_relative "./config"
+
+require_relative "./hokusai/voice"
 
 require_relative './hokusai/blocks/empty'
 require_relative './hokusai/blocks/vblock'
@@ -45,7 +48,6 @@ require_relative './hokusai/blocks/shader_end'
 require_relative './hokusai/blocks/color_picker'
 require_relative './hokusai/blocks/translation'
 require_relative './hokusai/blocks/slider'
-require_relative './hokusai/blocks/text'
 require_relative './hokusai/blocks/center'
 require_relative './hokusai/blocks/tooltip'
 require_relative './hokusai/blocks/icon'
@@ -231,6 +233,14 @@ module Hokusai
     @on_open_file = block
   end
 
+  def self.on_set_title(&block)
+    @on_set_title = block
+  end
+
+  def self.set_title(title)
+    @on_set_title&.call(title)
+  end
+
   # Public: Picks a file path to open using native file dialog
   # 
   # hash - options for native file dialog
@@ -280,7 +290,7 @@ module Hokusai
     @on_renderable&.call(canvas)
   end
 
-  # **Backend** Provides set mouse cursor callback
+  # Internal: Provides set mouse cursor callback
   def self.on_set_mouse_cursor(&block)
     @on_set_mouse_cursor = block
   end
@@ -294,7 +304,7 @@ module Hokusai
     @on_set_mouse_cursor&.call(type)
   end
 
-  # **Backend** Provides copy callback
+  # Internal: Provides copy callback
   def self.on_copy(&block)
     @on_copy = block
   end
@@ -306,6 +316,18 @@ module Hokusai
   # Returns nothing
   def self.copy(text)
     @on_copy&.call(text)
+  end
+
+  # Internal: Sets the on paste callback
+  def self.on_paste(&block)
+    @on_paste = block
+  end
+
+  # Public: Get text from clipboard
+  #
+  # Returns a String or Nil
+  def self.paste
+    @on_paste&.call
   end
 
   # Mobile support
@@ -331,6 +353,36 @@ module Hokusai
 
   def self.keyboard_visible?
     @on_keyboard_visible&.call
+  end
+
+  def self.on_speak_words
+    @on_speak_words ||= []
+  end
+
+  # Public: Hook to perform actions on exit of the program.
+  # 
+  # block - an exit callback
+  # 
+  # Returns nothing
+  def self.on_exit(&block)
+    @exits ||= []
+    @exits << block
+  end
+
+  # Internal: Called on exit by the backend
+  def self.exit
+    @exits&.each do |block|
+      block.call
+    end
+  end
+
+  # Public: Routes (words) through TTS
+  #
+  # words - a string to speak
+  # 
+  # Returns nothing
+  def self.speak(words)
+    on_speak_words << words
   end
 
   # Internal: Copies state from one Hokusai::Block to another Hokusai::Block

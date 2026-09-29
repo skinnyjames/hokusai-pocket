@@ -158,6 +158,11 @@ Returns nothing
 Returns a boolean
 
 
+## .on_set_mouse_cursor <Badge type="warning" text="internal" />
+
+<p>Provides set mouse cursor callback</p>
+
+
 ## .set_mouse_cursor(type) <Badge type="info" text="public" />
 
 <p>Sets the mouse cursor from the available types:</p>
@@ -167,6 +172,11 @@ Returns a boolean
 *  _type_ - A symbol representing the type. can be one of [:default, :arrow, :ibeam, :crosshair, :pointer, :none]
 
 
+## .on_copy <Badge type="warning" text="internal" />
+
+<p>Provides copy callback</p>
+
+
 ## .copy(text) <Badge type="info" text="public" />
 
 <p>Copies text to clipboard</p>
@@ -174,6 +184,33 @@ Returns a boolean
 #### Arguments
 
 *  _text_ - the text to copy (String)
+
+### Returns
+
+Returns nothing
+
+
+## .on_paste <Badge type="warning" text="internal" />
+
+<p>Sets the on paste callback</p>
+
+
+## .paste <Badge type="info" text="public" />
+
+<p>Get text from clipboard</p>
+
+### Returns
+
+Returns a String or Nil
+
+
+## .speak(words) <Badge type="info" text="public" />
+
+<p>Routes (words) through TTS</p>
+
+#### Arguments
+
+*  _words_ - a string to speak
 
 ### Returns
 

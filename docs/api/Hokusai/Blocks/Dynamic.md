@@ -7,6 +7,8 @@ Measures it's children and emits the width and height
 
 * `computed :reverse, default: false
 `
+* `computed :vertical, default: true
+`
 
 
 

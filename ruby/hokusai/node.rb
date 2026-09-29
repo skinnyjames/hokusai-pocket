@@ -55,11 +55,17 @@ module Hokusai
 
     def destroy; end
 
+    RANDOM_LEN = 6
+
     def initialize(ast, portal = nil)
       @ast = ast
       @portal = portal
-      # @uuid = SecureRandom.hex(6).freeze
       @meta = Meta.new
+      @uuid ||= begin
+        value = Random.rand(36**RANDOM_LEN)
+        id = value.to_s(36)
+        id.ljust(RANDOM_LEN, '0')[0...RANDOM_LEN]
+      end
     end
 
     def mount(klass, providers: {})

@@ -23,10 +23,19 @@ WORKDIR /app
 
 RUN git clone --branch 5.5 --depth 1 https://github.com/raysan5/raylib.git vendor/raylib
 RUN git clone --depth 1 https://github.com/tree-sitter/tree-sitter.git vendor/tree-sitter
-RUN git clone --branch stable --depth 1 https://github.com/mruby/mruby.git vendor/mruby
-RUN git clone --branch main --depth 1 https://github.com/skinnyjames/hokusai-pocket.git vendor/hp
+RUN git clone --branch 3.4.0 --depth 1 https://github.com/mruby/mruby.git vendor/mruby
+RUN git clone --branch <%= branch %> --depth 1 https://github.com/skinnyjames/hokusai-pocket.git vendor/hp
 RUN git clone https://github.com/mlabbe/nativefiledialog.git vendor/nfd
 RUN git clone https://github.com/libuv/libuv vendor/libuv
+RUN git clone --depth 1 http://github.com/festvox/flite vendor/flite
+RUN git clone --depth 1 --branch v1.7.1 https://github.com/ggml-org/whisper.cpp.git vendor/whisper
+RUN git clone --depth 1 https://github.com/mackron/miniaudio.git vendor/miniaudio
+
+<% if !extras.empty? %>
+  <% extras.each do |extra| %>
+    ADD <%= extra %> /app/<%= extra %>
+  <% end %>
+<% end %>
 
 # fetch http deps
 RUN wget -O vendor/llhttp.tar.gz https://github.com/nodejs/llhttp/archive/refs/tags/release/v9.3.1.tar.gz && \
@@ -258,6 +267,37 @@ RUN cd build/gmake_macosx && make config=release_x64
 RUN cd build/gmake_linux_zenity && make config=release_x64
 <% end %>
 
+# build flite
+WORKDIR /app/vendor/flite
+<% if os == "windows" %>
+ENV CC=x86_64-w64-mingw32-gcc-posix
+ENV AR=x86_64-w64-mingw32-gcc-ar
+RUN CFLAGS='-DCST_AUDIO_NONE -DCST_NO_SOCKETS -fgnu89-inline' ./configure --with-audio="none" --host=x86_64-w64-mingw32 --target=x86_64-unknown-linux-gnu
+<% elsif os == "osx" %>
+ENV CC=x86_64-apple-darwin20.4-clang
+ENV AR=x86_64-apple-darwin20.4-ar
+ENV RANLIB=x86_64-apple-darwin20.4-ranlib
+ENV ARFLAGS=rc
+RUN CFLAGS='-DCST_AUDIO_NONE -DCST_NO_SOCKETS' ./configure --with-audio="none" --host=x86_64-apple-darwin
+<% else %>
+ENV CC=gcc
+ENV AR=ar
+RUN CFLAGS='-DCST_AUDIO_NONE -DCST_NO_SOCKETS' ./configure --with-audio="none" --host=x86_64-unknown-linux-gnu
+<% end %>
+
+RUN CFLAGS='-DCST_AUDIO_NONE -DCST_NO_SOCKETS' make -j 1
+
+# build whisper
+WORKDIR /app/vendor/whisper
+<% if os == "linux" %>
+RUN cmake-wrap -S . -B build -DCMAKE_BUILD_TYPE=Release -DGGML_NATIVE=OFF -DGGML_AVX2=OFF -DGGML_FMA=OFF -DWHISPER_BUILD_TESTS=OFF -DGGML_OPENMP=OFF -DWHISPER_OPENMP=OFF -DBUILD_SHARED_LIBS=OFF -DWHISPER_BUILD_EXAMPLES=OFF -DWHISPER_BUILD_SERVER=OFF
+<% elsif os == "osx" %>
+RUN cmake-wrap -S . -B build -DCMAKE_BUILD_TYPE=Release -DGGML_NATIVE=OFF -DWHISPER_BUILD_TESTS=OFF -DGGML_OPENMP=OFF -DWHISPER_OPENMP=OFF -DBUILD_SHARED_LIBS=OFF -DWHISPER_BUILD_EXAMPLES=OFF -DWHISPER_BUILD_SERVER=OFF -DGGML_METAL=OFF
+<% else %>
+RUN cmake-wrap -S . -B build -DCMAKE_BUILD_TYPE=Release -DGGML_NATIVE=OFF -DWHISPER_BUILD_TESTS=OFF -DGGML_OPENMP=OFF -DWHISPER_OPENMP=OFF -DBUILD_SHARED_LIBS=OFF -DWHISPER_BUILD_EXAMPLES=OFF -DWHISPER_BUILD_SERVER=OFF
+<% end %>
+WORKDIR /app/vendor/whisper/build
+RUN make -j 5 all
 
 # build libuv
 WORKDIR /app/vendor/libuv
@@ -303,7 +343,7 @@ RUN cmake-wrap -S . -B build DMBEDCRYPTO_LIBRARY='../../vendor/mbedtls/build/dis
   -DTLSUV_TLSLIB=mbedtls \
   -DZLIB_INCLUDE='../../vendor/zlib' \
   -DZLIB_LIB="../../vendor/zlib/build/$ZLIBA" \
-  -DLLHTTP_LIB='../../vendor/llhtp/dist/lib/libllhttp.a' \
+  -DLLHTTP_LIB='../../vendor/llhttp/dist/lib/libllhttp.a' \
   -DLLHTTP_INCLUDE='../../vendor/llhttp/dist/include' \
   -DTLSUV_LIBUV_LIB='../../vendor/libuv/libuv.a' \
   -DTLSUV_LIBUV_INCLUDE='../../vendor/libuv/build/dist/include' \
@@ -345,23 +385,27 @@ spec("hokusai-pocket-app") do
 
 <% if os.eql?("windows") %>
     def libs
-      "-lws2_32 -lgdi32 -lwinmm -lcomctl32 -lcomdlg32 -lole32 -luuid -ldbghelp -liphlpapi -luserenv -lbcrypt -lcrypt32 -static -lwinpthread  -lsynchronization"
+      "-lws2_32 -lgdi32 -lwinmm -lcomctl32 -lcomdlg32 -lole32 -luuid -ldbghelp -liphlpapi -luserenv -lbcrypt -lcrypt32 -static -lwinpthread  -lsynchronization -lstdc++"
     end
 <% elsif os.eql?("osx") %>
     def libs
-      "-framework CoreVideo -framework Security -framework CoreAudio -framework AppKit -framework IOKit -framework Cocoa -framework GLUT -framework OpenGL"
+      "-framework CoreVideo -framework Security -framework CoreAudio -framework AppKit -framework IOKit -framework Cocoa -framework GLUT -framework OpenGL -framework Metal -framework Foundation -framework MetalKit -framework Accelerate -lc++"
     end
 <% else %>
     def libs
-      "-lGL -lm -lpthread -ldl -lrt -lX11"
+      "-lGL -lm -lpthread -ldl -lrt -lX11 -lstdc++"
     end
 <% end %>
     def includes
       %w[
           vendor/tree-sitter/build/include 
           vendor/raylib/src 
+          vendor/miniaudio
           vendor/mruby/include
           vendor/mruby/build/host/include
+          vendor/whisper/include
+          vendor/whisper/ggml/include
+          vendor/flite/include
           vendor/hp/grammar/tree_sitter
           vendor/hp/src
           vendor/hp/src/mruby-uv
@@ -388,8 +432,20 @@ spec("hokusai-pocket-app") do
         vendor/mruby/build/platform/lib/libmruby.a 
         vendor/raylib/src/libraylib.a
         vendor/tree-sitter/build/lib/libtree-sitter.a
-        vendor/libuv/build/dist/lib/libuv.a
       ] + ["vendor/nfd/build/lib/Release/x64/\#{nfd}"]
+
+      ln << "vendor/whisper/build/src/libwhisper.a"
+      ln << "vendor/whisper/build/ggml/src/libggml.a"
+
+      %w[libflite_cmu_us_slt.a libflite_usenglish.a libflite_cmulex.a libflite.a].each do |lib|
+        <% if os == "windows" %>
+          ln << "vendor/flite/build/x86_64-linux-gnu/lib/#\{lib}"
+        <% elsif os == "osx" %>
+          ln << "vendor/flite/build/x86_64-darwin/lib/\#{lib}"
+        <% else %>
+          ln << "vendor/flite/build/x86_64-linux-gnu/lib/\#{lib}"
+        <% end %>
+      end
 
       ln << "vendor/tlsuv/build/libtlsuv.a"
       ln << "vendor/llhttp/dist/lib/libllhttp.a"
@@ -399,6 +455,7 @@ spec("hokusai-pocket-app") do
       end
 
       ln << "vendor/zlib/build/\#{zlib}"
+      ln << "vendor/libuv/build/dist/lib/libuv.a"
       ln.join(" ")
     end
 
@@ -427,7 +484,7 @@ spec("hokusai-pocket-app") do
       File.open("vendor/hp/mrblib/hokusai.rb", "w") { |io| io << ruby_file("vendor/hp/ruby/hokusai.rb") }
       mkdir("vendor/hokusai-pocket")
 
-      command("\#{mrbc} -o vendor/hp/src/pocket.c -Bpocket ./vendor/hp/mrblib/hokusai.rb")
+      command("\#{mrbc} -g -o vendor/hp/src/pocket.c -Bpocket ./vendor/hp/mrblib/hokusai.rb")
 
       ruby do
         code = File.read("vendor/hp/src/pocket.c")
@@ -453,20 +510,19 @@ spec("hokusai-pocket-app") do
       end
 
       # ugh, need separate libuv/raylib compilation units because of windows.h collisions
-      loop_includes = %w[
-        vendor/mruby/include
-        vendor/mruby/build/host/include
-        vendor/libuv/include
-        vendor/tree-sitter/build/include
-        vendor/hp/src
-        vendor/hp/grammar/tree_sitter
-      ].map { |inc| "-I../../\#{inc}" }.join(" ")
+      loop_includes = includes.map { |inc| "-I../../\#{inc}" }.join(" ")
 
       command("${CC:-gcc} -O3 -Wall \#{loop_includes} -c ../../vendor/hp/src/mruby-uv/loop.c", chdir: "vendor/hokusai-pocket")
       # end building loop.o
+      # build http.c
+      command("${CC:-gcc} -O3 -Wall -DNOGDI -DWIN32_LEAN_AND_MEAN -DNOUSER  \#{loop_includes} -c ../../vendor/hp/src/http/http.c", chdir: "vendor/hokusai-pocket")
+      command("${CC:-gcc} -O3 -Wall -DNOGDI -DWIN32_LEAN_AND_MEAN -DNOUSER  \#{loop_includes} -c ../../vendor/hp/src/voice/voice.c", chdir: "vendor/hokusai-pocket")
+      command("${CC:-gcc} -O3 -Wall -DNOGDI -DWIN32_LEAN_AND_MEAN -DNOUSER  \#{loop_includes} -c ../../vendor/hp/src/voice/speech.c", chdir: "vendor/hokusai-pocket")
+
+      # build voice/speech.c
 
       ruby do
-        command("${CC:-gcc} -O3 -Wall \#{h_includes} -c #\{h_sources}", chdir: "vendor/hokusai-pocket")
+        command("${CC:-gcc} -O3 -Wall -DHP_HTTP -DHP_VOICE \#{h_includes} -c #\{h_sources}", chdir: "vendor/hokusai-pocket")
         .forward_output(&on_output)
         .execute
 
@@ -476,7 +532,7 @@ spec("hokusai-pocket-app") do
       end
 
       # build the app
-      command("\#{mrbc} -o pocket-app.h -Bpocket_app pocket-app.rb")
+      command("\#{mrbc} -g -o pocket-app.h -Bpocket_app pocket-app.rb")
       ruby do
         File.open("<%= outfile %>.c", "w") do |io|
           str = <<~C          
@@ -522,6 +578,8 @@ spec("hokusai-pocket-app") do
         .
         vendor/hokusai-pocket
         vendor/hp/src
+        vendor/hp/src/http
+        vendor/hp/src/voice
         vendor/hp/src/mruby-uv
         vendor/nfd/src/include
         vendor/libuv/include
@@ -537,12 +595,6 @@ EOT
 WORKDIR /app
 
 ADD build/pocket-app.rb .
-
-<% if !extras.empty? %>
-  <% extras.each do |extra| %>
-    ADD <%= extra %> /app/<% extra %>
-  <% end %>
-<% end %>
 
 <% if assets_path %>
   ADD <%= assets_path %> /app/bin/assets

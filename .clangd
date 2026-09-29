@@ -1,0 +1,12 @@
+CompileFlags:
+  Add:
+    - -I../vendor/accesskit/include
+    - -I../vendor/raylib/src
+    - -I../vendor/raylib/src/external
+    - -I../vendor/mruby/include
+    - -I../vendor/tree-sitter/include
+    - -I../vendor/libuv/include
+    - -I../vendor/nfd/include
+    - -I../vendor/whisper/include
+    - -I../vendor/flite/include
+    - -xc

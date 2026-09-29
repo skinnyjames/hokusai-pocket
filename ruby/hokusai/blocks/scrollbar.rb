@@ -10,7 +10,7 @@ class Hokusai::Blocks::Scrollbar < Hokusai::Block
     [template]
       vblock.scrollbar {
         ...scrollbar
-        @mousedown="scroll_start"
+        @click="scroll_start"
         @mousemove="scroll_handle"
         :background="background"
       }
@@ -44,6 +44,10 @@ class Hokusai::Blocks::Scrollbar < Hokusai::Block
   computed :control_padding, default: 2.0, convert: proc(&:to_f)
 
   attr_accessor :scroll_y, :scrolling, :height, :offset
+
+  def stop(event)
+    event.stop
+  end
 
   def scroll_start(event)
     self.scrolling = true

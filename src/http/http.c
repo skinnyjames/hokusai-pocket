@@ -249,7 +249,7 @@ void mrb_define_http_req_class(mrb_state* mrb)
   struct RClass* hokusai = mrb_module_get(mrb, "Hokusai");
   struct RClass* request = mrb_define_class_under(mrb, hokusai, "Request", mrb->object_class);
   uv_mutex_init(&am);
-  mrb_define_class_method(mrb, request, "init", mrb_http_req_init, MRB_ARGS_REQ(1));
+  mrb_define_class_method(mrb, request, "init", mrb_http_req_init, MRB_ARGS_REQ(2));
   mrb_define_method(mrb, request, "url", mrb_http_req_url, MRB_ARGS_NONE());
   mrb_define_method(mrb, request, "execute", mrb_http_req_execute, MRB_ARGS_REQ(4));
   mrb_define_method(mrb, request, "get", mrb_http_req_execute_get, MRB_ARGS_REQ(3));

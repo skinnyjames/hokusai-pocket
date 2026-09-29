@@ -125,12 +125,12 @@ Returns Object or nil if prop not found
 
 ## #focus <Badge type="info" text="public" />
 
-<p>Set this node and chlidren to focused</p>
+<p>Set this node to focused</p>
 
 
 ## #blur <Badge type="info" text="public" />
 
-<p>Unfocus this node and children</p>
+<p>Unfocus this node</p>
 
 
 ## #on_update(target, &block) <Badge type="warning" text="internal" />

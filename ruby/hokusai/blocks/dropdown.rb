@@ -66,7 +66,7 @@ class Hokusai::Blocks::DropdownItem < Hokusai::Block
           command.padding = padding
         end
 
-        cy = canvas.y + (canvas.height / 2.0) - (size / 2)
+        cy = canvas.y + (canvas.height / 2.0) - (size / 4.0)
         text(content, canvas.x + padding.left, cy) do |command|
           if font
             command.font = Hokusai.fonts.get(font)
@@ -75,10 +75,10 @@ class Hokusai::Blocks::DropdownItem < Hokusai::Block
           command.color = color
           command.padding = padding
         end
-        
-        yield canvas
       end
     end
+
+    yield canvas
   end
 end
 
@@ -88,10 +88,10 @@ class Hokusai::Blocks::Dropdown < Hokusai::Block
   style <<~EOF
   [style]
   dropText {
+    padding: padding(10.0, 5.0, 10.0, 20.0);
     color: rgb(222,222,222);
     content: "Choose your destiny";
     outline: outline(0.0, 0.0, 1.0, 0.0);
-    padding: padding(0.0, 0.0, 0.0, 20.0);
     outline_color: rgb(43, 43, 43);
   }
 
@@ -141,7 +141,7 @@ class Hokusai::Blocks::Dropdown < Hokusai::Block
   [template]
     vblock { @keypress="autocomplete" @click="prevent" @mousedown="prevent" @hover="prevent" @wheel="prevent" }
       hblock { ...dropContainer }
-        text { ...dropText :padding="text_padding" :size="size" :content="active_content" }
+        text { ...dropText :size="size" :content="active_content" }
         icon { ...dropIcon :size="size" @click="open"}
       [if="opened"]
         panel.panel {
@@ -190,13 +190,6 @@ class Hokusai::Blocks::Dropdown < Hokusai::Block
 
   def prevent(event)
     event.stop
-  end
-
-  def text_padding
-    mheight = ((@height || 0.0) / 2.0)
-    msize = (size / 2.0)
-    top = mheight - msize
-    Hokusai::Padding.new(top, 0.0, 0.0, 20.0)
   end
 
   def filtered_options

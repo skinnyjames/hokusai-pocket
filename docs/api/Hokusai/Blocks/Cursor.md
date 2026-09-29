@@ -13,7 +13,7 @@ Represents a blinking cursor
 `
 * `computed :speed, default: 0.5
 `
-* `computed :cursor_width, default: 2.0
+* `computed :cursor_width, default: 5.0
 `
 * `computed :cursor_height, default: 0.0
 `

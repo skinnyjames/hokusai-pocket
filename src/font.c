@@ -2,9 +2,11 @@
 #define HOKUSAI_POCKET_FONT
 
 #include "font.h"
+#include <stdlib.h>
 #include <mruby.h>
 #include <mruby/hash.h>
 #include <mruby/proc.h>
+#include <mruby/string.h>
 
 static char* default_codepoints = "–—‘’“”…\r\n\t 0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ!@#$%%^&*(),.?/\"\\[]-_=+|~`{}<>;:'\0";
 
@@ -68,45 +70,165 @@ mrb_value hp_font_from(mrb_state* mrb, mrb_value self)
   return obj;
 }
 
+
+
+typedef struct { int first, last; } hp_range;
+ 
+static const hp_range hp_default_ranges[] = {
+  {0x0020, 0x007E}, /* ASCII */
+  {0x0009, 0x000A}, /* tab, newline (the old default set had them) */
+  {0x000D, 0x000D}, /* carriage return */
+  {0x00A0, 0x017F}, /* Latin-1, Latin Extended-A */
+  {0x2010, 0x2027}, /* dashes, quotes, ellipsis, bullets */
+  {0x2030, 0x205E}, /* per mille, primes, ... */
+  {0x20A0, 0x20BF}, /* currency */
+  {0x2190, 0x21FF}, /* arrows */
+  {0x2200, 0x22FF}, /* mathematical operators */
+  {0x2300, 0x23FF}, /* miscellaneous technical */
+  {0x2500, 0x257F}, /* box drawing */
+  {0x2580, 0x259F}, /* block elements */
+  {0x25A0, 0x25FF}, /* geometric shapes */
+  {0x2600, 0x26FF}, /* miscellaneous symbols */
+  {0x2700, 0x27BF}, /* dingbats: the arrow and cross in oh-my-zsh's prompt, check marks */
+  {0x2800, 0x28FF}, /* braille (spinners, graphs) */
+  {0xE0A0, 0xE0D4}, /* powerline */
+  {0xFFFD, 0xFFFD}  /* replacement character */
+};
+ 
+#define HP_MAX_CODEPOINT 0x10FFFF
+ 
+static void hp_add_codepoint(int* list, int* n, unsigned char* seen, int cp)
+{
+  if (cp <= 0 || cp > HP_MAX_CODEPOINT) return;
+  if (seen[cp >> 3] & (1 << (cp & 7))) return;
+ 
+  seen[cp >> 3] |= (unsigned char)(1 << (cp & 7));
+  list[(*n)++] = cp;
+}
+ 
+/* The default ranges followed by whatever is in `extra` (UTF-8, may be NULL),
+ * without duplicates. Returns a malloc'd array (free() it), or NULL. */
+static int* hp_build_codepoints(const char* extra, int* out_count)
+{
+  int n_extra = 0, cap = 0, n = 0, i, cp;
+  int* extra_cps = NULL;
+  int* list;
+  unsigned char* seen;
+ 
+  if (extra && extra[0]) extra_cps = LoadCodepoints(extra, &n_extra);
+ 
+  for (i = 0; i < (int)(sizeof hp_default_ranges / sizeof hp_default_ranges[0]); i++)
+    cap += hp_default_ranges[i].last - hp_default_ranges[i].first + 1;
+  cap += n_extra;
+ 
+  list = (int*)malloc(sizeof(int) * (size_t)cap);
+  seen = (unsigned char*)calloc((HP_MAX_CODEPOINT >> 3) + 1, 1);
+  if (!list || !seen)
+  {
+    free(list);
+    free(seen);
+    if (extra_cps) UnloadCodepoints(extra_cps);
+    *out_count = 0;
+    return NULL;
+  }
+ 
+  for (i = 0; i < (int)(sizeof hp_default_ranges / sizeof hp_default_ranges[0]); i++)
+    for (cp = hp_default_ranges[i].first; cp <= hp_default_ranges[i].last; cp++)
+      hp_add_codepoint(list, &n, seen, cp);
+ 
+  for (i = 0; i < n_extra; i++)
+    hp_add_codepoint(list, &n, seen, extra_cps[i]);
+ 
+  free(seen);
+  if (extra_cps) UnloadCodepoints(extra_cps);
+  *out_count = n;
+  return list;
+}
+ 
+/* Hokusai::Backend::Font.from_ext(path, size, extra_chars = nil)
+ *
+ * extra_chars is a String of any additional characters to load (a Nerd Font's
+ * icons, say); the default ranges above are always loaded. */
 mrb_value hp_font_from_ext(mrb_state* mrb, mrb_value self)
 {
   mrb_value path;
   mrb_value osize;
-  mrb_value rcodepoint_str;
-  char* codepoint_str;
-  mrb_int argc = mrb_get_args(mrb, "So|S", &path, &osize, &rcodepoint_str);
-
-  if (argc == 2)
-  {
-    codepoint_str = default_codepoints;
-  }
-  else
-  {
-    codepoint_str = mrb_str_to_cstr(mrb, rcodepoint_str);
-  }
-
+  mrb_value extra = mrb_nil_value();
+  mrb_get_args(mrb, "So|o", &path, &osize, &extra);
+ 
   int size = mrb_int(mrb, osize);
   char* cpath = mrb_str_to_cstr(mrb, path);
-  int count;
-  int* codepoints = LoadCodepoints(codepoint_str, &count);
+  const char* extra_str = mrb_string_p(extra) ? mrb_str_to_cstr(mrb, extra) : NULL;
+ 
+  int count = 0;
+  int* codepoints = hp_build_codepoints(extra_str, &count);
+  if (!codepoints) mrb_raise(mrb, E_RUNTIME_ERROR, "Font.from_ext: out of memory");
+ 
   Font font = LoadFontEx(cpath, size, codepoints, count);
+  free(codepoints);
+ 
+  if (font.texture.id == 0 || font.texture.id == GetFontDefault().texture.id)
+  {
+    mrb_raisef(mrb, E_RUNTIME_ERROR, "Font.from_ext: could not load %s", cpath);
+  }
+ 
   SetTextureFilter(font.texture, TEXTURE_FILTER_POINT);
-  UnloadCodepoints(codepoints);
-
+ 
   hp_font_wrapper* wrapper;
   mrb_value obj = mrb_funcall(mrb, self, "new", 0, NULL);
   wrapper = (hp_font_wrapper*)DATA_PTR(obj);
   if (wrapper) mrb_free(mrb, wrapper);
   mrb_data_init(obj, NULL, &hp_font_type);
-
+ 
   wrapper = mrb_malloc(mrb, sizeof(hp_font_wrapper));
   wrapper->font = font;
   wrapper->size = size;
-
+ 
   DATA_TYPE(obj) = &hp_font_type;
   DATA_PTR(obj) = wrapper;
   return obj;
 }
+
+
+// mrb_value hp_font_from_ext(mrb_state* mrb, mrb_value self)
+// {
+//   mrb_value path;
+//   mrb_value osize;
+//   mrb_value rcodepoint_str;
+//   char* codepoint_str;
+//   mrb_int argc = mrb_get_args(mrb, "So|S", &path, &osize, &rcodepoint_str);
+
+//   if (argc == 2)
+//   {
+//     codepoint_str = default_codepoints;
+//   }
+//   else
+//   {
+//     codepoint_str = mrb_str_to_cstr(mrb, rcodepoint_str);
+//   }
+
+//   int size = mrb_int(mrb, osize);
+//   char* cpath = mrb_str_to_cstr(mrb, path);
+//   int count;
+//   int* codepoints = LoadCodepoints(codepoint_str, &count);
+//   Font font = LoadFontEx(cpath, size, codepoints, count);
+//   SetTextureFilter(font.texture, TEXTURE_FILTER_POINT);
+//   UnloadCodepoints(codepoints);
+
+//   hp_font_wrapper* wrapper;
+//   mrb_value obj = mrb_funcall(mrb, self, "new", 0, NULL);
+//   wrapper = (hp_font_wrapper*)DATA_PTR(obj);
+//   if (wrapper) mrb_free(mrb, wrapper);
+//   mrb_data_init(obj, NULL, &hp_font_type);
+
+//   wrapper = mrb_malloc(mrb, sizeof(hp_font_wrapper));
+//   wrapper->font = font;
+//   wrapper->size = size;
+
+//   DATA_TYPE(obj) = &hp_font_type;
+//   DATA_PTR(obj) = wrapper;
+//   return obj;
+// }
 
 float hp_font_spacing(int height, hp_font_wrapper* wrapper)
 {
@@ -129,7 +251,17 @@ mrb_value hp_font_measure(mrb_state* mrb, mrb_value self)
 
   Vector2 vec2 = MeasureTextEx(wrapper->font, cstr, h, hp_font_spacing(h, wrapper));
 
-  mrb_ary_push(mrb, arr, mrb_float_value(mrb, vec2.x));
+  float x = 0.0;
+  if (vec2.x < 0.0)
+  {
+    x = 0.0;
+  }
+  else if (vec2.x > 0.0) 
+  {
+    x = vec2.x + 1.0;
+  }
+
+  mrb_ary_push(mrb, arr, mrb_float_value(mrb, x));
   mrb_ary_push(mrb, arr, mrb_float_value(mrb, vec2.y));
   return arr;
 }
@@ -140,6 +272,10 @@ mrb_value hp_font_measure_char(mrb_state* mrb, mrb_value self)
   mrb_value chr;
   mrb_value size;
   mrb_get_args(mrb, "So", &chr, &size);
+  if (RSTRING_LEN(chr) == 1 && RSTRING_PTR(chr)[0] == '\n')
+  {
+    return mrb_float_value(mrb, 0.0);
+  }
 
   hp_font_wrapper* wrapper = hp_font_get(mrb, self);
 

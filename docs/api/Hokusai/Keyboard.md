@@ -6,9 +6,13 @@ Represents keyboard state
 populated by the MRuby/Raylib backend.
 Should not need to use this directly.
 
-## #printable? <Badge type="info" text="public" />
+## #printable?(type) <Badge type="info" text="public" />
 
 <p>Is the pressed key printable?</p>
+
+#### Arguments
+
+*  _type_ - one of the following symbols (:pressed, :down) (default :pressed)
 
 ### Returns
 

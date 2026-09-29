@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.8.0
+
+### Added
+
+* Adds entry level accessiblity support via TTS and ASR
+* Adds paste support for `Hokusai::Blocks::Input`
+* Adds `Hokusai.on_exit` callback
+* Adds `Hokusai.set_title` method
+
+## Modified
+
+* Rewrite of Input/Text/Selectable blocks and `Hokusai::Util::Selection`
+* Clicks on z-indexed blocks will blur any blocks underneath
+* Specify which remote branch to rebuild from: `HOKUSAI_BRANCH=feature/accessibility hokusai-pocket @rebuild` or `HOKUSAI_BRANCH=main hokusai-pocket publish` 
+
+## Modified
+
 ## 0.7.3
 
 ## Modified

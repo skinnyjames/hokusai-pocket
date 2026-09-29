@@ -11,11 +11,9 @@ class Hokusai::Blocks::Cursor < Hokusai::Block
   computed :y, default: 0.0
   computed :show, default: false
   computed :speed, default: 0.5
-  computed :cursor_width, default: 2.0
+  computed :cursor_width, default: 5.0
   computed :cursor_height, default: 0.0
   computed :color, default: DEFAULT_COLOR, convert: Hokusai::Color
-
-  inject :selection
 
   def initialize(**args)
     @active = false
@@ -36,13 +34,11 @@ class Hokusai::Blocks::Cursor < Hokusai::Block
     end
   end
 
-  def render(canvas)
-    diff = selection&.diff || 0.0
-    
+  def render(canvas)  
     if show
       draw do
         if @active
-          rect(x, y + diff, cursor_width, cursor_height) do |command|
+          rect(x, y, cursor_width, cursor_height) do |command|
             command.color = color
           end
         end

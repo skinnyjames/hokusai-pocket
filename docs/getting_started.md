@@ -12,13 +12,38 @@ The binary can run or publish applications, as well as rebuild itself with diffe
 
 ## Building from source
 
+Building from source is an excellent way to test modifications to the C code or to modify the build.
+
 To build the hokusai-pocket binary from source, first you'll need a copy of [barista](https://github.com/skinnyjames/mruby-bin-barista/releases/tag/0.3.1) for
 your platform.
 
 Then, in this source directory, run: `barista @desktop` to build a copy of `hokusai-pocket` for your host system.
 The binary will be located in `bin`
 
-The build can be customized.
+Barista will build the project with it's dependencies, which are cached on subsequent builds.
+
+### Common prerequisites
+
+* make
+* automake
+* CMake
+* gcc/clang
+* mingw for windows builds
+* ruby/rake (for MRuby build)
+* git
+* wget
+
+x86_64 Linux builds also need
+
+* libtool 
+* libasound2-dev 
+* libgl1-mesa-dev 
+* libglu1-mesa-dev 
+* libx11-dev 
+* libxi-dev 
+* libxrandr-dev 
+* mesa-common-dev 
+* xorg-dev
 
 ## Running your first program
 

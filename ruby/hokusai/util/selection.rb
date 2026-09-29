@@ -2,72 +2,110 @@ require_relative "./geometry_selection"
 require_relative "./position_selection"
 
 module Hokusai::Util
+  # Public: A utility to help coordinate selections.
+  #         Currently used for text selection and in [Hokusai::Blocks::Selectable](/api/Hokusai/Blocks/Selectable)
   class Selection
-    attr_reader :geom, :pos
-    attr_accessor :type, :offset_y, :diff, :cursor
+    attr_reader :pos, :geom
+    attr_accessor :offset_y, :offset_x, :offset_pos, :cursor, 
+                  :action, :state, :use_focus, :focus_id, :top, :column,
+                  :insert
 
     def initialize
+      @pos = PositionSelection.new(self)
       @geom = GeometrySelection.new(self)
-      @pos = PositionSelection.new
-      @type = :geom
       @offset_y = 0.0
-      @diff = 0.0
+      @offset_x = 0.0
+      @offset_pos = 0
       @cursor = nil
+      @action = nil
+      @state = :geom
+      @use_focus = false
+      @focus_id = nil
+      @top = 0.0
+      @column = nil
+      @insert = false
     end
 
-    def clear
-      pos.clear
-      geom.clear
+    # Public: Set the current cursor position
+    #
+    # arr - an array of 4 floats (start_x, stop_x, cursor_width, cursor_height)
+    #
+    # Returns nothing
+    def cursor=(arr)
+      return if (geom? && !geom.modified)
+
+      @cursor = arr
+    ensure
+      geom.modified = false
+    end
+
+    # Public: Returns the selection y offset
+    #
+    # Returns a float
+    def offset_y
+      @top + @offset_y
     end
 
     def cursor
-      geom.cursor
+      return nil unless @cursor
+
+      return [@cursor[0], @cursor[1] - offset_y, @cursor[2], @cursor[3]]
     end
 
-    def geom!
-      pos.clear
-      pos.cursor_index = nil
-
-      self.type = :geom
-    end
-
-    def pos!
-      geom.clear
-
-      self.type = :pos
-    end
-
+    # Public: Is the selection in geometry mode?
+    #
+    # Returns boolean
     def geom?
-      type == :geom
+      state == :geom
     end
 
+    # Public: Use geometry mode
+    #
+    # clear - (boolean) should the positions be cleared? (default true)
+    #
+    # Returns nothing
+    def geom!(pclear = true)
+      pos.clear if pclear
+
+      self.state = :geom
+    end
+
+    # Public: Is the selection in positional mode?
+    #
+    # Returns boolean
     def pos?
-      type == :pos
+      state == :pos
     end
 
-    def left?
-      geom? ? geom.left? : pos.left?
+    # Public: Use positional mode
+    #
+    # clear - (boolean) should the geometry be cleared? (default false)
+    #
+    # Returns nothing
+    def pos!(gclear = false)
+      geom.clear if gclear
+      geom.changed_direction = false
+      geom.click_pos = nil
+
+      self.state = :pos
     end
 
-    def right?
-      geom? ? geom.right? : pos.right?
+    # Public: Clear all selections and start in geometry mode.
+    #
+    # Returns nothing
+    def clear
+      geom.clear
+      pos.clear
+      self.cursor = nil
+
+      geom!
     end
 
-    def up?
-      geom? && geom.up?
-    end
-
-    def down?
-      geom? && geom.down?
-    end
-
+    # Public: Are we actively selecting?
+    #
+    # Returns boolean
     def selecting?
-      !(geom.type == :none && geom.click_pos.nil?)
-    end
-
-    # should we show the cursor?
-    def active?
-      !cursor.nil?
+      (geom? && geom.state == :selecting) || (pos? && !pos.cursor_index.nil?)
     end
   end
 end
