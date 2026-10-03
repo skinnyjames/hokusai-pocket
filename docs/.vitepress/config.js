@@ -56,7 +56,7 @@ const guides = [
 export default {
   // site-level options
   title: 'hokusai-pocket',
-  base: '/',
+  base: '/hokusai-pocket',
   description: 'Portable GUIs in Ruby',
   themeConfig: {
     sidebar: guides,

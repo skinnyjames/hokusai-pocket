@@ -204,6 +204,24 @@ Returns nothing
 Returns a String or Nil
 
 
+## .on_exit(&block) <Badge type="info" text="public" />
+
+<p>Hook to perform actions on exit of the program.</p>
+
+#### Arguments
+
+*  _block_ - an exit callback
+
+### Returns
+
+Returns nothing
+
+
+## .exit <Badge type="warning" text="internal" />
+
+<p>Called on exit by the backend</p>
+
+
 ## .speak(words) <Badge type="info" text="public" />
 
 <p>Routes (words) through TTS</p>
