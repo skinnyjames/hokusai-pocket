@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.0
+
+* Bumps mruby to latest
+* Allows specifying mruby branch with `MRUBY_BRANCH`
+* Allows specifying hokusai-pocket branch on rebuild/publish with `HOKUSAI_BRANCH`
+
 ## 0.8.0
 
 ### Added
