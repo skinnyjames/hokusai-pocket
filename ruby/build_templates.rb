@@ -23,7 +23,7 @@ WORKDIR /app
 
 RUN git clone --branch 5.5 --depth 1 https://github.com/raysan5/raylib.git vendor/raylib
 RUN git clone --depth 1 https://github.com/tree-sitter/tree-sitter.git vendor/tree-sitter
-RUN git clone --branch 3.4.0 --depth 1 https://github.com/mruby/mruby.git vendor/mruby
+RUN git clone https://github.com/mruby/mruby.git vendor/mruby && cd vendor/mruby && git checkout <%= mruby_branch %>
 RUN git clone --branch <%= branch %> --depth 1 https://github.com/skinnyjames/hokusai-pocket.git vendor/hp
 RUN git clone https://github.com/mlabbe/nativefiledialog.git vendor/nfd
 RUN git clone https://github.com/libuv/libuv vendor/libuv
@@ -70,17 +70,13 @@ MRuby::CrossBuild.new("platform") do |conf|
   conf.build_target = "x86_64-pc-linux-gnu"
   conf.host_target = "x86_64-apple-darwin20.4"
   
-  conf.gembox "stdlib"
-  conf.gembox "stdlib-ext"
-  conf.gembox "stdlib-io"
-  conf.gembox "math"
-  conf.gembox "metaprog"
-  conf.gem :github => 'iij/mruby-env'
-  conf.gem github: "skinnyjames-mruby/mruby-regexp-pcre"
+  conf.ports :posix
+  conf.gem core: "mruby-regexp"
   conf.gem github: "skinnyjames-mruby/mruby-dir-glob", canonical: true
   <%= gem_config %>
 
   # Generate mrbc command
+  conf.gembox "default"
   conf.gem :core => "mruby-bin-mrbc"
 end
 EOT
@@ -98,8 +94,9 @@ MRuby::CrossBuild.new("platform") do |conf|
   conf.linker.command = conf.cc.command
   conf.archiver.command = "\#{conf.host_target}-gcc-ar"
   conf.exts.executable = ".exe"
-  conf.gem :github => 'iij/mruby-env'
-  conf.gem github: "skinnyjames-mruby/mruby-regexp-pcre"
+
+  conf.ports :win
+  conf.gem core: "mruby-regexp"
   conf.gem github: "skinnyjames-mruby/mruby-dir-glob", canonical: true
   <%= gem_config %>
 
@@ -114,8 +111,8 @@ MRuby::CrossBuild.new("platform") do |conf|
   else
     toolchain :gcc
   end
-  conf.gem :github => 'iij/mruby-env'
-  conf.gem github: "skinnyjames-mruby/mruby-regexp-pcre"
+  conf.ports :posix
+  conf.gem core: "mruby-regexp"
   conf.gem github: "skinnyjames-mruby/mruby-dir-glob", canonical: true
   <%= gem_config %>
 
@@ -124,7 +121,8 @@ end
 EOT
 <% end %>
 
-RUN unset LD && unset CC && unset CXX && unset AR && rake MRUBY_CONFIG=build_config.rb
+RUN unset LD && unset CC && unset CXX && unset AR && MRUBY_REGEXP_GEM=mruby-regexp rake MRUBY_CONFIG=build_config.rb
+RUN cp build/mrbc/default/bin/mrbc build/platform/bin/mrbc
 
 # Raylib patch
 COPY <<EOT /app/vendor/raylib/tweaks.patch
@@ -362,7 +360,7 @@ COPY <<EOT /app/Brewfile
 spec("hokusai-pocket-app") do
   task "build" do |args|
     def mrbc
-      "vendor/mruby/build/host/bin/mrbc"
+      "vendor/mruby/build/platform/bin/mrbc"
     end
 
 <% if os.eql?("windows")%>
@@ -402,7 +400,7 @@ spec("hokusai-pocket-app") do
           vendor/raylib/src 
           vendor/miniaudio
           vendor/mruby/include
-          vendor/mruby/build/host/include
+          vendor/mruby/build/platform/include
           vendor/whisper/include
           vendor/whisper/ggml/include
           vendor/flite/include
@@ -574,7 +572,7 @@ spec("hokusai-pocket-app") do
         vendor/raylib/src
         vendor/tree-sitter/build/include 
         vendor/mruby/include
-        vendor/mruby/build/host/include
+        vendor/mruby/build/platform/include
         .
         vendor/hokusai-pocket
         vendor/hp/src

@@ -10,6 +10,10 @@ def remote_hokusai_branch
   ENV.fetch("HOKUSAI_BRANCH", "main")
 end
 
+def mruby_branch
+  ENV.fetch("MRUBY_BRANCH", "5d3471bdac681a8a890c62923d3b0b3fac66c698")
+end
+
 def triplet(args)
   arch = args[:arm64] ? "aarch64" : "x86_64"
   if Barista.os == "MacOS"
@@ -682,7 +686,8 @@ spec("hokusai-pocket") do |config|
   # output: vendor/mruby/build/host/lib/libmruby.a
   task "mruby" do |args|
     def fetch
-      command("git clone --branch 3.4.0 --depth 1 https://github.com/mruby/mruby.git vendor/mruby")
+      command("git clone https://github.com/mruby/mruby.git vendor/mruby")
+      command("git checkout #{mruby_branch}", chdir: "vendor/mruby")
     end
 
     def build
@@ -695,8 +700,9 @@ spec("hokusai-pocket") do |config|
             str = <<-RUBY
             MRuby::CrossBuild.new("mingw") do |conf|
               conf.toolchain :gcc
+              
 
-              conf.cc.flags += %w[-DMRB_ARY_LENGTH_MAX=0 -DMRB_STR_LENGTH_MAX=0]
+              conf.cc.flags += %w[-DMRB_ARY_LENGTH_MAX=0 -DMRB_STR_LENGTH_MAX=0 -static]
 
               conf.host_target = "x86_64-w64-mingw32"  # required for `for_windows?` used by `mruby-socket` gem
 
@@ -706,12 +712,14 @@ spec("hokusai-pocket") do |config|
               conf.archiver.command = "\#{conf.host_target}-gcc-ar"
               conf.exts.executable = ".exe"
 
-              conf.cc.flags = ['-static']
               conf.linker.flags += ['-static', '-lpthread']
-
+              conf.ports :win
+              
               conf.gem github: "skinnyjames/mruby-bin-theorem", branch: "main"
               conf.gem github: "skinnyjames-mruby/mruby-dir-glob", canonical: true
               conf.gem github: "skinnyjames/mruby-bin-barista", branch: "main"
+              conf.gem core: "mruby-regexp"
+
               #{gem_config}
               conf.gembox "default"
             end
@@ -724,6 +732,7 @@ spec("hokusai-pocket") do |config|
                 conf.gem github: "skinnyjames/mruby-bin-theorem", branch: "main"
                 conf.gem github: "skinnyjames-mruby/mruby-dir-glob", canonical: true
                 conf.gem github: "skinnyjames/mruby-bin-barista", branch: "main"
+                conf.gem core: "mruby-regexp"
 
                 #{gem_config}
                 conf.gembox "default"
@@ -737,10 +746,11 @@ spec("hokusai-pocket") do |config|
         end
       end
 
-      command("unset LD && unset CC && unset CXX && unset AR && rake MRUBY_CONFIG=cli_build_config.rb", chdir: "vendor/mruby")
+      command("unset LD && unset CC && unset CXX && unset AR && MRUBY_REGEXP_GEM=mruby-regexp rake MRUBY_CONFIG=cli_build_config.rb", chdir: "vendor/mruby")
 
       if mingw?
-        command("mv vendor/mruby/build/mingw/lib/libmruby.a vendor/mruby/build/host/lib/libmruby.a")
+        command("ln -sfn mingw vendor/mruby/build/host")
+        command("cp vendor/mruby/build/mrbc/default/bin/mrbc vendor/mruby/build/host/bin/mrbc")
       end
     end
   end
@@ -881,25 +891,25 @@ spec("hokusai-pocket") do |config|
         end
       end
 
-      gcc(" -O3 -Wall #{includes(args)} -c ../../#{prefix}/src/mruby-uv/loop.c", chdir: "vendor/hokusai-pocket")
+      gcc(" -O3 -Wall -g #{includes(args)} -c ../../#{prefix}/src/mruby-uv/loop.c", chdir: "vendor/hokusai-pocket")
       
       defs = ""
 
       if args[:http]
-        gcc("-O3 -Wall  -DNOGDI -DWIN32_LEAN_AND_MEAN -DNOUSER #{includes(args)} -c ../../#{prefix}/src/http/http.c", chdir: "vendor/hokusai-pocket")
+        gcc("-O3 -Wall -g -DNOGDI -DWIN32_LEAN_AND_MEAN -DNOUSER #{includes(args)} -c ../../#{prefix}/src/http/http.c", chdir: "vendor/hokusai-pocket")
 
         defs = "-DHP_HTTP"
       end
 
       if args[:voice]
-        gcc("-O3 -Wall  -DNOGDI -DWIN32_LEAN_AND_MEAN -DNOUSER #{includes(args)} -c ../../#{prefix}/src/voice/voice.c", chdir: "vendor/hokusai-pocket")
-        gcc("-O3 -Wall  -DNOGDI -DWIN32_LEAN_AND_MEAN -DNOUSER #{includes(args)} -c ../../#{prefix}/src/voice/speech.c", chdir: "vendor/hokusai-pocket")
+        gcc("-O3 -Wall -g -DNOGDI -DWIN32_LEAN_AND_MEAN -DNOUSER #{includes(args)} -c ../../#{prefix}/src/voice/voice.c", chdir: "vendor/hokusai-pocket")
+        gcc("-O3 -Wall -g -DNOGDI -DWIN32_LEAN_AND_MEAN -DNOUSER #{includes(args)} -c ../../#{prefix}/src/voice/speech.c", chdir: "vendor/hokusai-pocket")
 
         defs += " -DHP_VOICE"
       end
       
       ruby do
-        gcc("-O3 -Wall #{defs} #{includes(args)} -I. -c #{sources}", chdir: "vendor/hokusai-pocket")
+        gcc("-O3 -Wall -g -O0 #{defs} #{includes(args)} -I. -c #{sources}", chdir: "vendor/hokusai-pocket")
           .forward_output(&on_output)
           .execute
         ar("r libhokusai.a #{objs}", chdir: "vendor/hokusai-pocket")
@@ -974,6 +984,8 @@ spec("hokusai-pocket") do |config|
             mrb_funcall(mrb, gemspec, "execute", 1, mrb_ary_join(mrb, ary, mrb_str_new_cstr(mrb, " ")));
             if (mrb->exc) {
               mrb_print_error(mrb);
+              mrb_value bt = mrb_funcall(mrb, mrb_funcall(mrb, mrb_obj_value(mrb->exc), "backtrace", 0, NULL), "join", 0, NULL);
+              mrb_p(mrb, bt);
               return 1;
             }
 
@@ -987,7 +999,7 @@ spec("hokusai-pocket") do |config|
         end
       end
 
-      gcc("-O2 -Wall #{ENV["CFLAGS"]} -g #{includes(args)} -I. -o ../../bin/hokusai-pocket hokusai-pocket.c -L. #{links(args)} #{ENV["LDFLAGS"]} #{frameworks(args)}", chdir: "vendor/cli")
+      gcc("-Wall #{ENV["CFLAGS"]} -g -O0 #{includes(args)} -I. -o ../../bin/hokusai-pocket hokusai-pocket.c -L. #{links(args)} #{ENV["LDFLAGS"]} #{frameworks(args)}", chdir: "vendor/cli")
     end
   end
 
@@ -1230,6 +1242,7 @@ spec("hokusai-pocket") do |config|
             Hokusai.docker_template, 
             string: true, 
             vars: {
+              mruby_branch: mruby_branch,
               branch: remote_hokusai_branch,
               target: args[:target],
               voice: args[:voice],
