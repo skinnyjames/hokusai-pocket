@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.10.0
+
+* Adds mruby-cbor to dependencies.
+* Simplifies libuv work: `http.c` and `loop.c`
+
 ## 0.9.0
 
 * Bumps mruby to latest

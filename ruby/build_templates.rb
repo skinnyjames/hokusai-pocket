@@ -73,6 +73,7 @@ MRuby::CrossBuild.new("platform") do |conf|
   conf.ports :posix
   conf.gem core: "mruby-regexp"
   conf.gem github: "skinnyjames-mruby/mruby-dir-glob", canonical: true
+  conf.gem github: "Asmod4n/mruby-cbor", branch: "main"
   <%= gem_config %>
 
   # Generate mrbc command
@@ -90,6 +91,8 @@ MRuby::CrossBuild.new("platform") do |conf|
   conf.host_target = "x86_64-w64-mingw32"  # required for `for_windows?` used by `mruby-socket` gem
 
   conf.cc.command = "\#{conf.host_target}-gcc-posix"
+  conf.cxx.command = "\#{conf.host_target}-g++-posix"
+
   conf.cc.flags += %w[-O2]
   conf.linker.command = conf.cc.command
   conf.archiver.command = "\#{conf.host_target}-gcc-ar"
@@ -98,6 +101,7 @@ MRuby::CrossBuild.new("platform") do |conf|
   conf.ports :win
   conf.gem core: "mruby-regexp"
   conf.gem github: "skinnyjames-mruby/mruby-dir-glob", canonical: true
+  conf.gem github: "Asmod4n/mruby-cbor", branch: "main"
   <%= gem_config %>
 
   conf.gembox "default"
@@ -111,9 +115,12 @@ MRuby::CrossBuild.new("platform") do |conf|
   else
     toolchain :gcc
   end
+
+  conf.cxx.command = "g++"
   conf.ports :posix
   conf.gem core: "mruby-regexp"
   conf.gem github: "skinnyjames-mruby/mruby-dir-glob", canonical: true
+  conf.gem github: "Asmod4n/mruby-cbor", branch: "main"
   <%= gem_config %>
 
   conf.gembox "default"

@@ -3,106 +3,200 @@
 
 #include "loop.h"
 #include <uv.h>
+#include <mruby/dump.h>
+#include <mruby/proc.h>
 #include <mruby/variable.h>
-#include <mruby/array.h>
-#include <mruby/hash.h>
-#include "migrate.c"
 #include <ast.h>
 #include <style.h>
 #include <pocket.h>
 
-/**
- * @struct MrbUvWorkContext
- * @brief Baton context for UV worker thread 
- * @var MrbUvWorkContext::req
- * the parameter that is passed to uv_queue_work
- * @var MrbUvWorkContext::id
- * A unique and incrementing integer for every work request
- * @var MrbUvWorkContext::mrb
- * An MRuby VM specific to this work request
- * @var MrbUvWorkContext::work
- * The Hokusai::Work object that was passed to this request (migrated to this vm)
- * @var MrbUvWorkContext::execution_state
- * The state for the Hokusai::Work object, migrated to this vm, to pass to #execute
- **/
-typedef struct MrbUvWorkContext {
-  uv_work_t req;
-  int id;
-  mrb_state* mrb;
-  mrb_value work;
-  mrb_value execution_state;
-} mrb_uv_work_context;
-
-/**
- * @struct MrbUvQueue
- * @brief The result of the work execution, including context.
- * @var MrbUbQueue::id
- * The id of the mrb_uv_work_context
- * @var MrbUvQueue::mrb
- * The Mruby vm of the mrb_uv_work_context
- * @var MrbUvQueue::work
- * The Hokusai::Work object (owned by this vm)
- * @var MrbUvQueue::completed
- * The response from Hokusai::Work#execute (owned by this vm)
- * @var MrbUvQueue::next
- * The next item in the queue
- **/
-typedef struct MrbUvQueue {
-  int id;
-  mrb_state* mrb;
-  mrb_value work;
-  mrb_value completed;
-  struct MrbUvQueue* next;
-} mrb_uv_queue;
-
-typedef struct MrbUvAsyncWrapper {
-  mrb_state* mrb;
-  mrb_value receiver;
-  mrb_uv_queue* queue;
-} mrb_uv_async_wrapper;
-
-static uv_async_t mrb_uv_async;
-static uv_mutex_t mm;
-static int uv_count = 0;
-
-static void mrb_uv_handle_async(uv_async_t* handle)
+typedef struct MRBUVWork
 {
-  uv_mutex_lock(&mm);
-  mrb_uv_async_wrapper* uv_async_data = (mrb_uv_async_wrapper*)mrb_uv_async.data;
-  mrb_uv_queue* head = uv_async_data->queue;
+  int id;
+  char* name;
+  char* buf; 
+  int len;
+  struct MRBUVWork* next;
+  uv_work_t req;
+} mrb_uv_work;
 
-  /**
-   * 1. Iterate the queue
-   * 2. Migrate the execution results
-   * 3. Call the finish callback on the work.
-   */
-  while (uv_async_data->queue)
+typedef struct MRBUVWorker
+{
+   mrb_state* mrb; 
+   int loaded; 
+} mrb_uv_worker;
+
+typedef struct MRBUVJobDefinition 
+{ 
+  char* name; 
+  uint8_t* bin; 
+  size_t size; 
+} mrb_uv_job_def;
+
+static mrb_state* main_mrb;
+static uv_key_t mrb_uv_worker_key;
+static int job_count = 0;
+
+static mrb_uv_job_def* mrb_uv_job_defs = NULL;
+static int mrb_uv_job_defs_len = 0;
+static uv_mutex_t mrb_uv_job_defs_mm;
+
+
+static void work_done(uv_work_t* req, int status)
+{
+  mrb_uv_work* job = req->data;
+  mrb_state* mrb = main_mrb;
+  int ai = mrb_gc_arena_save(mrb);
+
+  mrb_value klass = mrb_obj_value(mrb_class_get_under(mrb, mrb_module_get(mrb, "Hokusai"), "Work"));
+  mrb_value args[2] = {
+    mrb_fixnum_value(job->id),
+    (status == 0 && job->buf) ? mrb_str_new(mrb, job->buf, job->len) : mrb_nil_value()
+  };
+  mrb_funcall_argv(mrb, klass, mrb_intern_lit(mrb, "finish"), 2, args);
+  if (mrb->exc) { mrb_print_error(mrb); mrb->exc = NULL; }
+  mrb_gc_arena_restore(mrb, ai);
+
+  free(job->name);
+  free(job->buf);
+  free(job);
+}
+
+static mrb_value mrb_uv_work_register(mrb_state* mrb, mrb_value self)
+{
+  char* name;
+  mrb_value block;
+  mrb_get_args(mrb, "zo", &name, &block);
+
+  struct RProc* proc = mrb_proc_ptr(block);
+  if (MRB_PROC_CFUNC_P(proc)) mrb_raise(mrb, E_ARGUMENT_ERROR, "Work#register needs a ruby block");
+
+  uint8_t* bin; 
+  size_t size;
+  mrb_dump_irep(mrb, proc->body.irep, 0, &bin, &size);
+
+  uint8_t* copy = malloc(size);
+  memcpy(copy, bin, size);
+  mrb_free(mrb, bin);
+
+  uv_mutex_lock(&mrb_uv_job_defs_mm);
+  mrb_uv_job_defs = realloc(mrb_uv_job_defs, sizeof(mrb_uv_job_def) * (mrb_uv_job_defs_len + 1));
+  mrb_uv_job_defs[mrb_uv_job_defs_len++] = (mrb_uv_job_def){ strdup(name), copy, size };
+  uv_mutex_unlock(&mrb_uv_job_defs_mm);
+
+  return mrb_nil_value();
+}
+
+static mrb_value mrb_uv_backend_run(mrb_state* mrb, mrb_value self)
+{
+  return mrb_nil_value();
+}
+
+static mrb_uv_worker* worker_get()
+{
+  mrb_uv_worker* worker = uv_key_get(&mrb_uv_worker_key);
+  if (!worker) 
   {
-    // Bring the execution result to this vm.
-    mrb_value completed = mrb_thread_migrate_value(uv_async_data->queue->mrb, uv_async_data->queue->completed, uv_async_data->mrb);
-    mrb_value work = mrb_thread_migrate_value(uv_async_data->queue->mrb, uv_async_data->queue->work, uv_async_data->mrb);
-
-    // a bit hacky, somehow the Hokusai::Work object lost the reciever variable, so we need to pass it as an argument.
-    mrb_funcall(uv_async_data->mrb, work, "finish", 2, uv_async_data->receiver, completed);
-    if (uv_async_data->mrb->exc) mrb_print_error(uv_async_data->mrb);
-
-    /**
-     * we are done with this work's ruby vm
-     * and this queue item.
-     * 
-     * Cleanup
-     */
-    mrb_close(uv_async_data->queue->mrb);
-
-    mrb_uv_queue* head = uv_async_data->queue;
-    uv_async_data->queue = uv_async_data->queue->next;
-    free(head);
+    worker = calloc(1, sizeof(mrb_uv_worker));
+    worker->mrb = mrb_open();
+    worker->loaded = 0;
+    struct RClass* mod = mrb_define_module(worker->mrb, "Hokusai");
+    mrb_define_hokusai_ast_class(worker->mrb);
+    mrb_define_hokusai_style_class(worker->mrb);
+    load_pocket(worker->mrb);
+    struct RClass* hokusai_backend = mrb_class_get_under(worker->mrb, mod, "Backend");
+    mrb_define_method(worker->mrb, hokusai_backend, "run", mrb_uv_backend_run, MRB_ARGS_NONE());
+    uv_key_set(&mrb_uv_worker_key, worker);
   }
 
-  head = NULL;
-  uv_async_data->queue = NULL;
+  /*
+    if there are any jobs created at runtime from the application
+    we want to load them all into the worker thread vm.
+  */
+  uv_mutex_lock(&mrb_uv_job_defs_mm);
+  int from = worker->loaded;
+  int to = mrb_uv_job_defs_len;
+  int len = to - from;
+  mrb_uv_job_def* defs = NULL;
 
-  uv_mutex_unlock(&mm);
+  if (len > 0)
+  {
+    defs = malloc(sizeof(mrb_uv_job_def) * len);
+    memcpy(defs, mrb_uv_job_defs + from, sizeof(mrb_uv_job_def) * len);
+  }
+  uv_mutex_unlock(&mrb_uv_job_defs_mm);
+
+  if (len > 0)
+  {
+    mrb_state* wmrb = worker->mrb;
+    mrb_value work = mrb_obj_value(mrb_class_get_under(wmrb, mrb_module_get(wmrb, "Hokusai"), "Work"));  
+
+    for (int i = 0; i < len; i++)
+    {
+      int ai = mrb_gc_arena_save(wmrb);
+      mrb_irep* irep = mrb_read_irep(wmrb, defs[i].bin);
+      struct RProc* proc = mrb_proc_new(wmrb, irep);
+      proc->e.target_class = wmrb->object_class;
+      mrb_value args[2] = { mrb_str_new_cstr(wmrb, defs[i].name), mrb_obj_value(proc) };
+      mrb_funcall_argv(wmrb, work, mrb_intern_lit(wmrb, "add"), 2, args);
+      if (wmrb->exc) { mrb_print_error(wmrb); wmrb->exc = NULL; }
+      mrb_gc_arena_restore(wmrb, ai);
+    }
+
+    free(defs);
+    worker->loaded = to;
+  }
+
+  return worker;
+}
+
+static void work_execute(uv_work_t* req)
+{
+  mrb_uv_work* job = req->data;
+  mrb_uv_worker* worker = worker_get();
+  mrb_state* mrb = worker->mrb;
+  int ai = mrb_gc_arena_save(mrb);
+
+  mrb_value klass = mrb_obj_value(mrb_class_get_under(mrb, mrb_module_get(mrb, "Hokusai"), "Work"));
+  mrb_value args[2] = {
+    mrb_str_new_cstr(mrb, job->name),
+    mrb_str_new(mrb, job->buf, job->len)
+  };
+
+  mrb_value out = mrb_funcall_argv(mrb, klass, mrb_intern_lit(mrb, "run"), 2, args);
+  if (mrb->exc) { mrb_print_error(mrb); mrb->exc = NULL; out = mrb_nil_value(); }
+
+  free(job->buf);
+  if (mrb_string_p(out)) {
+    job->len = RSTRING_LEN(out);
+    job->buf = malloc(job->len);
+    memcpy(job->buf, RSTRING_PTR(out), job->len);
+  } else {
+    job->buf = NULL;
+    job->len = 0;
+  }
+  mrb_gc_arena_restore(mrb, ai);
+}
+
+static mrb_value mrb_uv_loop_queue(mrb_state* mrb, mrb_value self)
+{
+  char* name; 
+  char* buf; 
+  mrb_int len;
+
+  mrb_get_args(mrb, "zs", &name, &buf, &len);
+  mrb_uv_loop_wrapper* loop = mrb_uv_loop_get(mrb, self);
+
+  mrb_uv_work* job = calloc(1, sizeof(mrb_uv_work));
+  job->id = ++job_count;
+  job->name = strdup(name);
+  job->buf = malloc(len);
+  memcpy(job->buf, buf, len);
+  job->len = len;
+  job->req.data = job;
+  
+  uv_queue_work((uv_loop_t*)loop->loop, &job->req, work_execute, work_done);
+  return mrb_fixnum_value(job->id);
 }
 
 static void mrb_uv_loop_type_free(mrb_state* mrb, void* payload)
@@ -124,6 +218,15 @@ mrb_uv_loop_wrapper* mrb_uv_loop_get(mrb_state* mrb, mrb_value self)
   return wrapper;
 }
 
+mrb_value mrb_define_uv_sleep(mrb_state* mrb, mrb_value self)
+{
+  mrb_value ms;
+  mrb_get_args(mrb, "o", &ms);
+  uv_sleep(mrb_int(mrb, ms));
+
+  return mrb_nil_value();
+}
+
 /**
  * Constructors
  */
@@ -134,8 +237,6 @@ mrb_value mrb_uv_loop_init(mrb_state* mrb, mrb_value self)
   uv_loop_t* loop = malloc(sizeof(uv_loop_t));
   if (!loop) mrb_raise(mrb, E_STANDARD_ERROR, "Could not allocate uv loop");
   if (uv_loop_init(loop) != 0) mrb_raise(mrb, E_STANDARD_ERROR, "Error initializing uv loop");
-  uv_async_init(loop, &mrb_uv_async, mrb_uv_handle_async);
-
 
   mrb_uv_loop_wrapper* wrapper = malloc(sizeof(mrb_uv_loop_wrapper));
   *wrapper = (mrb_uv_loop_wrapper){(void*)loop};
@@ -148,7 +249,6 @@ mrb_value mrb_uv_loop_default(mrb_state* mrb, mrb_value self)
   mrb_value obj = mrb_funcall(mrb, self, "new", 0, NULL);
 
   uv_loop_t* loop = uv_default_loop();
-  uv_async_init(loop, &mrb_uv_async, mrb_uv_handle_async);
 
   if (!loop)
   {
@@ -162,9 +262,6 @@ mrb_value mrb_uv_loop_default(mrb_state* mrb, mrb_value self)
   return obj;
 }
 
-/*
-  Instance methods
-*/
 mrb_value mrb_uv_loop_run(mrb_state* mrb, mrb_value self)
 {
   mrb_value flags;
@@ -192,168 +289,26 @@ mrb_value mrb_uv_loop_stop(mrb_state* mrb, mrb_value self)
   return mrb_nil_value();
 }
 
-static void mrb_uv_loop_queue_execute(uv_work_t* req)
-{  
-  /**
-   * This may be running in separate thread.
-   */
-  mrb_uv_work_context* context = (mrb_uv_work_context*)((uv_work_t*)req)->data;
-  mrb_uv_async_wrapper* uv_async = (mrb_uv_async_wrapper*)mrb_uv_async.data;
-
-  /*
-  * We are going to pass the state directly to #execute
-  * it already belongs this vm.
-  * 
-  * Note: the execution_result also belongs to this vm, but we will need to migrate
-  * it back in the future.
-  */
-  mrb_value state = mrb_iv_get(context->mrb, context->work, mrb_intern_lit(context->mrb, "@state"));
-  mrb_value execution_result = mrb_funcall_argv(context->mrb, context->work, mrb_intern_lit(context->mrb, "execute"), 1, &state);
-
-  if (context->mrb->exc) mrb_print_error(context->mrb);
-
-  if (!mrb_nil_p(execution_result))
-  {
-    /**
-     * Lock the mutex while we modify shared state.
-     */
-    uv_mutex_lock(&mm);
-
-    if (uv_async->queue == NULL)
-    {
-      uv_async->queue = malloc(sizeof(mrb_uv_queue));
-      uv_async->queue->id = context->id;
-      uv_async->queue->mrb = context->mrb;
-      uv_async->queue->work = context->work;
-      uv_async->queue->next = NULL;
-      uv_async->queue->completed = execution_result;
-    }
-    else
-    {
-      mrb_uv_queue* queue = malloc(sizeof(mrb_uv_queue));
-      queue->id = context->id;
-      queue->mrb = context->mrb;
-      queue->work = context->work;
-      queue->completed = execution_result;
-
-      // put on the front of the list.
-      queue->next = uv_async->queue;
-      uv_async->queue = queue;
-    }
-
-    uv_mutex_unlock(&mm);
-
-    uv_async_send(&mrb_uv_async);
-  }
-}
-
-void mrb_uv_loop_queue_finished(uv_work_t* req, int status)
-{
-  mrb_uv_work_context* context = (mrb_uv_work_context*)((uv_work_t*)req)->data;
-  free(context);
-}
-
-/*
-  Puts a Hokusai::Work into the uv threaded work queue
-  
-  Spins up a new MRB VM and exports Hokusai objects to it.
-  passes the work context and callbacks to `uv_queue_work`
-*/
-mrb_value mrb_uv_loop_queue(mrb_state* mrb, mrb_value self)
-{
-  mrb_value work;
-  mrb_get_args(mrb, "o", &work);
-  mrb_uv_loop_wrapper* loop = mrb_uv_loop_get(mrb, self);
-
-  /**
-   * create a new context for this work.
-   */
-  mrb_uv_work_context* context = malloc(sizeof(mrb_uv_work_context));
-  context->req.data = (void*)context;
-
-  /**
-   * open a new mruby vm and init it with Hokusai
-   */
-  mrb_state* mrb2 = mrb_open();
-  struct RClass* mod = mrb_define_module(mrb2, "Hokusai");
-  mrb_define_hokusai_ast_class(mrb2);
-  mrb_define_hokusai_style_class(mrb2);
-  load_pocket(mrb2);
-  migrate_all_symbols(mrb, mrb2);
-
-  /**
-   * We will be calling Hokusai::Work.finish from the calling vm
-   * But we will be calling execute from the new vm
-   * so we will migrate the work object.
-   */
-  mrb_value work2 = mrb_thread_migrate_value(mrb, work, mrb2);
-  if (mrb2->exc) mrb_print_error(mrb2);
-
-  /*
-  *  Increment the global count and use it as the id
-  */
-  uv_count = uv_count + 1;
-  context->id = uv_count;
-  context->mrb = mrb2;
-  context->work = work2;
-
-  /*
-    Finish populating the uv_async_data
-  */
-  if (mrb_nil_p(((mrb_uv_async_wrapper*)(mrb_uv_async.data))->receiver))
-  {
-    mrb_value reciever = mrb_iv_get(mrb, work, mrb_intern_lit(mrb, "@receiver"));
-    ((mrb_uv_async_wrapper*)(mrb_uv_async.data))->receiver = reciever;
-  }
-
-  /**
-   * Queue the async work
-   */
-  uv_queue_work((uv_loop_t*)loop->loop, &context->req, mrb_uv_loop_queue_execute, mrb_uv_loop_queue_finished);
-  
-  return mrb_nil_value();
-}
-
-mrb_value mrb_define_uv_sleep(mrb_state* mrb, mrb_value self)
-{
-  mrb_value ms;
-  mrb_get_args(mrb, "o", &ms);
-  uv_sleep(mrb_int(mrb, ms));
-
-  return mrb_nil_value();
-}
-
 void mrb_define_uv_loop_class(mrb_state* mrb)
 {
-  /*
-    initialize the uv_async_t payload.
-    this will be passed to `uv_async_send` calls
-    It contains the calling MRuby VM and a queue of results from the executions.
-  */
-  mrb_uv_async_wrapper* uv_async = malloc(sizeof(mrb_uv_async_wrapper));
-  uv_async->mrb = mrb;
-  uv_async->receiver = mrb_nil_value();
-  uv_async->queue = NULL;
-  mrb_uv_async.data = (void*)uv_async;
-
-  /*
-    initialize the mutex
-  */
-  uv_mutex_init(&mm);
+  main_mrb = mrb;
+  uv_key_create(&mrb_uv_worker_key);
+  uv_mutex_init(&mrb_uv_job_defs_mm);
+  
   struct RClass* hokusai = mrb_module_get(mrb, "Hokusai");
-  struct RClass* module = mrb_module_get(mrb, "UV");
-  struct RClass* klass = mrb_define_class_under(mrb, module, "Loop", mrb->object_class);
+  struct RClass* work_klass = mrb_define_class_under(mrb, hokusai, "Work", mrb->object_class);
+  struct RClass* loop_klass = mrb_define_class_under(mrb, hokusai, "Loop", mrb->object_class);
 
-  MRB_SET_INSTANCE_TT(klass, MRB_TT_DATA);
+  MRB_SET_INSTANCE_TT(loop_klass, MRB_TT_DATA);
   mrb_define_class_method(mrb, hokusai, "sleep", mrb_define_uv_sleep, MRB_ARGS_REQ(1));
-  mrb_define_class_method(mrb, klass, "init", mrb_uv_loop_init, MRB_ARGS_NONE());
-  mrb_define_class_method(mrb, klass, "default", mrb_uv_loop_default, MRB_ARGS_NONE());
+  mrb_define_class_method(mrb, work_klass, "register", mrb_uv_work_register, MRB_ARGS_REQ(2));
+  mrb_define_class_method(mrb, loop_klass, "init", mrb_uv_loop_init, MRB_ARGS_NONE());
+  mrb_define_class_method(mrb, loop_klass, "default", mrb_uv_loop_default, MRB_ARGS_NONE());
 
-  mrb_define_method(mrb, klass, "run", mrb_uv_loop_run, MRB_ARGS_REQ(1));
-  mrb_define_method(mrb, klass, "alive?", mrb_uv_loop_is_alive, MRB_ARGS_NONE());
-  mrb_define_method(mrb, klass, "stop", mrb_uv_loop_stop, MRB_ARGS_NONE());
+  mrb_define_method(mrb, loop_klass, "run", mrb_uv_loop_run, MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, loop_klass, "alive?", mrb_uv_loop_is_alive, MRB_ARGS_NONE());
+  mrb_define_method(mrb, loop_klass, "stop", mrb_uv_loop_stop, MRB_ARGS_NONE());
 
-  mrb_define_method(mrb, klass, "queue", mrb_uv_loop_queue, MRB_ARGS_REQ(1));
+  mrb_define_method(mrb, loop_klass, "queue", mrb_uv_loop_queue, MRB_ARGS_REQ(2));
 }
-
 #endif

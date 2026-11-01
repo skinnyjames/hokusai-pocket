@@ -793,62 +793,59 @@ end
 module Hokusai
   # Public: HTTP module used in [Hokusai::Block](/api/Hokusai/Block.html#fetch-url-opts-path-block)
   module HTTP
-    # Public: Represents http response
+    # Public: Represents a response body from an HTTP Request.
+    #         Each request writes to a tmpfile asynchronously, 
+    #         the body retains an handle to this io.
     class ResponseBody
-      attr_reader :finished, :tmp
-      attr_accessor :value, :buffer
+      @@seq = 0
+
+      attr_reader :tmp, :io
 
       def initialize
-        @buffer = ""
-        @value = ""
-        @tmp = "#{Hokusai.tmpdir}/#{Hokusai.monotonic}"
+        @@seq += 1
+        @tmp = "#{Hokusai.tmpdir}/hokusai_#{@@seq}_#{Hokusai.monotonic}"
         @finished = false
+        @io = nil
       end
 
-      # Public: buffered read callback to pipe response data
-      # 
-      # block - the callback
-      # 
-      # Returns nothing
-      def on_read(&block)
-        io = File.open(@tmp, "r")
-        io.each do |group|
-          block.call(group)
-        end
-
-        io.close
-      ensure
-        IO.popen("rm #{@tmp}") if File.exist?(@tmp)
-      end
-      
-      # Internal: Writes content to this response's io
-      # 
-      # content - a string
       def write(content)
         @io ||= File.open(@tmp, "w")
         @io << content
       end
 
-      # Internal: closes the io
       def finish
         @finished = true
+        @io ||= File.open(@tmp, "w")
         @io.close
       end
 
-      # Public: Get the response body as a ruby object
+      # Public: Reads a buffered stream of (chunk_size) into (block)
       # 
-      # Returns Object
+      # chunk_size - bytes to read from the response io at a time
+      # block - a callback called with the buffer until the io is read 
+      #
+      def on_read(chunk_size = 65536, &block)
+        io = File.open(@tmp, "r")
+        while (chunk = io.read(chunk_size))
+          break if chunk.empty?
+          block.call(chunk)
+        end
+      ensure
+        io.close if io
+        File.delete(@tmp) if File.exist?(@tmp)
+      end
+
+      # Public: Get this response body parsed as json
       def json
         JSON.parse(all)
       end
-
-      # Public: Get response body as a String
-      # 
-      # Returns String
+      
+      # Public: Get this response body as a string
       def all
-        File.read(@tmp)
+        io.read
       ensure
-        IO.popen("rm #{@tmp}") if File.exist?(@tmp)
+        io.close if io
+        File.delete(@tmp) if File.exist?(@tmp)
       end
     end
 
@@ -2814,6 +2811,43 @@ module Hokusai
 
         raise Hokusai::Error.new("No provision for #{name}")
       end
+    end
+
+    # Public: Sugar method to define an async job to be run 
+    #         on the libuv worker loop.  
+    #
+    # name - a unique name for the job (Symbol)
+    # block - a callback that will be run in a different vm/thread 
+    #
+    # Examples
+    # 
+    #   class Foo < Hokusai::Block
+    #     job :long_running do |count|
+    #       count.times do |i|
+    #         p i
+    #       end
+    #       #
+    #       "Done!"
+    #     end
+    #     
+    #     def on_mounted
+    #       run :long_running, 10_000 do |result|
+    #         p result # "Done!"
+    #       end
+    #     end
+    #   end
+    # 
+    def self.job(name, &block)
+      Hokusai::Work.register(name.to_s, block)
+    end
+
+    # Public: Sugar method that runs a registered job (name).
+    # 
+    # name - name of the regsitered job (Symbol)
+    # state - An object that can be encoded/decoded with mruby-cbor
+    # block - a callback that is called with the finished value 
+    def run(name, state = nil, &block)
+      Hokusai::Work.queue(name, state, &block)
     end
 
     # Internal: Compile a string template or NodeBuilder proc
@@ -12459,34 +12493,57 @@ HP_SHADER_UNIFORM_UIVEC2 = 9     # Shader uniform type: uivec2 (2 unsigned int)
 HP_SHADER_UNIFORM_UIVEC3 = 10    # Shader uniform type: uivec3 (3 unsigned int)
 HP_SHADER_UNIFORM_UIVEC4 = 11    # Shader uniform type: uivec4 (4 unsigned int)
 
+CBOR.symbols_as_uint32
+
 # A backend agnostic library for authoring
 # desktop applications
 # @author skinnyjames
 module Hokusai
-  # Class for handling async work.
+  # Public: Class for handling async work.
+  #         Queues work on the default libuv loop
+  # 
+  # Examples
+  # 
+  #   Hokusai::Work.register :some_job do |state|
+  #     state.times do |i|
+  #       p i
+  #     end
+  #     
+  #     :done
+  #   end
+  #   
+  #   Hokusai::Work.queue :some_job, 20000 do |result|
+  #     p result # :done
+  #   end
+  #
   class Work
-    def initialize(receiver)
-      @state = nil
-      @receiver = receiver
-      @on_execute_cb = nil
-      @on_finished_cb = nil
-    end
+    @jobs = {}
+    @pending = {}
 
-    def on_execute(state = nil, &block)
-      @state = state
-      @on_execute_cb = block
-    end
+    class << self
+      def add(name, proc)
+        @jobs[name.to_sym] = proc
+      end
 
-    def on_finished(&block)
-      @on_finished_cb = block
-    end
+      def run(name, bytes)
+        job = @jobs[name.to_sym]
+        raise "No job found" if job.nil?
+        CBOR.encode job.call(CBOR.decode(bytes))
+      rescue => ex
+        CBOR.encode({ error: ex.message })
+      end
 
-    def execute(state)
-      @on_execute_cb&.call(state)
-    end
+      def queue(name, state, &on_finished)
+        encoded = CBOR.encode(state)
+        id = Hokusai.worker.queue(name.to_s, encoded)
+        @pending[id] = on_finished
+      end
 
-    def finish(receiver, value = nil)
-      receiver.instance_exec(value, &@on_finished_cb)
+      def finish(id, bytes)
+        if callback = @pending[id]
+          callback.call CBOR.decode(bytes) if bytes
+        end
+      end
     end
   end
   
