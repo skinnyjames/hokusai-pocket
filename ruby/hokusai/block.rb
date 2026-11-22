@@ -336,6 +336,43 @@ module Hokusai
       end
     end
 
+    # Public: Sugar method to define an async job to be run 
+    #         on the libuv worker loop.  
+    #
+    # name - a unique name for the job (Symbol)
+    # block - a callback that will be run in a different vm/thread 
+    #
+    # Examples
+    # 
+    #   class Foo < Hokusai::Block
+    #     job :long_running do |count|
+    #       count.times do |i|
+    #         p i
+    #       end
+    #       #
+    #       "Done!"
+    #     end
+    #     
+    #     def on_mounted
+    #       run :long_running, 10_000 do |result|
+    #         p result # "Done!"
+    #       end
+    #     end
+    #   end
+    # 
+    def self.job(name, &block)
+      Hokusai::Work.register(name.to_s, block)
+    end
+
+    # Public: Sugar method that runs a registered job (name).
+    # 
+    # name - name of the regsitered job (Symbol)
+    # state - An object that can be encoded/decoded with mruby-cbor
+    # block - a callback that is called with the finished value 
+    def run(name, state = nil, &block)
+      Hokusai::Work.queue(name, state, &block)
+    end
+
     # Internal: Compile a string template or NodeBuilder proc
     # 
     # Returns [Hokusai::Node](/api/Hokusai/Node)

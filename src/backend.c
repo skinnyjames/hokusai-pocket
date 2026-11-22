@@ -6,6 +6,82 @@
 #include "voice/voice.h"
 #include "voice/speech.h"
 #endif 
+
+static int keys[110] = {
+  0, 39, 44, 45, 46, 47, 48,
+  49, 50, 51, 52, 53, 54, 55, 56, 57, 59, 61,
+  65, 66, 67, 68, 69, 70, 71, 72, 73,
+  74, 75, 76, 77, 78, 79, 80, 81,
+  82, 83, 84, 85, 86, 87, 88, 89, 90, 91,
+  92, 93, 96, 32, 256, 257, 258, 259,
+  260, 261, 262, 263, 264, 265, 266,
+  267, 268, 269, 280, 281, 282, 283, 284,
+  290, 291, 292, 293, 294, 295, 296, 297,
+  298, 299, 300, 301, 340, 341, 342, 343,
+  344, 345, 346, 347, 348, 320, 321, 322, 323,
+  324, 325, 326, 327, 328, 329, 330, 331,
+  332, 333, 334, 335, 336, 4, 5, 24, 25
+};
+
+static char* key_codes[110] = {
+  "null", "apostrophe", "comma", "minus", "period",
+  "slash", "zero", "one", "two", "three", "four",
+  "five", "six", "seven", "eight", "nine", "semicolon", 
+  "equal", "a", "b", "c", "d", "e", "f", "g", "h", 
+  "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", 
+  "s", "t", "u", "v", "w", "x", "y", "z", "left_bracket", 
+  "backslash", "right_bracket", "grave", "space", "escape", 
+  "enter", "tab", "backspace", "insert", "delete", "right", 
+  "left", "down", "up", "page_up", "page_down", "home", "end", 
+  "caps_lock", "scroll_lock", "num_lock", "print_screen", "pause", 
+  "f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", 
+  "f9", "f10", "f11", "f12", "left_shift", "left_control", 
+  "left_alt", "left_super", "right_shift", "right_control", "right_alt", 
+  "right_super", "kb_menu", "kp_0", "kp_1", "kp_2", "kp_3", 
+  "kp_4", "kp_5", "kp_6", "kp_7", "kp_8", "kp_9", "kp_decimal", 
+  "kp_divide", "kp_multiply", "kp_subtract", "kp_add", "kp_enter", 
+  "kp_equal", "back", "menu", "volume_up", "volume_down"
+};
+
+
+static bool was_touching = false;
+static mrb_sym hp_sym_x, hp_sym_y, hp_sym_width, hp_sym_height;
+static mrb_sym hp_sym_color, hp_sym_red, hp_sym_blue, hp_sym_green, hp_sym_alpha;
+static mrb_sym hp_sym_outline, hp_sym_padding, hp_sym_top, hp_sym_right, hp_sym_bottom, hp_sym_left;
+static mrb_sym hp_sym_font, hp_sym_fonts, hp_sym_content, hp_sym_size, hp_sym_active;
+static mrb_sym hp_key_syms[110];
+static struct RClass* hp_hokusai_mod;
+
+void hp_init_syms(mrb_state* mrb)
+{
+  hp_sym_x = mrb_intern_lit(mrb, "x");
+  hp_sym_y = mrb_intern_lit(mrb, "y");
+  hp_sym_width = mrb_intern_lit(mrb, "width");
+  hp_sym_height = mrb_intern_lit(mrb, "height");
+  hp_sym_color = mrb_intern_lit(mrb, "color");
+  hp_sym_red = mrb_intern_lit(mrb, "red");
+  hp_sym_blue = mrb_intern_lit(mrb, "blue");
+  hp_sym_green = mrb_intern_lit(mrb, "green");
+  hp_sym_alpha = mrb_intern_lit(mrb, "alpha");
+  hp_sym_top = mrb_intern_lit(mrb, "top");
+  hp_sym_right = mrb_intern_lit(mrb, "right");
+  hp_sym_bottom = mrb_intern_lit(mrb, "bottom");
+  hp_sym_left = mrb_intern_lit(mrb, "left");
+  hp_sym_outline = mrb_intern_lit(mrb, "outline");
+  hp_sym_padding = mrb_intern_lit(mrb, "padding");
+  hp_sym_font = mrb_intern_lit(mrb, "font");
+  hp_sym_fonts = mrb_intern_lit(mrb, "fonts");
+  hp_sym_content = mrb_intern_lit(mrb, "content");
+  hp_sym_size = mrb_intern_lit(mrb, "size");
+  hp_sym_active = mrb_intern_lit(mrb, "active");
+  hp_hokusai_mod = mrb_module_get(mrb, "Hokusai");
+
+  for (int i = 0; i < 110; i++)
+  { 
+    hp_key_syms[i] = mrb_intern_cstr(mrb, key_codes[i]); 
+  }
+}
+
 uint64_t char_cache_hash(const void* item, uint64_t seed0, uint64_t seed1)
 {
 	measure_cache* cache = (measure_cache*) item;
@@ -81,10 +157,10 @@ Color raylib_color(mrb_state* mrb, mrb_value command, char* type)
 {
   if (type == NULL) type = "color";
   mrb_value color = mrb_funcall_argv(mrb, command, mrb_intern_cstr(mrb, type), 0, NULL);
-  int red = mrb_int(mrb, mrb_funcall_argv(mrb, color, mrb_intern_lit(mrb, "red"), 0, NULL));
-  int blue = mrb_int(mrb, mrb_funcall_argv(mrb, color, mrb_intern_lit(mrb, "blue"), 0, NULL));
-  int green = mrb_int(mrb, mrb_funcall_argv(mrb, color, mrb_intern_lit(mrb, "green"), 0, NULL));
-  mrb_value alphad = mrb_funcall_argv(mrb, color, mrb_intern_lit(mrb, "alpha"), 0, NULL);
+  int red = mrb_int(mrb, mrb_funcall_argv(mrb, color, hp_sym_red, 0, NULL));
+  int blue = mrb_int(mrb, mrb_funcall_argv(mrb, color, hp_sym_blue, 0, NULL));
+  int green = mrb_int(mrb, mrb_funcall_argv(mrb, color, hp_sym_green, 0, NULL));
+  mrb_value alphad = mrb_funcall_argv(mrb, color, hp_sym_alpha, 0, NULL);
   int alpha;
   if (mrb_nil_p(alphad)){
     alpha = 255;
@@ -121,10 +197,10 @@ mrb_value on_draw_circle(mrb_state* mrb, mrb_value self)
 {
   mrb_value command;
   mrb_get_args(mrb, "o", &command);
-  float x = mrb_float(mrb_funcall_argv(mrb, command, mrb_intern_lit(mrb, "x"), 0, NULL));
+  float x = mrb_float(mrb_funcall_argv(mrb, command, hp_sym_x, 0, NULL));
   // hp_handle_error(mrb);
 
-  float y = mrb_float(mrb_funcall_argv(mrb, command, mrb_intern_lit(mrb, "y"), 0, NULL));
+  float y = mrb_float(mrb_funcall_argv(mrb, command, hp_sym_y, 0, NULL));
   // hp_handle_error(mrb);
 
   float radius = mrb_float(mrb_funcall_argv(mrb, command, mrb_intern_lit(mrb, "radius"), 0, NULL));
@@ -188,7 +264,7 @@ mrb_value on_draw_rect(mrb_state* mrb, mrb_value self)
 
     if (outline_uniform && outline_color.a > 0)
     {
-      float top = mrb_float(mrb_funcall_argv(mrb, outline, mrb_intern_lit(mrb, "top"), 0, NULL));
+      float top = mrb_float(mrb_funcall_argv(mrb, outline, hp_sym_top, 0, NULL));
       if (rounding > 0.0)
       {
         DrawRectangleRoundedLinesEx(rect, rounding, 50, top, outline_color);
@@ -200,10 +276,10 @@ mrb_value on_draw_rect(mrb_state* mrb, mrb_value self)
     }
     else if (outline_color.a > 0)
     {
-      float top = mrb_float(mrb_funcall_argv(mrb, outline, mrb_intern_lit(mrb, "top"), 0, NULL));
-      float right = mrb_float(mrb_funcall_argv(mrb, outline, mrb_intern_lit(mrb, "right"), 0, NULL));
-      float bottom = mrb_float(mrb_funcall_argv(mrb, outline, mrb_intern_lit(mrb, "bottom"), 0, NULL));
-      float left = mrb_float(mrb_funcall_argv(mrb, outline, mrb_intern_lit(mrb, "left"), 0, NULL));
+      float top = mrb_float(mrb_funcall_argv(mrb, outline, hp_sym_top, 0, NULL));
+      float right = mrb_float(mrb_funcall_argv(mrb, outline, hp_sym_right, 0, NULL));
+      float bottom = mrb_float(mrb_funcall_argv(mrb, outline, hp_sym_bottom, 0, NULL));
+      float left = mrb_float(mrb_funcall_argv(mrb, outline, hp_sym_left, 0, NULL));
 
       if (top > 0)
       {
@@ -236,12 +312,11 @@ mrb_value on_draw_text(mrb_state* mrb, mrb_value self)
   mrb_get_args(mrb, "o", &command);
   
   mrb_value used;
-  mrb_value font = mrb_funcall_argv(mrb, command, mrb_intern_lit(mrb, "font"), 0, NULL);
+  mrb_value font = mrb_funcall_argv(mrb, command, hp_sym_font, 0, NULL);
   if (mrb_nil_p(font))
   {  
-    struct RClass* hok = mrb_module_get(mrb, "Hokusai");
-    mrb_value fonts = mrb_funcall_argv(mrb, mrb_obj_value(hok), mrb_intern_lit(mrb, "fonts"), 0, NULL);
-    mrb_value active = mrb_funcall_argv(mrb, fonts, mrb_intern_lit(mrb, "active"), 0, NULL);
+    mrb_value fonts = mrb_funcall_argv(mrb, mrb_obj_value(hp_hokusai_mod), hp_sym_fonts, 0, NULL);
+    mrb_value active = mrb_funcall_argv(mrb, fonts, hp_sym_active, 0, NULL);
     hp_handle_error(mrb);
     used = active;
   }
@@ -252,16 +327,16 @@ mrb_value on_draw_text(mrb_state* mrb, mrb_value self)
 
   hp_font_wrapper* wrapper = hp_font_get(mrb, used);
   
-  int x = mrb_int(mrb, mrb_float_to_integer(mrb, mrb_funcall_argv(mrb, command, mrb_intern_lit(mrb, "x"), 0, NULL)));
+  int x = mrb_int(mrb, mrb_float_to_integer(mrb, mrb_funcall_argv(mrb, command, hp_sym_x, 0, NULL)));
   // hp_handle_error(mrb);
 
-  int y = mrb_int(mrb, mrb_float_to_integer(mrb, mrb_funcall_argv(mrb, command, mrb_intern_lit(mrb, "y"), 0, NULL)));
+  int y = mrb_int(mrb, mrb_float_to_integer(mrb, mrb_funcall_argv(mrb, command, hp_sym_y, 0, NULL)));
   // hp_handle_error(mrb);
 
-  const char* str = mrb_string_cstr(mrb, mrb_funcall_argv(mrb, command, mrb_intern_lit(mrb, "content"), 0, NULL));
+  const char* str = mrb_string_cstr(mrb, mrb_funcall_argv(mrb, command, hp_sym_content, 0, NULL));
   // hp_handle_error(mrb);
 
-  int size = mrb_int(mrb, mrb_float_to_integer(mrb, mrb_funcall_argv(mrb, command, mrb_intern_lit(mrb, "size"), 0, NULL)));
+  int size = mrb_int(mrb, mrb_float_to_integer(mrb, mrb_funcall_argv(mrb, command, hp_sym_size, 0, NULL)));
   hp_handle_error(mrb);
 
   if (!inside_scissori(x, y, size)) {
@@ -280,16 +355,16 @@ mrb_value on_draw_scissor_begin(mrb_state* mrb, mrb_value self)
   mrb_value command;
   mrb_get_args(mrb, "o", &command);
   
-  int x = mrb_int(mrb, mrb_float_to_integer(mrb, mrb_funcall_argv(mrb, command, mrb_intern_lit(mrb, "x"), 0, NULL)));
+  int x = mrb_int(mrb, mrb_float_to_integer(mrb, mrb_funcall_argv(mrb, command, hp_sym_x, 0, NULL)));
   // hp_handle_error(mrb);
 
-  int y = mrb_int(mrb, mrb_float_to_integer(mrb, mrb_funcall_argv(mrb, command, mrb_intern_lit(mrb, "y"), 0, NULL)));
+  int y = mrb_int(mrb, mrb_float_to_integer(mrb, mrb_funcall_argv(mrb, command, hp_sym_y, 0, NULL)));
   // hp_handle_error(mrb);
 
-  int width = mrb_int(mrb, mrb_float_to_integer(mrb, mrb_funcall_argv(mrb, command, mrb_intern_lit(mrb, "width"), 0, NULL)));
+  int width = mrb_int(mrb, mrb_float_to_integer(mrb, mrb_funcall_argv(mrb, command, hp_sym_width, 0, NULL)));
   // hp_handle_error(mrb);
 
-  int height = mrb_int(mrb, mrb_float_to_integer(mrb, mrb_funcall_argv(mrb, command, mrb_intern_lit(mrb, "height"), 0, NULL)));
+  int height = mrb_int(mrb, mrb_float_to_integer(mrb, mrb_funcall_argv(mrb, command, hp_sym_height, 0, NULL)));
   hp_handle_error(mrb);
 
   BeginScissorMode(x, y, width, height);
@@ -330,16 +405,16 @@ mrb_value on_draw_image(mrb_state* mrb, mrb_value self)
   const char* oid = mrb_str_to_cstr(mrb, mrb_funcall(mrb, object_id, "to_s", 0, NULL));
   // hp_handle_error(mrb);
 
-  int x = mrb_int(mrb, mrb_float_to_integer(mrb, mrb_funcall_argv(mrb, command, mrb_intern_lit(mrb, "x"), 0, NULL)));
+  int x = mrb_int(mrb, mrb_float_to_integer(mrb, mrb_funcall_argv(mrb, command, hp_sym_x, 0, NULL)));
   // hp_handle_error(mrb);
 
-  int y = mrb_int(mrb, mrb_float_to_integer(mrb, mrb_funcall_argv(mrb, command, mrb_intern_lit(mrb, "y"), 0, NULL)));
+  int y = mrb_int(mrb, mrb_float_to_integer(mrb, mrb_funcall_argv(mrb, command, hp_sym_y, 0, NULL)));
   // hp_handle_error(mrb);
 
-  int width = mrb_int(mrb, mrb_float_to_integer(mrb, mrb_funcall_argv(mrb, command, mrb_intern_lit(mrb, "width"), 0, NULL)));
+  int width = mrb_int(mrb, mrb_float_to_integer(mrb, mrb_funcall_argv(mrb, command, hp_sym_width, 0, NULL)));
   // hp_handle_error(mrb);
 
-  int height = mrb_int(mrb, mrb_float_to_integer(mrb, mrb_funcall_argv(mrb, command, mrb_intern_lit(mrb, "height"), 0, NULL)));
+  int height = mrb_int(mrb, mrb_float_to_integer(mrb, mrb_funcall_argv(mrb, command, hp_sym_height, 0, NULL)));
 
   mrb_value slice = mrb_funcall(mrb, command, "slice", 0, NULL);
 
@@ -429,7 +504,7 @@ int on_shader_uniform_foreach(mrb_state* mrb, mrb_value key, mrb_value value, vo
   else
   {
     // value 0 is an array...
-    int len = mrb_int(mrb, mrb_funcall_argv(mrb, vec, mrb_intern_lit(mrb, "size"), 0, NULL));
+    int len = mrb_int(mrb, mrb_funcall_argv(mrb, vec, hp_sym_size, 0, NULL));
 
     if (type < 4)
     {
@@ -535,8 +610,8 @@ mrb_value on_draw_rotation_begin(mrb_state* mrb, mrb_value self)
   mrb_value command;
   mrb_get_args(mrb, "o", &command);
 
-  float x = mrb_float(mrb_funcall_argv(mrb, command, mrb_intern_lit(mrb,"x"), 0, NULL));
-  float y = mrb_float(mrb_funcall_argv(mrb, command, mrb_intern_lit(mrb,"y"), 0, NULL));
+  float x = mrb_float(mrb_funcall_argv(mrb, command, hp_sym_x, 0, NULL));
+  float y = mrb_float(mrb_funcall_argv(mrb, command, hp_sym_y, 0, NULL));
   float degrees = mrb_float(mrb_funcall_argv(mrb, command, mrb_intern_lit(mrb,"degrees"), 0, NULL));
   hp_handle_error(mrb);
 
@@ -558,8 +633,8 @@ mrb_value on_draw_translation_begin(mrb_state* mrb, mrb_value self)
   mrb_value command;
   mrb_get_args(mrb, "o", &command);
 
-  float x = mrb_float(mrb_funcall_argv(mrb, command, mrb_intern_lit(mrb,"x"), 0, NULL));
-  float y = mrb_float(mrb_funcall_argv(mrb, command, mrb_intern_lit(mrb,"y"), 0, NULL));
+  float x = mrb_float(mrb_funcall_argv(mrb, command, hp_sym_x, 0, NULL));
+  float y = mrb_float(mrb_funcall_argv(mrb, command, hp_sym_y, 0, NULL));
   hp_handle_error(mrb);
 
   rlPushMatrix();
@@ -579,8 +654,8 @@ mrb_value on_draw_scale_begin(mrb_state* mrb, mrb_value self)
   mrb_value command;
   mrb_get_args(mrb, "o", &command);
 
-  float x = mrb_float(mrb_funcall_argv(mrb, command, mrb_intern_lit(mrb,"x"), 0, NULL));
-  float y = mrb_float(mrb_funcall_argv(mrb, command, mrb_intern_lit(mrb,"y"), 0, NULL));
+  float x = mrb_float(mrb_funcall_argv(mrb, command, hp_sym_x, 0, NULL));
+  float y = mrb_float(mrb_funcall_argv(mrb, command, hp_sym_y, 0, NULL));
 
   rlPushMatrix();
   rlScalef(x, y, 0.0);
@@ -644,14 +719,14 @@ mrb_value on_draw_texture(mrb_state* mrb, mrb_value self)
   mrb_value texture = mrb_funcall_argv(mrb, command, mrb_intern_lit(mrb, "texture"), 0, NULL);
   hp_texture_wrapper* wrapper = hp_texture_get(mrb, texture);
 
-  float x = mrb_float(mrb_funcall_argv(mrb, command, mrb_intern_lit(mrb, "x"), 0, NULL));
+  float x = mrb_float(mrb_funcall_argv(mrb, command, hp_sym_x, 0, NULL));
   hp_handle_error(mrb);
 
-  float y = mrb_float(mrb_funcall_argv(mrb, command, mrb_intern_lit(mrb, "y"), 0, NULL));
+  float y = mrb_float(mrb_funcall_argv(mrb, command, hp_sym_y, 0, NULL));
   hp_handle_error(mrb);
 
-  float width = mrb_float(mrb_funcall_argv(mrb, command, mrb_intern_lit(mrb, "width"), 0, NULL));
-  float height = mrb_float(mrb_funcall_argv(mrb, command, mrb_intern_lit(mrb, "height"), 0, NULL));
+  float width = mrb_float(mrb_funcall_argv(mrb, command, hp_sym_width, 0, NULL));
+  float height = mrb_float(mrb_funcall_argv(mrb, command, hp_sym_height, 0, NULL));
   float rotation = mrb_float(mrb_funcall_argv(mrb, command, mrb_intern_lit(mrb, "rotation"), 0, NULL));
   bool flip = mrb_bool(mrb_funcall(mrb, command, "flip", 0, NULL));
   bool repeat = mrb_bool(mrb_funcall(mrb, command, "repeat", 0, NULL));
@@ -753,13 +828,13 @@ mrb_value on_can_render(mrb_state* mrb, mrb_value self)
   mrb_value canvas;
   mrb_get_args(mrb, "o", &canvas);
 
-  int x = mrb_int(mrb, mrb_float_to_integer(mrb, mrb_funcall_argv(mrb, canvas, mrb_intern_lit(mrb, "x"), 0, NULL)));
+  int x = mrb_int(mrb, mrb_float_to_integer(mrb, mrb_funcall_argv(mrb, canvas, hp_sym_x, 0, NULL)));
   hp_handle_error(mrb);
 
-  int y = mrb_int(mrb, mrb_float_to_integer(mrb, mrb_funcall_argv(mrb, canvas, mrb_intern_lit(mrb, "y"), 0, NULL)));
+  int y = mrb_int(mrb, mrb_float_to_integer(mrb, mrb_funcall_argv(mrb, canvas, hp_sym_y, 0, NULL)));
   hp_handle_error(mrb);
 
-  int height = mrb_int(mrb, mrb_float_to_integer(mrb, mrb_funcall_argv(mrb, canvas, mrb_intern_lit(mrb, "height"), 0, NULL)));
+  int height = mrb_int(mrb, mrb_float_to_integer(mrb, mrb_funcall_argv(mrb, canvas, hp_sym_height, 0, NULL)));
   hp_handle_error(mrb);
 
   if (inside_scissori(x, y, height))
@@ -987,45 +1062,6 @@ void hp_backend_render_callbacks(mrb_state* mrb, struct RClass* module)
   mrb_funcall_with_block(mrb, mrb_obj_value(texture_class), mrb_intern_lit(mrb, "on_draw"), 0, NULL, mrb_obj_value(texture_proc));
 }
 
-static int keys[110] = {
-  0, 39, 44, 45, 46, 47, 48,
-  49, 50, 51, 52, 53, 54, 55, 56, 57, 59, 61,
-  65, 66, 67, 68, 69, 70, 71, 72, 73,
-  74, 75, 76, 77, 78, 79, 80, 81,
-  82, 83, 84, 85, 86, 87, 88, 89, 90, 91,
-  92, 93, 96, 32, 256, 257, 258, 259,
-  260, 261, 262, 263, 264, 265, 266,
-  267, 268, 269, 280, 281, 282, 283, 284,
-  290, 291, 292, 293, 294, 295, 296, 297,
-  298, 299, 300, 301, 340, 341, 342, 343,
-  344, 345, 346, 347, 348, 320, 321, 322, 323,
-  324, 325, 326, 327, 328, 329, 330, 331,
-  332, 333, 334, 335, 336, 4, 5, 24, 25
-};
-
-static char* key_codes[110] = {
-  "null", "apostrophe", "comma", "minus", "period",
-  "slash", "zero", "one", "two", "three", "four",
-  "five", "six", "seven", "eight", "nine", "semicolon", 
-  "equal", "a", "b", "c", "d", "e", "f", "g", "h", 
-  "i", "j", "k", "l", "m", "n", "o", "p", "q", "r", 
-  "s", "t", "u", "v", "w", "x", "y", "z", "left_bracket", 
-  "backslash", "right_bracket", "grave", "space", "escape", 
-  "enter", "tab", "backspace", "insert", "delete", "right", 
-  "left", "down", "up", "page_up", "page_down", "home", "end", 
-  "caps_lock", "scroll_lock", "num_lock", "print_screen", "pause", 
-  "f1", "f2", "f3", "f4", "f5", "f6", "f7", "f8", 
-  "f9", "f10", "f11", "f12", "left_shift", "left_control", 
-  "left_alt", "left_super", "right_shift", "right_control", "right_alt", 
-  "right_super", "kb_menu", "kp_0", "kp_1", "kp_2", "kp_3", 
-  "kp_4", "kp_5", "kp_6", "kp_7", "kp_8", "kp_9", "kp_decimal", 
-  "kp_divide", "kp_multiply", "kp_subtract", "kp_add", "kp_enter", 
-  "kp_equal", "back", "menu", "volume_up", "volume_down"
-};
-
-
-static bool was_touching = false;
-
 void hp_process_input(mrb_state* mrb, mrb_value input, bool use_touch)
 {
   mrb_value keyboard = mrb_funcall_argv(mrb, input, mrb_intern_lit(mrb, "keyboard"), 0, NULL);
@@ -1036,7 +1072,8 @@ void hp_process_input(mrb_state* mrb, mrb_value input, bool use_touch)
 
   for (int i=109; i>0; i--)
   {
-    mrb_value sym = mrb_symbol_value(mrb_intern_cstr(mrb, key_codes[i]));
+    mrb_value sym = mrb_symbol_value(hp_key_syms[i]);
+    // mrb_symbol_value(mrb_intern_cstr(mrb, key_codes[i]));
     // mrb_value key = mrb_hash_get(mrb, input_keys, sym);
     mrb_value args[2] = {sym, mrb_bool_value(IsKeyDown(keys[i]))};
     mrb_funcall_argv(mrb, keyboard, mrb_intern_lit(mrb, "set"), 2, args);
@@ -1232,6 +1269,7 @@ void hp_process_voice(mrb_state* mrb, hp_voice* voice, mrb_value app, int voicek
 
 int hp_backend_run(mrb_state* mrb, struct RClass* hokusai_module, mrb_value backend)
 {
+  hp_init_syms(mrb);
   textures = hashmap_new(sizeof(texture_cache), 0, 0, 0, texture_hash, texture_compare, texture_free, NULL);
   shaders = hashmap_new(sizeof(shader_cache), 0, 0, 0, shader_hash, shader_compare, shader_free, NULL);
   // glue setup glue
@@ -1266,8 +1304,8 @@ int hp_backend_run(mrb_state* mrb, struct RClass* hokusai_module, mrb_value back
   if (mrb->exc) mrb_print_error(mrb);
   // raylib stuff
   SetConfigFlags(config_flags);
-  int width = mrb_int(mrb, mrb_funcall_argv(mrb, config, mrb_intern_lit(mrb, "width"), 0, NULL));
-  int height = mrb_int(mrb, mrb_funcall_argv(mrb, config, mrb_intern_lit(mrb, "height"), 0, NULL));
+  int width = mrb_int(mrb, mrb_funcall_argv(mrb, config, hp_sym_width, 0, NULL));
+  int height = mrb_int(mrb, mrb_funcall_argv(mrb, config, hp_sym_height, 0, NULL));
   const char* title = mrb_string_cstr(mrb,  mrb_funcall_argv(mrb, config, mrb_intern_lit(mrb, "title"), 0, NULL));
   bool draw_fps = mrb_bool(mrb_funcall(mrb, config, "draw_fps", 0, NULL));
   mrb_value mrb_fps = mrb_funcall(mrb, config, "fps", 0, NULL);

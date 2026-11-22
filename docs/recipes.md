@@ -173,5 +173,34 @@ end
 Note: fetch will populate a temporary file with the result, and the callback will have a handle to that file.
 After the request is read, Hokusai will attempt to clean up/remove the temporary file.
 
+## Async work
 
+You can run a job on the libuv loop from a block.
+Jobs are declared at the class level, and can be run from the instance.
 
+Warning: Don't run jobs from any method that is computed or rendered, as those run 
+normally at 60fps.  Run them from event handlers and hooks.
+
+Note: the job class method callback can't contain closures.
+
+```ruby
+class Foo < Hokusai::Block
+  #...
+  job :some_blocking_job do |state|
+    i = 0
+    res = 0
+    while i < 10000
+      res += state[:count]
+      i += 1
+    end
+
+    res
+  end
+
+  def on_mounted
+    run :some_blocking_job, 5 do |result|
+      @hey = result
+    end
+  end
+end
+```

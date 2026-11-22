@@ -707,6 +707,7 @@ spec("hokusai-pocket") do |config|
               conf.host_target = "x86_64-w64-mingw32"  # required for `for_windows?` used by `mruby-socket` gem
 
               conf.cc.command = "\#{conf.host_target}-gcc-posix"
+              conf.cxx.command = "\#{conf.host_target}-g++-posix"
               conf.cc.flags += %w[-O2]
               conf.linker.command = conf.cc.command        
               conf.archiver.command = "\#{conf.host_target}-gcc-ar"
@@ -718,6 +719,7 @@ spec("hokusai-pocket") do |config|
               conf.gem github: "skinnyjames/mruby-bin-theorem", branch: "main"
               conf.gem github: "skinnyjames-mruby/mruby-dir-glob", canonical: true
               conf.gem github: "skinnyjames/mruby-bin-barista", branch: "main"
+              conf.gem github: "Asmod4n/mruby-cbor", branch: "main"
               conf.gem core: "mruby-regexp"
 
               #{gem_config}
@@ -732,6 +734,7 @@ spec("hokusai-pocket") do |config|
                 conf.gem github: "skinnyjames/mruby-bin-theorem", branch: "main"
                 conf.gem github: "skinnyjames-mruby/mruby-dir-glob", canonical: true
                 conf.gem github: "skinnyjames/mruby-bin-barista", branch: "main"
+                conf.gem github: "Asmod4n/mruby-cbor", branch: "main"
                 conf.gem core: "mruby-regexp"
 
                 #{gem_config}

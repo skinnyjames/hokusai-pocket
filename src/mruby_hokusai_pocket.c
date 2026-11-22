@@ -29,7 +29,7 @@ mrb_value hp_define_work_loop(mrb_state* mrb, mrb_value self)
   mrb_value loop = mrb_iv_get(mrb, self, mrb_intern_lit(mrb, "@uv_loop"));
   if (mrb_nil_p(loop))
   {
-    struct RClass* mod = mrb_module_get(mrb, "UV");
+    struct RClass* mod = mrb_module_get(mrb, "Hokusai");
     struct RClass* klass = mrb_class_get_under(mrb, mod, "Loop");
     loop = mrb_funcall(mrb, mrb_obj_value(klass), "default", 0, NULL);
     mrb_iv_set(mrb, self, mrb_intern_lit(mrb, "@uv_loop"), loop);
@@ -56,7 +56,6 @@ void mrb_mruby_hokusai_pocket_gem_init(mrb_state* mrb)
   mrb_define_http_req_class(mrb);
 #endif
 
-  mrb_define_module(mrb, "UV");
   mrb_define_uv_loop_class(mrb);
 
   if (mrb->exc) mrb_print_error(mrb);

@@ -15,4 +15,5 @@ typedef struct MrbUvLoopWrapper {
 mrb_uv_loop_wrapper* mrb_uv_loop_get(mrb_state* mrb, mrb_value self);
 void mrb_define_uv_loop_class(mrb_state* mrb);
 void mrb_define_uv_work_class(mrb_state* mrb);
+
 #endif

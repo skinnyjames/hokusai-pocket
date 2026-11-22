@@ -1,62 +1,59 @@
 module Hokusai
   # Public: HTTP module used in [Hokusai::Block](/api/Hokusai/Block.html#fetch-url-opts-path-block)
   module HTTP
-    # Public: Represents http response
+    # Public: Represents a response body from an HTTP Request.
+    #         Each request writes to a tmpfile asynchronously, 
+    #         the body retains an handle to this io.
     class ResponseBody
-      attr_reader :finished, :tmp
-      attr_accessor :value, :buffer
+      @@seq = 0
+
+      attr_reader :tmp, :io
 
       def initialize
-        @buffer = ""
-        @value = ""
-        @tmp = "#{Hokusai.tmpdir}/#{Hokusai.monotonic}"
+        @@seq += 1
+        @tmp = "#{Hokusai.tmpdir}/hokusai_#{@@seq}_#{Hokusai.monotonic}"
         @finished = false
+        @io = nil
       end
 
-      # Public: buffered read callback to pipe response data
-      # 
-      # block - the callback
-      # 
-      # Returns nothing
-      def on_read(&block)
-        io = File.open(@tmp, "r")
-        io.each do |group|
-          block.call(group)
-        end
-
-        io.close
-      ensure
-        IO.popen("rm #{@tmp}") if File.exist?(@tmp)
-      end
-      
-      # Internal: Writes content to this response's io
-      # 
-      # content - a string
       def write(content)
         @io ||= File.open(@tmp, "w")
         @io << content
       end
 
-      # Internal: closes the io
       def finish
         @finished = true
+        @io ||= File.open(@tmp, "w")
         @io.close
       end
 
-      # Public: Get the response body as a ruby object
+      # Public: Reads a buffered stream of (chunk_size) into (block)
       # 
-      # Returns Object
+      # chunk_size - bytes to read from the response io at a time
+      # block - a callback called with the buffer until the io is read 
+      #
+      def on_read(chunk_size = 65536, &block)
+        io = File.open(@tmp, "r")
+        while (chunk = io.read(chunk_size))
+          break if chunk.empty?
+          block.call(chunk)
+        end
+      ensure
+        io.close if io
+        File.delete(@tmp) if File.exist?(@tmp)
+      end
+
+      # Public: Get this response body parsed as json
       def json
         JSON.parse(all)
       end
-
-      # Public: Get response body as a String
-      # 
-      # Returns String
+      
+      # Public: Get this response body as a string
       def all
-        File.read(@tmp)
+        io.read
       ensure
-        IO.popen("rm #{@tmp}") if File.exist?(@tmp)
+        io.close if io
+        File.delete(@tmp) if File.exist?(@tmp)
       end
     end
 

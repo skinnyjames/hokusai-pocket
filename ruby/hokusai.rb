@@ -69,34 +69,57 @@ HP_SHADER_UNIFORM_UIVEC2 = 9     # Shader uniform type: uivec2 (2 unsigned int)
 HP_SHADER_UNIFORM_UIVEC3 = 10    # Shader uniform type: uivec3 (3 unsigned int)
 HP_SHADER_UNIFORM_UIVEC4 = 11    # Shader uniform type: uivec4 (4 unsigned int)
 
+CBOR.symbols_as_uint32
+
 # A backend agnostic library for authoring
 # desktop applications
 # @author skinnyjames
 module Hokusai
-  # Class for handling async work.
+  # Public: Class for handling async work.
+  #         Queues work on the default libuv loop
+  # 
+  # Examples
+  # 
+  #   Hokusai::Work.register :some_job do |state|
+  #     state.times do |i|
+  #       p i
+  #     end
+  #     
+  #     :done
+  #   end
+  #   
+  #   Hokusai::Work.queue :some_job, 20000 do |result|
+  #     p result # :done
+  #   end
+  #
   class Work
-    def initialize(receiver)
-      @state = nil
-      @receiver = receiver
-      @on_execute_cb = nil
-      @on_finished_cb = nil
-    end
+    @jobs = {}
+    @pending = {}
 
-    def on_execute(state = nil, &block)
-      @state = state
-      @on_execute_cb = block
-    end
+    class << self
+      def add(name, proc)
+        @jobs[name.to_sym] = proc
+      end
 
-    def on_finished(&block)
-      @on_finished_cb = block
-    end
+      def run(name, bytes)
+        job = @jobs[name.to_sym]
+        raise "No job found" if job.nil?
+        CBOR.encode job.call(CBOR.decode(bytes))
+      rescue => ex
+        CBOR.encode({ error: ex.message })
+      end
 
-    def execute(state)
-      @on_execute_cb&.call(state)
-    end
+      def queue(name, state, &on_finished)
+        encoded = CBOR.encode(state)
+        id = Hokusai.worker.queue(name.to_s, encoded)
+        @pending[id] = on_finished
+      end
 
-    def finish(receiver, value = nil)
-      receiver.instance_exec(value, &@on_finished_cb)
+      def finish(id, bytes)
+        if callback = @pending[id]
+          callback.call CBOR.decode(bytes) if bytes
+        end
+      end
     end
   end
   
