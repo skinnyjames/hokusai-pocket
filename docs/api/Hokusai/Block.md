@@ -327,6 +327,49 @@ Returns nothing
 <p>Same as .inject but throws error if not provided</p>
 
 
+## .job(name, &block) <Badge type="info" text="public" />
+
+<p>Sugar method to define an async job to be run </p>
+<p>        on the libuv worker loop.</p>
+
+#### Arguments
+
+*  _name_ - a unique name for the job (Symbol)
+*  _block_ - a callback that will be run in a different vm/thread
+
+### Examples
+
+```ruby
+class Foo < Hokusai::Block
+  job :long_running do |count|
+    count.times do |i|
+      p i
+    end
+    #
+    "Done!"
+  end
+```
+```ruby
+  def on_mounted
+    run :long_running, 10_000 do |result|
+      p result # "Done!"
+    end
+  end
+end
+```
+
+
+## #run(name, state, &block) <Badge type="info" text="public" />
+
+<p>Sugar method that runs a registered job (name).</p>
+
+#### Arguments
+
+*  _name_ - name of the regsitered job (Symbol)
+*  _state_ - An object that can be encoded/decoded with mruby-cbor
+*  _block_ - a callback that is called with the finished value
+
+
 ## .compile <Badge type="warning" text="internal" />
 
 <p>Compile a string template or NodeBuilder proc</p>

@@ -2,50 +2,27 @@
 layout: doc
 ---
 # class ResponseBody <Badge type="info" text="public" />
-Represents http response
+Represents a response body from an HTTP Request.
+Each request writes to a tmpfile asynchronously, 
+the body retains an handle to this io.
 
-## #on_read(&block) <Badge type="info" text="public" />
+## #on_read(chunk_size, &block) <Badge type="info" text="public" />
 
-<p>buffered read callback to pipe response data</p>
-
-#### Arguments
-
-*  _block_ - the callback
-
-### Returns
-
-Returns nothing
-
-
-## #write(content) <Badge type="warning" text="internal" />
-
-<p>Writes content to this response's io</p>
+<p>Reads a buffered stream of (chunk_size) into (block)</p>
 
 #### Arguments
 
-*  _content_ - a string
-
-
-## #finish <Badge type="warning" text="internal" />
-
-<p>closes the io</p>
+*  _chunk_size_ - bytes to read from the response io at a time
+*  _block_ - a callback called with the buffer until the io is read
 
 
 ## #json <Badge type="info" text="public" />
 
-<p>Get the response body as a ruby object</p>
-
-### Returns
-
-Returns Object
+<p>Get this response body parsed as json</p>
 
 
 ## #all <Badge type="info" text="public" />
 
-<p>Get response body as a String</p>
-
-### Returns
-
-Returns String
+<p>Get this response body as a string</p>
 
 
