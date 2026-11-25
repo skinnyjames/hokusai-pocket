@@ -49,13 +49,33 @@ static mrb_sym hp_sym_x, hp_sym_y, hp_sym_width, hp_sym_height;
 static mrb_sym hp_sym_color, hp_sym_red, hp_sym_blue, hp_sym_green, hp_sym_alpha;
 static mrb_sym hp_sym_outline, hp_sym_padding, hp_sym_top, hp_sym_right, hp_sym_bottom, hp_sym_left;
 static mrb_sym hp_sym_font, hp_sym_fonts, hp_sym_content, hp_sym_size, hp_sym_active;
+static mrb_sym hp_sym_ex, hp_sym_ey, hp_sym_type, hp_sym_coords;
+static mrb_sym hp_sym_linear, hp_sym_bezier, hp_sym_catmullrom, hp_sym_bspline;
 static mrb_sym hp_key_syms[110];
 static struct RClass* hp_hokusai_mod;
+
+static Vector2* hp_poly_buf = NULL;
+static mrb_int hp_poly_cap = 0;
+
+static Vector2* hp_poly_reserve(mrb_state* mrb, mrb_int n)
+{
+  if (n > hp_poly_cap) {
+    mrb_int cap = hp_poly_cap ? hp_poly_cap : 64;
+    while (cap < n) cap *= 2;
+    Vector2* buf = mrb_realloc(mrb, hp_poly_buf, sizeof(Vector2) * cap);
+    hp_poly_buf = buf;
+    hp_poly_cap = cap;
+  }
+  return hp_poly_buf;
+}
 
 void hp_init_syms(mrb_state* mrb)
 {
   hp_sym_x = mrb_intern_lit(mrb, "x");
   hp_sym_y = mrb_intern_lit(mrb, "y");
+  hp_sym_ex = mrb_intern_lit(mrb, "ex");
+  hp_sym_ey = mrb_intern_lit(mrb, "ey");
+  hp_sym_coords = mrb_intern_lit(mrb, "coords");
   hp_sym_width = mrb_intern_lit(mrb, "width");
   hp_sym_height = mrb_intern_lit(mrb, "height");
   hp_sym_color = mrb_intern_lit(mrb, "color");
@@ -69,6 +89,11 @@ void hp_init_syms(mrb_state* mrb)
   hp_sym_left = mrb_intern_lit(mrb, "left");
   hp_sym_outline = mrb_intern_lit(mrb, "outline");
   hp_sym_padding = mrb_intern_lit(mrb, "padding");
+  hp_sym_linear = mrb_intern_lit(mrb, "linear");
+  hp_sym_bezier = mrb_intern_lit(mrb, "bezier");
+  hp_sym_catmullrom = mrb_intern_lit(mrb, "catmull");
+  hp_sym_bspline = mrb_intern_lit(mrb, "bspline");
+
   hp_sym_font = mrb_intern_lit(mrb, "font");
   hp_sym_fonts = mrb_intern_lit(mrb, "fonts");
   hp_sym_content = mrb_intern_lit(mrb, "content");
@@ -80,6 +105,11 @@ void hp_init_syms(mrb_state* mrb)
   { 
     hp_key_syms[i] = mrb_intern_cstr(mrb, key_codes[i]); 
   }
+}
+
+static inline float hp_float(mrb_state* mrb, mrb_value v)
+{
+  return (float)mrb_as_float(mrb, v);
 }
 
 uint64_t char_cache_hash(const void* item, uint64_t seed0, uint64_t seed1)
@@ -210,6 +240,50 @@ mrb_value on_draw_circle(mrb_state* mrb, mrb_value self)
   
   Color rcolor = raylib_color(mrb, command, "color");
   DrawCircle(x, y, radius, rcolor);
+  return mrb_nil_value();
+}
+
+mrb_value on_draw_line(mrb_state* mrb, mrb_value self)
+{
+  mrb_value command;
+  mrb_get_args(mrb, "o", &command);
+  float x = mrb_float(mrb_funcall_argv(mrb, command, hp_sym_x, 0, NULL));
+  float y = mrb_float(mrb_funcall_argv(mrb, command, hp_sym_y, 0, NULL));
+  float ex = mrb_float(mrb_funcall_argv(mrb, command, hp_sym_ex, 0, NULL));
+  float ey = mrb_float(mrb_funcall_argv(mrb, command, hp_sym_ey, 0, NULL));
+  float width = hp_float(mrb, mrb_funcall_argv(mrb, command, hp_sym_width, 0, NULL));
+  Color rcolor = raylib_color(mrb, command, "color");
+
+  DrawLineEx((Vector2){x, y}, (Vector2){ex,ey}, width, rcolor);
+  return mrb_nil_value();
+}
+
+
+mrb_value on_draw_polyline(mrb_state* mrb, mrb_value self)
+{
+  mrb_value command;
+  mrb_get_args(mrb, "o", &command);
+
+  mrb_value coords = mrb_funcall_argv(mrb, command, hp_sym_coords, 0, NULL);
+  mrb_int n = RARRAY_LEN(coords);
+  if (n < 2) return mrb_nil_value();
+
+  Vector2* pts = hp_poly_reserve(mrb, n);
+  for (mrb_int i = 0; i < n; i++) {
+    mrb_value pt = mrb_ary_ref(mrb, coords, i);
+    pts[i].x = (float)mrb_as_float(mrb, mrb_ary_ref(mrb, pt, 0));
+    pts[i].y = (float)mrb_as_float(mrb, mrb_ary_ref(mrb, pt, 1));
+  }
+
+  float width = (float)mrb_as_float(mrb, mrb_funcall_argv(mrb, command, hp_sym_width, 0, NULL));
+  Color color = raylib_color(mrb, command, "color");
+  mrb_sym type = mrb_symbol(mrb_funcall_argv(mrb, command, mrb_intern_lit(mrb, "type"), 0, NULL));
+
+  if (type == hp_sym_linear)          DrawSplineLinear(pts, (int)n, width, color);
+  else if (type == hp_sym_bezier)     DrawSplineBezierCubic(pts, (int)n, width, color);
+  else if (type == hp_sym_bspline)    DrawSplineBasis(pts, (int)n, width, color);
+  else if (type == hp_sym_catmullrom) DrawSplineCatmullRom(pts, (int)n, width, color);
+
   return mrb_nil_value();
 }
 
@@ -997,6 +1071,14 @@ void hp_backend_render_callbacks(mrb_state* mrb, struct RClass* module)
   struct RProc* circle_proc = mrb_proc_new_cfunc(mrb, on_draw_circle);
   mrb_funcall_with_block(mrb, mrb_obj_value(circle_class), mrb_intern_lit(mrb, "on_draw"), 0, NULL, mrb_obj_value(circle_proc));
   
+  struct RClass* line_class = mrb_class_get_under(mrb, com_class, "Line");
+  struct RProc* line_proc = mrb_proc_new_cfunc(mrb, on_draw_line);
+  mrb_funcall_with_block(mrb, mrb_obj_value(line_class), mrb_intern_lit(mrb, "on_draw"), 0, NULL, mrb_obj_value(line_proc));
+
+  struct RClass* polyline_class = mrb_class_get_under(mrb, com_class, "Polyline");
+  struct RProc* polyline_proc = mrb_proc_new_cfunc(mrb, on_draw_polyline);
+  mrb_funcall_with_block(mrb, mrb_obj_value(polyline_class), mrb_intern_lit(mrb, "on_draw"), 0, NULL, mrb_obj_value(polyline_proc));
+
   struct RClass* rect_class = mrb_class_get_under(mrb, com_class, "Rectangle");
   struct RProc* rect_proc = mrb_proc_new_cfunc(mrb, on_draw_rect);
   mrb_funcall_with_block(mrb, mrb_obj_value(rect_class), mrb_intern_lit(mrb, "on_draw"), 0, NULL, mrb_obj_value(rect_proc));

@@ -3,26 +3,37 @@ class Hokusai::Blocks::Input < Hokusai::Block
   template <<~EOF
   [template]
     vblock {
-      @click="focus"
       :background="background"
       :padding="padding"
+      :outline="outline"
+      :outline_color="outline_color"
+      :rounding="rounding"
     }
-      text {
-        :color="color"
-        :content="model"
-        :size="size"
-        :selection_color="selection_color"
-        :selection_color_to="selection_color_to"
-        :animate_selection="animate_selection"
-        :copy_text="copy"
-        :min_height="min_height"
-        :max_height="max_height"
-        @copy="on_copy"
-        @selected="handle_selection"
-        @keypress="handle_keypress"
-        @keydown="handle_keydown"
-        @height_updated="update_content_height"
-      }
+      [if="show_placeholder"]
+        text {
+          :color="placeholder_color"
+          :content="placeholder"
+          :size="placeholder_size"
+          :min_height="min_height"
+          :max_height="max_height"
+        }
+      [else]
+        text {
+          :color="color"
+          :content="model"
+          :size="size"
+          :selection_color="selection_color"
+          :selection_color_to="selection_color_to"
+          :animate_selection="animate_selection"
+          :copy_text="copy"
+          :min_height="min_height"
+          :max_height="max_height"
+          @copy="on_copy"
+          @selected="handle_selection"
+          @keypress="handle_keypress"
+          @keydown="handle_keydown"
+          @height_updated="update_content_height"
+        }
   EOF
 
   uses(
@@ -36,8 +47,15 @@ class Hokusai::Blocks::Input < Hokusai::Block
   )
 
   computed! :model
+  
+  computed :placeholder, default: nil
+  computed :placeholder_color, default: [144,144,144], convert: Hokusai::Color
+  computed :placeholder_size, default: 22, convert: proc(&:to_i)
 
   computed :background, default: nil, convert: Hokusai::Color
+  computed :outline, default: 0.0, convert: Hokusai::Outline
+  computed :outline_color, default: [2,2,2], convert: Hokusai::Color
+  computed :rounding, default: 0.0, convert: proc(&:to_f)
   computed :color, default: [33,33,33], convert: Hokusai::Color
   computed :selection_color, default: [233,233,233], convert: Hokusai::Color
   computed :selection_color_to, default: [0, 33, 233], convert: Hokusai::Color
@@ -56,6 +74,9 @@ class Hokusai::Blocks::Input < Hokusai::Block
   attr_accessor :content, :buffer, :positions, :content_height, :shift, :copy
   
   def before_updated
+    if node.meta.focused && !show_placeholder
+      children.first.children.first.node.meta.focus
+    end
     # if model == "" && node.meta.focused
     #   selection.clear
     #   selection.pos.cursor_index = 0
@@ -63,8 +84,12 @@ class Hokusai::Blocks::Input < Hokusai::Block
     # end
   end
 
+  def show_placeholder
+    placeholder && model.empty? && !node.meta.focused
+  end
+
   def focus(event)
-    # node.meta.focus
+
   end
 
   def initialize(**args)
@@ -128,7 +153,7 @@ class Hokusai::Blocks::Input < Hokusai::Block
     end
     
     if selection.pos.positions
-      range = selection.pos.positions(false)
+      range = selection.pos.positions
     else
       range = nil
     end

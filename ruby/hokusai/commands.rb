@@ -1,6 +1,8 @@
 require_relative "./commands/base"
 require_relative "./commands/circle"
 require_relative "./commands/image"
+require_relative "./commands/line"
+require_relative "./commands/polyline"
 require_relative "./commands/rect"
 require_relative "./commands/scissor"
 require_relative "./commands/text"
@@ -153,6 +155,31 @@ module Hokusai
     # y - y coordinate (Float)
     def texture(texture, x, y)
       command = Commands::Texture.new(texture, x, y)
+
+      yield command if block_given?
+
+      queue << command
+    end
+
+    # Public: Draw a line
+    # 
+    # start_x - starting x coordinate (Float)
+    # start_y - starting y coordinate (Float)
+    # stop_x - stopping x coordinate (Float)
+    # stop_y - stopping y coordinate (Float)
+    def line(sx, sy, ex, ey)
+      command = Commands::Line.new(sx, sy, ex, ey)
+      
+      yield command if block_given?
+
+      queue << command
+    end
+
+    # Public: Draw a polyline from an array of coordinates
+    # 
+    # coords - an array containing a list of coords (Array([Float, Float)]))
+    def polyline(coords)
+      command = Commands::Polyline.new(coords)
 
       yield command if block_given?
 

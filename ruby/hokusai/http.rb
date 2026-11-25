@@ -23,8 +23,8 @@ module Hokusai
 
       def finish
         @finished = true
-        @io ||= File.open(@tmp, "w")
-        @io.close
+        # @io ||= File.open(@tmp, "w")
+        # @io.close
       end
 
       # Public: Reads a buffered stream of (chunk_size) into (block)
@@ -50,6 +50,7 @@ module Hokusai
       
       # Public: Get this response body as a string
       def all
+        io = File.open(@tmp, "r")
         io.read
       ensure
         io.close if io

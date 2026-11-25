@@ -815,8 +815,8 @@ module Hokusai
 
       def finish
         @finished = true
-        @io ||= File.open(@tmp, "w")
-        @io.close
+        # @io ||= File.open(@tmp, "w")
+        # @io.close
       end
 
       # Public: Reads a buffered stream of (chunk_size) into (block)
@@ -842,6 +842,7 @@ module Hokusai
       
       # Public: Get this response body as a string
       def all
+        io = File.open(@tmp, "r")
         io.read
       ensure
         io.close if io
@@ -3222,6 +3223,101 @@ module Hokusai
 end
 
 module Hokusai
+  # Internal: Command to draw a line.
+  class Commands::Line < Commands::Base
+    attr_reader :x, :y, :ex, :ey, :color
+    attr_accessor :width
+
+    # Internal: Line constructor
+    # 
+    # x - x coordinate
+    # y - y coordinate
+    # ex - end x coordinate
+    # ey - end y coordinate
+    def initialize(x, y, ex, ey)
+      @x = x.to_f
+      @y = y.to_f
+      @ex = ex.to_f
+      @ey = ey.to_f
+      @color = Color.new(255, 0, 0, 255)
+      @width = 2.0
+    end
+
+    def hash
+      [self.class, x, y, ex, ey, width, color.hash].hash
+    end
+
+    # Public: sets the line color.
+    # 
+    # value - a Hokusai::Color or Array of Int
+    #
+    # Returns nothing
+    def color=(value)
+      case value
+      when Color
+        @color = value
+      when Array
+        @color = Color.new(value[0], value[1], value[2], value[3] || 255)
+      end
+
+      self
+    end
+  end
+end
+
+module Hokusai
+  # Internal: Command to draw a polyline.
+  class Commands::Polyline < Commands::Base
+    attr_reader :coords, :color
+    attr_accessor :width, :type
+
+    # Internal: Line constructor
+    # 
+    # coords - array of coordinates
+    def initialize(coords)
+      @coords = coords
+      @type = :linear # :bezier, :linear, :bspline, :catmullrom
+      @color = Color.new(255, 0, 0, 255)
+      @width = 2.0
+    end
+
+    def hash
+      [self.class, width, type, color.hash].hash
+    end
+
+    def valid?
+      n = coords.size
+      case type
+      when :linear then n >= 2
+      when :bezier then n >= 4 && ((n - 1) % 3).zero?
+      when :bspline, :catmullrom then n >= 4
+      else false
+      end
+    end
+
+    def validate
+      raise Hokusai::Error.new("Invalid #{type} polyline (#{coords.size} points)") unless valid?
+    end
+
+    # Public: sets the polyline color.
+    # 
+    # value - a Hokusai::Color or Array of Int
+    #
+    # Returns nothing
+    def color=(value)
+      case value
+      when Color
+        @color = value
+      when Array
+        @color = Color.new(value[0], value[1], value[2], value[3] || 255)
+      end
+
+      self
+    end
+  end
+end
+
+module Hokusai
   # Internal: Command to render a rectangle
   class Commands::Rectangle < Commands::Base
     attr_reader :x, :y, :width, :height,
@@ -3848,6 +3944,31 @@ module Hokusai
     # y - y coordinate (Float)
     def texture(texture, x, y)
       command = Commands::Texture.new(texture, x, y)
+
+      yield command if block_given?
+
+      queue << command
+    end
+
+    # Public: Draw a line
+    # 
+    # start_x - starting x coordinate (Float)
+    # start_y - starting y coordinate (Float)
+    # stop_x - stopping x coordinate (Float)
+    # stop_y - stopping y coordinate (Float)
+    def line(sx, sy, ex, ey)
+      command = Commands::Line.new(sx, sy, ex, ey)
+      
+      yield command if block_given?
+
+      queue << command
+    end
+
+    # Public: Draw a polyline from an array of coordinates
+    # 
+    # coords - an array containing a list of coords (Array([Float, Float)]))
+    def polyline(coords)
+      command = Commands::Polyline.new(coords)
 
       yield command if block_given?
 
@@ -8967,6 +9088,7 @@ module Hokusai::Blocks
             :color="cursor_color"
             :x="cursor_x"
             :y="cursor_y"
+            :cursor_width="cursor_width"
             :cursor_height="cursor_height"
             :show="cursor_show"
           }
@@ -8978,6 +9100,7 @@ module Hokusai::Blocks
     )
 
     computed :cursor_color, default: [255,22,22], convert: Hokusai::Color
+    computed :cursor_width, default: 2.0, convert: proc(&:to_f)
     computed :vertical, default: true
     computed :focus_mode, default: true
     computed :selection_override, default: nil
@@ -9101,7 +9224,6 @@ module Hokusai::Blocks
 
     def on_click(event)
       if event.right.clicked
-        p selection.inspect
         return
       end
 
@@ -9175,26 +9297,37 @@ class Hokusai::Blocks::Input < Hokusai::Block
   template <<~EOF
   [template]
     vblock {
-      @click="focus"
       :background="background"
       :padding="padding"
+      :outline="outline"
+      :outline_color="outline_color"
+      :rounding="rounding"
     }
-      text {
-        :color="color"
-        :content="model"
-        :size="size"
-        :selection_color="selection_color"
-        :selection_color_to="selection_color_to"
-        :animate_selection="animate_selection"
-        :copy_text="copy"
-        :min_height="min_height"
-        :max_height="max_height"
-        @copy="on_copy"
-        @selected="handle_selection"
-        @keypress="handle_keypress"
-        @keydown="handle_keydown"
-        @height_updated="update_content_height"
-      }
+      [if="show_placeholder"]
+        text {
+          :color="placeholder_color"
+          :content="placeholder"
+          :size="placeholder_size"
+          :min_height="min_height"
+          :max_height="max_height"
+        }
+      [else]
+        text {
+          :color="color"
+          :content="model"
+          :size="size"
+          :selection_color="selection_color"
+          :selection_color_to="selection_color_to"
+          :animate_selection="animate_selection"
+          :copy_text="copy"
+          :min_height="min_height"
+          :max_height="max_height"
+          @copy="on_copy"
+          @selected="handle_selection"
+          @keypress="handle_keypress"
+          @keydown="handle_keydown"
+          @height_updated="update_content_height"
+        }
   EOF
 
   uses(
@@ -9208,8 +9341,15 @@ class Hokusai::Blocks::Input < Hokusai::Block
   )
 
   computed! :model
+  
+  computed :placeholder, default: nil
+  computed :placeholder_color, default: [144,144,144], convert: Hokusai::Color
+  computed :placeholder_size, default: 22, convert: proc(&:to_i)
 
   computed :background, default: nil, convert: Hokusai::Color
+  computed :outline, default: 0.0, convert: Hokusai::Outline
+  computed :outline_color, default: [2,2,2], convert: Hokusai::Color
+  computed :rounding, default: 0.0, convert: proc(&:to_f)
   computed :color, default: [33,33,33], convert: Hokusai::Color
   computed :selection_color, default: [233,233,233], convert: Hokusai::Color
   computed :selection_color_to, default: [0, 33, 233], convert: Hokusai::Color
@@ -9228,6 +9368,9 @@ class Hokusai::Blocks::Input < Hokusai::Block
   attr_accessor :content, :buffer, :positions, :content_height, :shift, :copy
   
   def before_updated
+    if node.meta.focused && !show_placeholder
+      children.first.children.first.node.meta.focus
+    end
     # if model == "" && node.meta.focused
     #   selection.clear
     #   selection.pos.cursor_index = 0
@@ -9235,8 +9378,12 @@ class Hokusai::Blocks::Input < Hokusai::Block
     # end
   end
 
+  def show_placeholder
+    placeholder && model.empty? && !node.meta.focused
+  end
+
   def focus(event)
-    # node.meta.focus
+
   end
 
   def initialize(**args)
@@ -9300,7 +9447,7 @@ class Hokusai::Blocks::Input < Hokusai::Block
     end
     
     if selection.pos.positions
-      range = selection.pos.positions(false)
+      range = selection.pos.positions
     else
       range = nil
     end
@@ -11945,6 +12092,7 @@ MRuby::CrossBuild.new("platform") do |conf|
   conf.ports :posix
   conf.gem core: "mruby-regexp"
   conf.gem github: "skinnyjames-mruby/mruby-dir-glob", canonical: true
+  conf.gem github: "Asmod4n/mruby-cbor", branch: "main"
   <%= gem_config %>
 
   # Generate mrbc command
@@ -11962,6 +12110,8 @@ MRuby::CrossBuild.new("platform") do |conf|
   conf.host_target = "x86_64-w64-mingw32"  # required for `for_windows?` used by `mruby-socket` gem
 
   conf.cc.command = "\#{conf.host_target}-gcc-posix"
+  conf.cxx.command = "\#{conf.host_target}-g++-posix"
+
   conf.cc.flags += %w[-O2]
   conf.linker.command = conf.cc.command
   conf.archiver.command = "\#{conf.host_target}-gcc-ar"
@@ -11970,6 +12120,7 @@ MRuby::CrossBuild.new("platform") do |conf|
   conf.ports :win
   conf.gem core: "mruby-regexp"
   conf.gem github: "skinnyjames-mruby/mruby-dir-glob", canonical: true
+  conf.gem github: "Asmod4n/mruby-cbor", branch: "main"
   <%= gem_config %>
 
   conf.gembox "default"
@@ -11983,9 +12134,12 @@ MRuby::CrossBuild.new("platform") do |conf|
   else
     toolchain :gcc
   end
+
+  conf.cxx.command = "g++"
   conf.ports :posix
   conf.gem core: "mruby-regexp"
   conf.gem github: "skinnyjames-mruby/mruby-dir-glob", canonical: true
+  conf.gem github: "Asmod4n/mruby-cbor", branch: "main"
   <%= gem_config %>
 
   conf.gembox "default"

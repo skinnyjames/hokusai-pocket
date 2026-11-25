@@ -23,6 +23,7 @@ module Hokusai::Blocks
             :color="cursor_color"
             :x="cursor_x"
             :y="cursor_y"
+            :cursor_width="cursor_width"
             :cursor_height="cursor_height"
             :show="cursor_show"
           }
@@ -34,6 +35,7 @@ module Hokusai::Blocks
     )
 
     computed :cursor_color, default: [255,22,22], convert: Hokusai::Color
+    computed :cursor_width, default: 2.0, convert: proc(&:to_f)
     computed :vertical, default: true
     computed :focus_mode, default: true
     computed :selection_override, default: nil
@@ -157,7 +159,6 @@ module Hokusai::Blocks
 
     def on_click(event)
       if event.right.clicked
-        p selection.inspect
         return
       end
 
